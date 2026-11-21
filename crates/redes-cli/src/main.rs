@@ -246,6 +246,27 @@ enum BibliotecaCmd {
         #[arg(long)]
         carpeta: Option<PathBuf>,
     },
+    /// Asigna un modelo de la biblioteca a los objetos de una familia y les pasa sus medidas.
+    ///
+    /// Escribe `modelo` en cada objeto y, en `datos`, el volumen, el área y el peso con la fuente
+    /// `modelo:<id>`. No pisa un dato que venga de otra fuente: lo avisa.
+    Aplicar {
+        /// Identificador de la pieza en `biblioteca.json`.
+        #[arg(long)]
+        modelo: String,
+        /// Familia a la que se aplica (`agua.valvula`, `saneamiento.pozo`…).
+        #[arg(long)]
+        familia: String,
+        /// Restringe a un subtipo.
+        #[arg(long)]
+        subtipo: Option<String>,
+        /// Carpeta del proyecto (donde vive `biblioteca.json`).
+        #[arg(long)]
+        carpeta: Option<PathBuf>,
+        /// Densidad para el peso (t/m³).
+        #[arg(long, default_value_t = 2.4)]
+        densidad: f64,
+    },
 }
 
 #[derive(Subcommand)]
@@ -285,7 +306,9 @@ fn run(cli: Cli, t0: Instant) -> i32 {
     let cmd_name = command_id(&cli.cmd).to_string();
 
     // `biblioteca` no necesita proyecto: revisa un .glb suelto.
-    if let Cmd::Biblioteca { cmd } = &cli.cmd {
+    if let Cmd::Biblioteca { cmd } = &cli.cmd
+        && !matches!(cmd, BibliotecaCmd::Aplicar { .. })
+    {
         return emit(biblioteca(cmd).within(elapsed(t0)), pretty, quiet);
     }
 
@@ -389,6 +412,65 @@ fn run(cli: Cli, t0: Instant) -> i32 {
 
     let destructive = false;
     let mut env = match cli.cmd {
+        Cmd::Biblioteca {
+            cmd:
+                BibliotecaCmd::Aplicar {
+                    modelo,
+                    familia,
+                    subtipo,
+                    carpeta,
+                    densidad,
+                },
+        } => {
+            let dir = carpeta.unwrap_or_else(|| {
+                path.parent()
+                    .map(|d| d.to_path_buf())
+                    .unwrap_or_else(|| PathBuf::from("."))
+            });
+            let ruta = dir.join("biblioteca.json");
+            let bib = match redes_core::biblioteca::Biblioteca::cargar(&ruta) {
+                Ok(b) => b,
+                Err(e) => return emit(io_error("biblioteca.aplicar", &e), pretty, quiet),
+            };
+            match redes_core::biblioteca::aplicar(
+                &mut p,
+                &bib,
+                &modelo,
+                &familia,
+                subtipo.as_deref(),
+                densidad,
+            ) {
+                Ok(a) => {
+                    // El proyecto recuerda dónde está su biblioteca para que el visor sepa qué
+                    // .glb cargar; se guarda relativa a la carpeta del proyecto.
+                    p.biblioteca = Some(
+                        ruta.strip_prefix(dir_parent(&path))
+                            .unwrap_or(&ruta)
+                            .to_string_lossy()
+                            .to_string(),
+                    );
+                    if !dry && let Err(e) = redes_core::project_io::save(&p, &path) {
+                        return emit(io_error("biblioteca.aplicar", &e), pretty, quiet);
+                    }
+                    Envelope::ok("biblioteca.aplicar")
+                        .with_project(&p, &path.display().to_string())
+                        .with_data(json!({
+                            "modelo": modelo,
+                            "familia": familia,
+                            "subtipo": subtipo,
+                            "aplicados": a.aplicados,
+                            "conservados_por_otra_fuente": a.conservados,
+                            "volumen_m3": round(a.volumen_m3, 4),
+                            "area_m2": round(a.area_m2, 3),
+                            "peso_t": round(a.peso_t, 3),
+                            "guardado": !dry,
+                        }))
+                        .with_artifact("proyecto", &path.display().to_string())
+                        .within(elapsed(t0))
+                }
+                Err(e) => io_error("biblioteca.aplicar", &e),
+            }
+        }
         Cmd::Proyecto {
             cmd: ProyectoCmd::Info,
         } => project_info(&p, &path),
@@ -605,6 +687,15 @@ fn biblioteca(cmd: &BibliotecaCmd) -> Envelope {
             carpeta.as_deref(),
             nombre.as_deref(),
         ),
+        // `aplicar` necesita el proyecto abierto: se resuelve en el flujo principal.
+        BibliotecaCmd::Aplicar { .. } => Envelope::fail(
+            "biblioteca.aplicar",
+            vec![Diagnostic::new(
+                "E_ARG_MISSING",
+                Severity::Error,
+                "biblioteca aplicar necesita un proyecto: use -p <archivo.redes>",
+            )],
+        ),
         BibliotecaCmd::Lista { carpeta } => {
             let dir = carpeta.clone().unwrap_or_else(|| PathBuf::from("."));
             let ruta = dir.join("biblioteca.json");
@@ -785,6 +876,7 @@ fn command_id(c: &Cmd) -> &'static str {
             BibliotecaCmd::Revisar { .. } => "biblioteca.revisar",
             BibliotecaCmd::Importar { .. } => "biblioteca.importar",
             BibliotecaCmd::Lista { .. } => "biblioteca.lista",
+            BibliotecaCmd::Aplicar { .. } => "biblioteca.aplicar",
             BibliotecaCmd::Cantidades { .. } => "biblioteca.cantidades",
         },
     }
@@ -1199,6 +1291,13 @@ fn exportar(p: &Project, cmd: ExportarCmd, dry: bool) -> Envelope {
             }
         }
     }
+}
+
+/// Carpeta del proyecto (o el directorio actual si no tiene).
+fn dir_parent(path: &std::path::Path) -> std::path::PathBuf {
+    path.parent()
+        .map(|d| d.to_path_buf())
+        .unwrap_or_else(|| PathBuf::from("."))
 }
 
 fn slug(s: &str) -> String {

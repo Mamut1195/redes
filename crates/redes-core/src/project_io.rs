@@ -243,6 +243,31 @@ mod tests {
         ruta
     }
 
+    /// El modelo asignado y la ruta de la biblioteca sobreviven a guardar y abrir.
+    #[test]
+    fn conserva_el_modelo_y_la_biblioteca() {
+        let mut p = crate::demo_catalog::catalogo();
+        p.biblioteca = Some("biblioteca.json".into());
+        p.nodes[0].modelo = Some("pozo-tipo".into());
+        p.nodes[0].datos.insert(
+            "volumen_m3".to_string(),
+            crate::model::Dato {
+                valor: 2.5,
+                unidad: "m3".into(),
+                fuente: "modelo:pozo-tipo".into(),
+            },
+        );
+        let ruta = std::env::temp_dir().join(format!("redes-modelo-{}.redes", std::process::id()));
+        crate::project_io::save(&p, &ruta).expect("guarda");
+        let q = crate::project_io::load(&ruta).expect("carga");
+        assert_eq!(q.biblioteca.as_deref(), Some("biblioteca.json"));
+        assert_eq!(q.nodes[0].modelo.as_deref(), Some("pozo-tipo"));
+        let d = q.nodes[0].datos.get("volumen_m3").expect("dato");
+        assert!((d.valor - 2.5).abs() < 1e-9);
+        assert_eq!(d.fuente, "modelo:pozo-tipo");
+        let _ = std::fs::remove_file(&ruta);
+    }
+
     #[test]
     fn rechaza_un_esquema_futuro() {
         let mut v = serde_json::to_value(crate::demo_catalog::catalogo()).unwrap();
@@ -309,6 +334,7 @@ mod tests {
             datos: Default::default(),
             estado: crate::model::EstadoObjeto::Pendiente,
             nota: None,
+            modelo: None,
             deleted: false,
         };
         let id = p.add_node(n).expect("añade");

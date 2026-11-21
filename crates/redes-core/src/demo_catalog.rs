@@ -81,6 +81,7 @@ pub fn catalogo() -> Project {
                 datos: BTreeMap::new(),
                 estado: EstadoObjeto::Pendiente,
                 nota: None,
+                modelo: None,
                 deleted: false,
             })
             .unwrap();
@@ -180,6 +181,7 @@ pub fn catalogo() -> Project {
                 datos: BTreeMap::new(),
                 estado: EstadoObjeto::Pendiente,
                 nota: None,
+                modelo: None,
                 deleted: false,
             })
             .unwrap();
@@ -226,6 +228,7 @@ pub fn catalogo() -> Project {
             datos: BTreeMap::new(),
             estado: EstadoObjeto::Pendiente,
             nota: None,
+            modelo: None,
             deleted: false,
         })
         .ok();
@@ -269,6 +272,7 @@ pub fn catalogo() -> Project {
             datos: BTreeMap::new(),
             estado: EstadoObjeto::Pendiente,
             nota: None,
+            modelo: None,
             deleted: false,
         })
         .ok();
@@ -298,6 +302,7 @@ pub fn catalogo() -> Project {
                 datos: BTreeMap::new(),
                 estado: EstadoObjeto::Pendiente,
                 nota: None,
+                modelo: None,
                 deleted: false,
             })
             .unwrap();
@@ -360,6 +365,7 @@ pub fn catalogo() -> Project {
         datos: BTreeMap::new(),
         estado: EstadoObjeto::Pendiente,
         nota: None,
+        modelo: None,
         deleted: false,
     })
     .ok();
@@ -385,6 +391,7 @@ pub fn catalogo() -> Project {
         )]),
         estado: EstadoObjeto::Pendiente,
         nota: None,
+        modelo: None,
         deleted: false,
     })
     .ok();
@@ -488,6 +495,7 @@ pub fn catalogo_completo() -> Project {
             datos: BTreeMap::new(),
             estado: EstadoObjeto::Pendiente,
             nota: None,
+            modelo: None,
             deleted: false,
         };
         let id = match p.add_node(nodo) {

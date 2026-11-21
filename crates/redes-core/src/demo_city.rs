@@ -245,6 +245,7 @@ pub fn ciudad() -> Project {
             )]),
             estado: EstadoObjeto::Aprobado,
             nota: None,
+            modelo: None,
             deleted: false,
         })
         .unwrap();
@@ -270,6 +271,7 @@ pub fn ciudad() -> Project {
                 datos: BTreeMap::new(),
                 estado: EstadoObjeto::Pendiente,
                 nota: None,
+                modelo: None,
                 deleted: false,
             })
             .unwrap();
@@ -325,6 +327,7 @@ pub fn ciudad() -> Project {
             datos: BTreeMap::new(),
             estado: EstadoObjeto::Pendiente,
             nota: None,
+            modelo: None,
             deleted: false,
         })
         .ok();
@@ -376,6 +379,7 @@ fn pozo(p: &mut Project, e: f64, n: f64, tipo: &str, diametro: f64) -> ElementId
         datos: BTreeMap::new(),
         estado: EstadoObjeto::Pendiente,
         nota: None,
+        modelo: None,
         deleted: false,
     })
     .unwrap()

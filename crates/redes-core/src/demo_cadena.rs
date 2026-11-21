@@ -47,6 +47,7 @@ fn nodo(
         datos: BTreeMap::new(),
         estado: EstadoObjeto::Pendiente,
         nota: None,
+        modelo: None,
         deleted: false,
     })
     .unwrap_or_else(|e| panic!("{code}: {e}"))

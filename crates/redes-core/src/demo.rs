@@ -103,6 +103,7 @@ pub fn project() -> Project {
                     EstadoObjeto::Pendiente
                 },
                 nota: None,
+                modelo: None,
                 deleted: false,
             })
             .unwrap();
@@ -189,6 +190,7 @@ pub fn project() -> Project {
                 datos: BTreeMap::new(),
                 estado: EstadoObjeto::Pendiente,
                 nota: None,
+                modelo: None,
                 deleted: false,
             })
             .unwrap();
@@ -238,6 +240,7 @@ pub fn project() -> Project {
             datos: BTreeMap::new(),
             estado: EstadoObjeto::Pendiente,
             nota: None,
+            modelo: None,
             deleted: false,
         })
         .unwrap();
@@ -283,6 +286,7 @@ pub fn project() -> Project {
             datos: BTreeMap::new(),
             estado: EstadoObjeto::Aprobado,
             nota: None,
+            modelo: None,
             deleted: false,
         })
         .unwrap();
@@ -310,6 +314,7 @@ pub fn project() -> Project {
                 datos: BTreeMap::new(),
                 estado: EstadoObjeto::Pendiente,
                 nota: None,
+                modelo: None,
                 deleted: false,
             })
             .unwrap();
@@ -364,6 +369,7 @@ pub fn project() -> Project {
         datos: BTreeMap::new(),
         estado: EstadoObjeto::Pendiente,
         nota: None,
+        modelo: None,
         deleted: false,
     })
     .ok();
@@ -384,6 +390,7 @@ pub fn project() -> Project {
         datos: BTreeMap::new(),
         estado: EstadoObjeto::Pendiente,
         nota: None,
+        modelo: None,
         deleted: false,
     })
     .ok();

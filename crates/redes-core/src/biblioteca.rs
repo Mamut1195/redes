@@ -1428,3 +1428,155 @@ mod tests {
         assert!(avisos.iter().any(|a| a.gravedad == Gravedad::Error));
     }
 }
+
+/// Resultado de aplicar una pieza a un proyecto.
+#[derive(Clone, Debug, Default)]
+pub struct Aplicacion {
+    pub aplicados: usize,
+    /// Objetos que ya tenían el dato con otra fuente y no se han tocado.
+    pub conservados: Vec<String>,
+    pub volumen_m3: f64,
+    pub area_m2: f64,
+    pub peso_t: f64,
+}
+
+/// Asigna `modelo` a los objetos de `familia` (y `subtipo`, si se indica) y les pasa las medidas.
+///
+/// La geometría manda en las cantidades: el volumen y el área salen del `.glb`, y cada dato queda
+/// marcado con su fuente (`modelo:<id>`). Un dato que venga de otra aplicación **no se pisa**.
+pub fn aplicar(
+    p: &mut crate::model::Project,
+    bib: &Biblioteca,
+    modelo: &str,
+    familia: &str,
+    subtipo: Option<&str>,
+    densidad: f64,
+) -> Result<Aplicacion, String> {
+    let pieza =
+        bib.piezas.iter().find(|x| x.id == modelo).ok_or_else(|| {
+            format!("E_STATE_NOT_FOUND: la pieza {modelo} no está en el manifiesto")
+        })?;
+    if pieza.familia != familia {
+        return Err(format!(
+            "E_ARG_INVALIDO: la pieza {modelo} es de {} y se aplica a {familia}",
+            pieza.familia
+        ));
+    }
+    let fuente = format!("modelo:{modelo}");
+    let volumen = pieza.volumen_m3.unwrap_or(0.0);
+    let area = pieza.area_m2.unwrap_or(0.0);
+    let peso = volumen * densidad;
+    let mut r = Aplicacion {
+        volumen_m3: volumen,
+        area_m2: area,
+        peso_t: peso,
+        ..Default::default()
+    };
+
+    for n in p.nodes.iter_mut() {
+        if n.deleted || n.family != familia {
+            continue;
+        }
+        if let Some(s) = subtipo
+            && n.ty != s
+        {
+            continue;
+        }
+        n.modelo = Some(modelo.to_string());
+        for (clave, valor, unidad) in [
+            ("volumen_m3", volumen, "m3"),
+            ("area_m2", area, "m2"),
+            ("peso_t", peso, "t"),
+        ] {
+            let ocupado = n.datos.get(clave).is_some_and(|d| d.fuente != fuente);
+            if ocupado {
+                r.conservados.push(format!("{}:{clave}", n.code));
+                continue;
+            }
+            n.datos.insert(
+                clave.to_string(),
+                crate::model::Dato {
+                    valor,
+                    unidad: unidad.to_string(),
+                    fuente: fuente.clone(),
+                },
+            );
+        }
+        r.aplicados += 1;
+    }
+    p.commit("biblioteca.aplicar");
+    Ok(r)
+}
+
+#[cfg(test)]
+mod tests_aplicar {
+    use super::*;
+
+    fn biblioteca_de_prueba() -> Biblioteca {
+        Biblioteca {
+            schema: "redes.biblioteca/1".into(),
+            piezas: vec![Entrada {
+                id: "pozo-tipo".into(),
+                familia: "saneamiento.pozo".into(),
+                subtipo: Some("inspeccion".into()),
+                dn_mm: None,
+                archivo: "biblioteca/pozo-tipo.glb".into(),
+                escala: 1.0,
+                triangulos: 120,
+                dimensiones_m: [1.2, 1.2, 2.4],
+                bytes: 4096,
+                volumen_m3: Some(2.0),
+                area_m2: Some(9.0),
+                cerrada: Some(true),
+                extras: Default::default(),
+                licencia: None,
+                autor: None,
+            }],
+        }
+    }
+
+    #[test]
+    fn aplica_modelo_y_medidas_sin_pisar_otra_fuente() {
+        let mut p = crate::demo_catalog::catalogo();
+        let bib = biblioteca_de_prueba();
+        // Un dato que viene de la app de origen: no se debe tocar.
+        let primero = p.nodes[0].code.clone();
+        p.nodes[0].datos.insert(
+            "volumen_m3".to_string(),
+            crate::model::Dato {
+                valor: 99.0,
+                unidad: "m3".into(),
+                fuente: "Civil 3D".into(),
+            },
+        );
+        let r = aplicar(&mut p, &bib, "pozo-tipo", "saneamiento.pozo", None, 2.4).expect("aplica");
+        assert!(r.aplicados > 0);
+        assert!(
+            p.nodes
+                .iter()
+                .any(|n| n.modelo.as_deref() == Some("pozo-tipo"))
+        );
+        assert!(
+            r.conservados.iter().any(|c| c.starts_with(&primero)),
+            "el dato de Civil 3D debe conservarse: {:?}",
+            r.conservados
+        );
+        let con_modelo = p
+            .nodes
+            .iter()
+            .find(|n| n.modelo.is_some() && n.code != primero)
+            .expect("algún pozo con modelo");
+        let d = con_modelo.datos.get("volumen_m3").expect("volumen");
+        assert!(d.fuente.starts_with("modelo:"));
+        assert!((d.valor - 2.0).abs() < 1e-9);
+        assert!(con_modelo.datos.contains_key("peso_t"));
+    }
+
+    #[test]
+    fn rechaza_una_pieza_de_otra_familia() {
+        let mut p = crate::demo_catalog::catalogo();
+        let bib = biblioteca_de_prueba();
+        let err = aplicar(&mut p, &bib, "pozo-tipo", "agua.valvula", None, 2.4).unwrap_err();
+        assert!(err.starts_with("E_ARG_INVALIDO"), "{err}");
+    }
+}

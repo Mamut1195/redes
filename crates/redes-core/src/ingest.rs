@@ -186,6 +186,7 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
                 datos: to_datos(datos),
                 estado: EstadoObjeto::Pendiente,
                 nota: None,
+                modelo: None,
                 deleted: false,
             };
             // Clave retirada: se traduce a su destino y se anota (nunca en silencio).
@@ -475,6 +476,7 @@ pub fn import_dxf(p: &mut Project, path: &Path, tolerance: f64) -> Result<Import
             datos: BTreeMap::new(),
             estado: EstadoObjeto::Pendiente,
             nota: None,
+            modelo: None,
             deleted: false,
         };
         // Si la clave viene de una familia retirada, se traduce a su destino (nunca en silencio).
@@ -581,6 +583,7 @@ fn nearest_node(
         datos: BTreeMap::new(),
         estado: EstadoObjeto::Pendiente,
         nota: None,
+        modelo: None,
         deleted: false,
     };
     // Clave retirada: se traduce a su destino y se anota (nunca en silencio).
@@ -730,6 +733,7 @@ pub fn import_geojson(p: &mut Project, path: &Path) -> Result<ImportReport, Stri
                 datos: BTreeMap::new(),
                 estado: EstadoObjeto::Pendiente,
                 nota: None,
+                modelo: None,
                 deleted: false,
             };
             // Clave retirada: se traduce a su destino y se anota (nunca en silencio).

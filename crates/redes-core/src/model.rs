@@ -125,6 +125,12 @@ pub struct Node {
     /// Números calculados por la app de origen (caudal, volumen, presión…).
     #[serde(default)]
     pub datos: BTreeMap<String, Dato>,
+    /// Pieza de la biblioteca que da la apariencia de este objeto (`biblioteca.json`).
+    ///
+    /// Si está vacío se dibuja la pieza paramétrica; si apunta a un `.glb` de la biblioteca, el
+    /// visor usa ese modelo y sus medidas alimentan los datos del objeto.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub modelo: Option<String>,
     #[serde(default = "estado_pendiente")]
     pub estado: EstadoObjeto,
     /// Observacion de la revision (que hay que corregir en la app de origen).
@@ -225,6 +231,12 @@ pub struct Project {
     /// Contexto urbano (calles y manzanas) para la vista 3D.
     #[serde(default)]
     pub entorno: Option<crate::city::Entorno>,
+    /// Ruta del manifiesto de la biblioteca de modelos (`biblioteca.json`), relativa al proyecto.
+    ///
+    /// Se guarda la ruta y no el manifiesto: el archivo de piezas puede crecer y no tiene por qué
+    /// duplicarse dentro de cada `.redes`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub biblioteca: Option<String>,
     pub nodes: Vec<Node>,
     pub links: Vec<Link>,
     pub(crate) next_slot: u32,
@@ -261,6 +273,7 @@ impl Project {
             links: Vec::new(),
             next_slot: 1,
             journal: Vec::new(),
+            biblioteca: None,
             extras: Default::default(),
         }
     }
@@ -497,6 +510,7 @@ mod tests {
             datos: BTreeMap::new(),
             estado: EstadoObjeto::Pendiente,
             nota: None,
+            modelo: None,
             deleted: false,
         })
         .unwrap()

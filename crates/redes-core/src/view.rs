@@ -1400,6 +1400,7 @@ mod tests {
                 datos: BTreeMap::new(),
                 estado: crate::model::EstadoObjeto::Pendiente,
                 nota: None,
+                modelo: None,
                 deleted: false,
             };
             let malla = pieza_local(&nodo, 2);
@@ -1591,6 +1592,7 @@ mod tests {
                     datos: Default::default(),
                     estado: crate::model::EstadoObjeto::Pendiente,
                     nota: None,
+                    modelo: None,
                     deleted: false,
                 })
                 .is_ok();
@@ -1644,6 +1646,7 @@ mod tests {
                 datos: BTreeMap::new(),
                 estado: crate::model::EstadoObjeto::Pendiente,
                 nota: None,
+                modelo: None,
                 deleted: false,
             })
             .expect("nodo");

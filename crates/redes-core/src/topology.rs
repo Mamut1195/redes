@@ -150,6 +150,7 @@ mod tests {
                     datos: BTreeMap::new(),
                     estado: EstadoObjeto::Pendiente,
                     nota: None,
+                    modelo: None,
                     deleted: false,
                 })
                 .unwrap();
@@ -207,6 +208,7 @@ mod tests {
                 datos: BTreeMap::new(),
                 estado: EstadoObjeto::Pendiente,
                 nota: None,
+                modelo: None,
                 deleted: false,
             })
             .unwrap();
