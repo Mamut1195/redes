@@ -318,3 +318,68 @@ mod tests {
         assert!((alto - 2.0).abs() < 1e-3, "alto = {alto}");
     }
 }
+
+/// Proxy de una malla: la misma silueta con menos triángulos (F6-05).
+///
+/// Cuantiza los vértices a una rejilla de `paso` metros y descarta los triángulos que colapsan a
+/// un punto. Sirve para ver la forma de un modelo pesado cuando no hay pase 3D; no sustituye a la
+/// malla real para medir.
+pub fn proxy(malla: &[Vertice], paso: f32) -> Vec<Vertice> {
+    if paso <= 0.0 {
+        return malla
+            .iter()
+            .map(|v| Vertice {
+                pos: v.pos,
+                normal: v.normal,
+                color: v.color,
+            })
+            .collect();
+    }
+    let mut out = Vec::with_capacity(malla.len());
+    for tri in malla.chunks_exact(3) {
+        let q: Vec<[f32; 3]> = tri
+            .iter()
+            .map(|v| {
+                [
+                    (v.pos[0] / paso).round() * paso,
+                    (v.pos[1] / paso).round() * paso,
+                    (v.pos[2] / paso).round() * paso,
+                ]
+            })
+            .collect();
+        if q[0] == q[1] || q[1] == q[2] || q[0] == q[2] {
+            continue;
+        }
+        for (i, v) in tri.iter().enumerate() {
+            out.push(Vertice {
+                pos: q[i],
+                normal: v.normal,
+                color: v.color,
+            });
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests_proxy {
+    use super::*;
+
+    fn triangulo(x: f32) -> Vertice {
+        Vertice {
+            pos: [x, 0.0, 0.0],
+            normal: [0.0, 0.0, 1.0],
+            color: [0.5, 0.5, 0.5],
+        }
+    }
+
+    #[test]
+    fn el_proxy_quita_triangulos_degenerados() {
+        // Uno de ~90 cm de lado (sobrevive con paso 0,25) y otro de 2 cm (colapsa a un punto).
+        let mut malla = vec![triangulo(0.0), triangulo(0.4), triangulo(0.9)];
+        malla.extend([triangulo(1.0), triangulo(1.02), triangulo(1.01)]);
+        let reducida = proxy(&malla, 0.25);
+        assert_eq!(reducida.len(), 3, "solo sobrevive el triángulo grande");
+        assert_eq!(proxy(&malla, 0.0).len(), malla.len(), "paso 0 no toca nada");
+    }
+}
