@@ -893,14 +893,38 @@ pub fn build_opts(
                     if let Some((a, b)) = corte
                         && let (Some(sa), Some(sb)) = (cam.project(a), cam.project(b))
                     {
+                        let d = ((cam.depth(a) + cam.depth(b)) * 0.5) as f32;
                         net.push(Prim::Line {
                             a: sa,
                             b: sb,
                             w: 1.6,
                             color: [0.98, 0.86, 0.42, 1.0],
-                            depth: ((cam.depth(a) + cam.depth(b)) * 0.5) as f32,
+                            depth: d,
                         });
                         line_count += 1;
+
+                        // Poché: la cara de corte se traman con rayitas perpendiculares, para que
+                        // la sección se lea como un plano y no como un alambre amarillo.
+                        let (dx, dy) = (sb[0] - sa[0], sb[1] - sa[1]);
+                        let largo = (dx * dx + dy * dy).sqrt();
+                        if largo > 6.0 {
+                            let (ux, uy) = (dx / largo, dy / largo);
+                            let (px, py) = (-uy, ux);
+                            let paso = 7.0f32;
+                            let mut s = paso * 0.5;
+                            while s < largo {
+                                let (cx, cy) = (sa[0] + ux * s, sa[1] + uy * s);
+                                net.push(Prim::Line {
+                                    a: [cx - px * 2.6 + ux * 1.6, cy - py * 2.6 + uy * 1.6],
+                                    b: [cx + px * 2.6 - ux * 1.6, cy + py * 2.6 - uy * 1.6],
+                                    w: 1.0,
+                                    color: [0.86, 0.74, 0.40, 1.0],
+                                    depth: d,
+                                });
+                                line_count += 1;
+                                s += paso;
+                            }
+                        }
                     }
 
                     for q in trozos {
@@ -970,6 +994,9 @@ pub fn build_opts(
     // La red se dibuja sobre el terreno (modo rayos X) pero **bajo** los edificios: así las
     // tuberías se ven a través del suelo y quedan ocultas detrás de una fachada, como debe ser.
     sort_far_first(&mut net);
+    // Las etiquetas se reparten en carriles para que no se pisen; si una no cabe, se calla.
+    // Las líneas guía entran en `net` y por tanto se ordenan con el resto de la red.
+    let mut etiquetas = acomodar_etiquetas(std::mem::take(&mut etiquetas), &mut net);
     prims.extend(net);
     sort_far_first(&mut city);
     prims.extend(city);
@@ -993,6 +1020,66 @@ pub fn build_opts(
         line_count,
         etiquetas,
     }
+}
+
+/// Coloca las etiquetas en carriles sin solaparse y, si hay que moverlas, dibuja la línea guía.
+///
+/// Sin esto, en una escena con 40 pozos juntos las etiquetas se apilaban y no se leía ninguna.
+fn acomodar_etiquetas(mut etiquetas: Vec<Etiqueta>, net: &mut Vec<Prim>) -> Vec<Etiqueta> {
+    const ALTO: f32 = 15.0;
+    // Carriles: primero el sitio natural, luego por encima y por debajo en saltos de un renglón.
+    const CARRILES: [f32; 7] = [
+        0.0,
+        -ALTO,
+        ALTO,
+        -2.0 * ALTO,
+        2.0 * ALTO,
+        -3.0 * ALTO,
+        3.0 * ALTO,
+    ];
+    // Se acomodan las más cercanas primero: son las que el usuario está mirando.
+    etiquetas.sort_by(|a, b| a.depth.total_cmp(&b.depth));
+
+    let mut ocupados: Vec<[f32; 4]> = Vec::new();
+    let mut salida: Vec<Etiqueta> = Vec::new();
+    for mut e in etiquetas {
+        let ancho = (e.texto.chars().count() as f32 * 7.2 + 8.0).clamp(30.0, 260.0);
+        let ancla = e.pos;
+        let mut colocado = false;
+        for dy in CARRILES {
+            let x = ancla[0] - ancho * 0.5;
+            let y = ancla[1] + dy - ALTO * 0.5;
+            let caja = [x, y, x + ancho, y + ALTO];
+            let choca = ocupados
+                .iter()
+                .any(|o| caja[0] < o[2] && caja[2] > o[0] && caja[1] < o[3] && caja[3] > o[1]);
+            if choca {
+                continue;
+            }
+            ocupados.push(caja);
+            e.pos = [ancla[0], ancla[1] + dy];
+            if dy.abs() > 1.0 {
+                // Línea guía desde el objeto hasta la etiqueta desplazada.
+                net.push(Prim::Line {
+                    a: [ancla[0], ancla[1] - 4.0],
+                    b: [ancla[0], ancla[1] + dy - 4.0],
+                    w: 0.8,
+                    color: [0.62, 0.66, 0.74, 0.85],
+                    depth: e.depth,
+                });
+            }
+            salida.push(e);
+            colocado = true;
+            break;
+        }
+        if !colocado {
+            // No cabe en ningún carril: se omite en vez de superponer.
+            continue;
+        }
+    }
+    // Se devuelven de lejos a cerca, que es el orden de dibujo.
+    salida.sort_by(|a, b| b.depth.total_cmp(&a.depth));
+    salida
 }
 
 /// Ordena de mas lejano a mas cercano (algoritmo del pintor).
@@ -1840,6 +1927,53 @@ mod tests {
                 pantalla,
                 esperado
             );
+        }
+    }
+
+    /// Con muchos objetos juntos, las etiquetas se reparten y no se pisan (F10-03).
+    #[test]
+    fn las_etiquetas_no_se_solapan() {
+        let p = crate::demo_city::ciudad();
+        let mut cam = Camera::default();
+        cam.viewport = [900.0, 600.0];
+        cam.fit(&p);
+        cam.distance = 120.0;
+        let s = build_opts(
+            &p,
+            p.terrain.as_ref(),
+            &cam,
+            Layers::default(),
+            None,
+            &Opciones::default(),
+        );
+        assert!(
+            s.etiquetas.len() >= 4,
+            "hay etiquetas: {}",
+            s.etiquetas.len()
+        );
+        let caja = |e: &Etiqueta| {
+            let ancho = (e.texto.chars().count() as f32 * 7.2 + 8.0).clamp(30.0, 260.0);
+            [
+                e.pos[0] - ancho * 0.5,
+                e.pos[1] - 7.5,
+                e.pos[0] + ancho * 0.5,
+                e.pos[1] + 7.5,
+            ]
+        };
+        for i in 0..s.etiquetas.len() {
+            for j in (i + 1)..s.etiquetas.len() {
+                let (a, b) = (caja(&s.etiquetas[i]), caja(&s.etiquetas[j]));
+                // Se permite un roce mínimo de 2 px, como en el criterio de aceptación.
+                let solapa = a[0] < b[2] - 2.0
+                    && a[2] > b[0] + 2.0
+                    && a[1] < b[3] - 2.0
+                    && a[3] > b[1] + 2.0;
+                assert!(
+                    !solapa,
+                    "se pisan «{}» y «{}»: {:?} vs {:?}",
+                    s.etiquetas[i].texto, s.etiquetas[j].texto, a, b
+                );
+            }
         }
     }
 
