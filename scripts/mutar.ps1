@@ -1,7 +1,7 @@
 # Rompe el código a propósito y exige que la suite lo detecte.
 #
-# Uso:  pwsh -File scripts/mutar.ps1
-#       pwsh -File scripts/mutar.ps1 -Solo etiquetas
+# Uso:  powershell -NoProfile -File scripts/mutar.ps1
+#       powershell -NoProfile -File scripts/mutar.ps1 -Solo etiquetas
 #
 # Requiere el árbol limpio: restaura cada mutación con `git checkout`.
 # Sale con código 1 si alguna mutación **sobrevive** (la suite pasa con el código roto).
@@ -14,13 +14,13 @@ $ErrorActionPreference = "Stop"
 $raiz = Split-Path -Parent $PSScriptRoot
 Set-Location $raiz
 
-$estado = (git status --porcelain) -join ""
-if ($estado.Trim() -ne "") {
-    Write-Host "El árbol tiene cambios sin commitear; la mutación necesita partir de un estado limpio." -ForegroundColor Red
+$estado = ((git status --porcelain) -join "").Trim()
+if ($estado -ne "") {
+    Write-Host "El arbol tiene cambios sin commitear; la mutacion necesita partir de un estado limpio." -ForegroundColor Red
     exit 2
 }
 
-# Cada mutación: archivo, patrón (regex), reemplazo y prueba que DEBE fallar.
+# Cada mutacion: archivo, patron (regex), reemplazo y prueba que DEBE fallar.
 $mutaciones = @(
     @{
         Nombre = "etiquetas"
@@ -36,7 +36,7 @@ $mutaciones = @(
         Patron = 'Some\(xc\) => cortar_tri\(verts, xc\),'
         Reemplazo = 'Some(_) => (vec![verts], None),'
         Prueba = "el_corte_secciona_las_tuberias"
-        Que = "dejar de seccionar las tuberías en el corte"
+        Que = "dejar de seccionar las tuberias en el corte"
     },
     @{
         Nombre = "filtro-familias"
@@ -44,7 +44,7 @@ $mutaciones = @(
         Patron = '(?s)if !def\.can\(caps::HYDRAULIC_NODE\).*?continue;\s*\}'
         Reemplazo = 'if !def.can(caps::HYDRAULIC_NODE) && !def.can(caps::ATTACHABLE) { continue; }'
         Prueba = "el_render_dibuja_familias_no_hidraulicas"
-        Que = "volver al filtro que ocultaba las familias no hidráulicas"
+        Que = "volver al filtro que ocultaba las familias no hidraulicas"
     }
 )
 
@@ -54,28 +54,26 @@ foreach ($m in $mutaciones) {
     if ($Solo -ne "" -and $m.Nombre -ne $Solo) { continue }
 
     Write-Host ""
-    Write-Host "== Mutación: $($m.Nombre) — $($m.Que)" -ForegroundColor Cyan
+    Write-Host "== Mutacion: $($m.Nombre) - $($m.Que)" -ForegroundColor Cyan
 
     $texto = Get-Content -Raw $m.Archivo
     $mutado = [regex]::Replace($texto, $m.Patron, $m.Reemplazo, 1)
     if ($mutado -eq $texto) {
-        Write-Host "   No se pudo aplicar (el patrón ya no está). Revisar la mutación." -ForegroundColor Yellow
+        Write-Host "   No se pudo aplicar (el patron ya no esta)." -ForegroundColor Yellow
         $sobrevivieron += "$($m.Nombre) (no aplicable)"
         continue
     }
-    try {
-        Set-Content -Path $m.Archivo -Value $mutado -NoNewline
-        $salida = & cargo test -p redes-core $m.Prueba 2>&1 | Out-String
-        $paso = $salida -match "test result: ok"
-        if ($paso) {
-            Write-Host "   SOBREVIVIÓ: la suite pasa con el código roto ($($m.Prueba))" -ForegroundColor Red
-            $sobrevivieron += $m.Nombre
-        } else {
-            Write-Host "   Detectada por $($m.Prueba)" -ForegroundColor Green
-        }
+
+    Set-Content -Path $m.Archivo -Value $mutado -NoNewline
+    $salida = (& cargo test -p redes-core $m.Prueba 2>&1 | Out-String)
+    git checkout -- $m.Archivo | Out-Null
+
+    if ($salida -match "test result: ok") {
+        Write-Host "   SOBREVIVIO: la suite pasa con el codigo roto ($($m.Prueba))" -ForegroundColor Red
+        $sobrevivieron += $m.Nombre
     }
-    finally {
-        git checkout -- $m.Archivo
+    else {
+        Write-Host "   Detectada por $($m.Prueba)" -ForegroundColor Green
     }
 }
 
