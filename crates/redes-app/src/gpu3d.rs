@@ -65,6 +65,17 @@ impl Geometria {
         cam: &redes_core::view::Camera,
         capas: redes_core::view::Layers,
     ) {
+        self.cargar_con_modelos(p, cam, capas, &[]);
+    }
+
+    /// Igual que [`Self::cargar`] pero añade las mallas de la biblioteca ya colocadas.
+    pub fn cargar_con_modelos(
+        &mut self,
+        p: &redes_core::model::Project,
+        cam: &redes_core::view::Camera,
+        capas: redes_core::view::Layers,
+        instancias: &[crate::modelos::Instancia],
+    ) {
         let malla = redes_core::gltf::triangulos_exportables(p, capas.terreno);
         // Se respetan las capas de la interfaz: apagar «Edificios» también los apaga aquí.
         let visibles: Vec<u16> = malla
@@ -115,6 +126,20 @@ impl Geometria {
             }
             for k in 0..3 {
                 empujar(t.pos[k], t.normal, t.color);
+                contador += 1;
+            }
+        }
+        // Modelos de la biblioteca: la malla ya viene en Z-arriba; se coloca en la cota del objeto.
+        for inst in instancias {
+            let (sen, cos) = (inst.giro.to_radians().sin(), inst.giro.to_radians().cos());
+            for v in inst.malla.iter() {
+                let (x, y) = (v.pos[0], v.pos[1]);
+                let pos = [
+                    inst.pos[0] + x * cos - y * sen,
+                    inst.pos[1] + x * sen + y * cos,
+                    inst.pos[2] + v.pos[2],
+                ];
+                empujar(pos, v.normal, v.color);
                 contador += 1;
             }
         }

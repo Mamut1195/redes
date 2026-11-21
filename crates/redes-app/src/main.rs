@@ -6,6 +6,7 @@
 //! `cargo run -p redes-app` · `-- --snap vista.png --scene iso` · `-- --tree arbol.json`
 
 mod gpu3d;
+mod modelos;
 
 use std::sync::{Arc, Mutex};
 
@@ -123,6 +124,12 @@ struct State {
     geom: Arc<Mutex<gpu3d::Geometria>>,
     /// Rectángulo del lienzo en puntos (x, y, ancho, alto): el pase 3D se limita a él.
     canvas_rect: [f32; 4],
+    /// Caché de mallas de la biblioteca (un `.glb` se lee una vez).
+    modelos: modelos::Cache,
+    /// Manifiesto del proyecto y su carpeta, si declara biblioteca.
+    bib: Option<(std::path::PathBuf, redes_core::biblioteca::Biblioteca)>,
+    /// Aviso de política de dibujo (modelos pesados sin `--gpu3d`).
+    aviso_modelos: Option<String>,
 }
 
 impl State {
@@ -161,6 +168,9 @@ impl State {
             // Estimación para el primer frame (el layout aún no ha corrido): 1280×800 con los
             // paneles de 214 y 292 pt. `on_layout` la sustituye por el rectángulo real.
             canvas_rect: [230.0, 51.0, 742.0, 714.0],
+            modelos: modelos::Cache::default(),
+            bib: None,
+            aviso_modelos: None,
         };
         estado.rebuild();
         estado
@@ -220,9 +230,44 @@ impl State {
             self.sel.as_deref(),
             &self.opts,
         );
+        // Manifiesto de la biblioteca: se resuelve una vez por proyecto.
+        if self.bib.is_none() && self.project.biblioteca.is_some() {
+            let dir = self
+                .path
+                .as_ref()
+                .and_then(|p| p.parent())
+                .map(|d| d.to_path_buf())
+                .unwrap_or_else(|| std::path::PathBuf::from("."));
+            self.bib = modelos::biblioteca_del_proyecto(&self.project, &dir);
+            if self.bib.is_none() {
+                self.aviso_modelos =
+                    Some("El proyecto declara una biblioteca que no se pudo abrir".to_string());
+            }
+        }
+
+        let con_modelo = self
+            .project
+            .nodes
+            .iter()
+            .filter(|n| n.modelo.is_some())
+            .count();
+        if con_modelo > 0 && !self.gpu3d {
+            self.aviso_modelos = Some(format!(
+                "{con_modelo} objetos tienen modelo y el pase 3D está apagado: se dibuja la pieza paramétrica. Arranque con --gpu3d para verlos."
+            ));
+        } else {
+            self.aviso_modelos = None;
+        }
+
         if self.gpu3d {
+            let instancias = match &self.bib {
+                Some((carpeta, bib)) => {
+                    modelos::instancias(&self.project, carpeta, bib, &mut self.modelos)
+                }
+                None => Vec::new(),
+            };
             if let Ok(mut g) = self.geom.lock() {
-                g.cargar(&self.project, &self.cam, self.layers);
+                g.cargar_con_modelos(&self.project, &self.cam, self.layers, &instancias);
             }
         }
     }
@@ -1076,9 +1121,14 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
             .color(OK),
         )
         .child(
-            text(s.aviso.clone().unwrap_or_default())
-                .font(type_::LABEL)
-                .color(DIM),
+            text(
+                s.aviso_modelos
+                    .clone()
+                    .or_else(|| s.aviso.clone())
+                    .unwrap_or_default(),
+            )
+            .font(type_::LABEL)
+            .color(DIM),
         )
         .child(
             text(if s.dirty { "cambios sin guardar" } else { "" })
