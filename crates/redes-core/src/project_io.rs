@@ -20,6 +20,9 @@ pub const EXT: &str = "redes";
 /// Nota: el motor no llama a esto desde el bucle de frames de la UI; el autoguardado corre en
 /// un trabajador (regla "cero E/S en el frame loop").
 pub fn save(p: &Project, path: &Path) -> Result<(), String> {
+    // Blindaje: `serde_json` escribe `null` para NaN/infinito y el archivo deja de poder abrirse.
+    // Se rechaza antes de tocar el disco.
+    validar_finito(p)?;
     if let Some(dir) = path.parent() {
         if !dir.as_os_str().is_empty() {
             std::fs::create_dir_all(dir).map_err(|e| format!("E_IO_PERMISSION: {e}"))?;
@@ -33,6 +36,61 @@ pub fn save(p: &Project, path: &Path) -> Result<(), String> {
         f.sync_all().map_err(|e| format!("E_IO_PERMISSION: {e}"))?;
     }
     std::fs::rename(&tmp, path).map_err(|e| format!("E_IO_PERMISSION: {e}"))?;
+    Ok(())
+}
+
+/// Comprueba que no haya NaN ni infinitos en cotas, posiciones ni números de atributos/datos.
+///
+/// `serde_json` serializa esos valores como `null`, y un proyecto con `null` en un `f64` ya no se
+/// puede volver a abrir. Es preferible rechazar el guardado a corromper el archivo.
+pub fn validar_finito(p: &Project) -> Result<(), String> {
+    fn fin(v: f64, que: &str, code: &str) -> Result<(), String> {
+        if v.is_finite() {
+            Ok(())
+        } else {
+            Err(format!("E_VALOR_NO_FINITO: {que} en {code} ({v})"))
+        }
+    }
+    let valor = |v: &crate::families::Value, que: &str, code: &str| -> Result<(), String> {
+        match v {
+            crate::families::Value::Num(x) => fin(*x, que, code),
+            _ => Ok(()),
+        }
+    };
+
+    for n in p.nodes.iter().filter(|n| !n.deleted) {
+        fin(n.pos.x, "E", &n.code)?;
+        fin(n.pos.y, "N", &n.code)?;
+        fin(n.z_terrain, "cota de terreno", &n.code)?;
+        fin(n.z_rim, "cota de tapa", &n.code)?;
+        fin(n.z_invert, "cota de clave", &n.code)?;
+        for (k, v) in &n.attrs {
+            valor(v, k, &n.code)?;
+        }
+        for (k, d) in &n.datos {
+            fin(d.valor, k, &n.code)?;
+        }
+    }
+    for l in p.links.iter().filter(|l| !l.deleted) {
+        for q in &l.path {
+            fin(q.x, "E del trazado", &l.code)?;
+            fin(q.y, "N del trazado", &l.code)?;
+            fin(q.z, "cota del trazado", &l.code)?;
+        }
+        for (k, v) in &l.attrs {
+            valor(v, k, &l.code)?;
+        }
+        for (k, d) in &l.datos {
+            fin(d.valor, k, &l.code)?;
+        }
+    }
+    if let Some(t) = &p.terrain {
+        for q in t.points.iter().take(1_000_000) {
+            fin(q.e, "E del terreno", &t.name)?;
+            fin(q.n, "N del terreno", &t.name)?;
+            fin(q.z, "cota del terreno", &t.name)?;
+        }
+    }
     Ok(())
 }
 
@@ -73,6 +131,38 @@ pub fn find_upwards(start: &Path) -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    /// Un NaN no puede llegar al disco: `serde_json` lo escribe como `null` y el proyecto deja de
+    /// abrirse. `save` debe rechazarlo y no tocar el archivo.
+    #[test]
+    fn no_guarda_valores_no_finitos() {
+        let mut p = crate::demo_catalog::catalogo();
+        let ruta = std::env::temp_dir().join(format!("redes-nan-{}.redes", std::process::id()));
+        let _ = std::fs::remove_file(&ruta);
+        crate::project_io::save(&p, &ruta).expect("guardado inicial");
+        let antes = std::fs::read(&ruta).expect("leer");
+        // Se inyecta un NaN como el que dejaría un DXF/CSV hostil.
+        p.nodes[0].z_rim = f64::NAN;
+        let err = crate::project_io::save(&p, &ruta).expect_err("debe rechazar el NaN");
+        assert!(err.starts_with("E_VALOR_NO_FINITO"), "{err}");
+        let despues = std::fs::read(&ruta).expect("leer otra vez");
+        assert_eq!(antes, despues, "el archivo no debe cambiar");
+        let _ = std::fs::remove_file(&ruta);
+    }
+
+    /// Un CSV con NaN en la cota se descarta en la ingesta y no envenena el proyecto.
+    #[test]
+    fn el_terreno_descarta_lineas_no_finitas() {
+        let mut p = crate::model::Project::new("nan", "EPSG:32717");
+        let csv = "E,N,Z\n758000,9797000,2500\nNaN,9797001,2501\n758002,9797002,2502\n758010,9797010,2505\n";
+        let ruta = std::env::temp_dir().join(format!("redes-nan-{}.csv", std::process::id()));
+        std::fs::write(&ruta, csv).expect("csv");
+        let rep = crate::ingest::import_terreno(&mut p, &ruta, 32717).expect("importa");
+        assert_eq!(p.terrain.as_ref().map(|t| t.points.len()).unwrap_or(0), 3);
+        assert!(!rep.descartados.is_empty(), "debe informar del descarte");
+        assert!(crate::project_io::validar_finito(&p).is_ok());
+        let _ = std::fs::remove_file(&ruta);
+    }
+
     use super::*;
 
     #[test]

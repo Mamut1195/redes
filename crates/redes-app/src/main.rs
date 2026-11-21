@@ -125,16 +125,24 @@ impl State {
         let _ = nota;
     }
 
-    /// Escribe el proyecto en un hilo aparte: el bucle de frames no toca el disco.
+    /// Guarda de forma atómica (temporal + rename) y solo marca limpio si se escribió.
+    ///
+    /// Antes se escribía el archivo vivo en un hilo y se ponía `dirty = false` sin esperar: una
+    /// escritura fallida dejaba la ventana diciendo «guardado» y un lector podía ver 0 bytes.
     fn save(&mut self) {
-        let Some(path) = self.path.clone() else { return };
-        let Ok(text) = serde_json::to_string_pretty(&*self.project) else { return };
-        std::thread::spawn(move || {
-            if let Err(e) = std::fs::write(&path, text) {
-                eprintln!("redes: no se pudo guardar {}: {e}", path.display());
+        let Some(path) = self.path.clone() else {
+            self.aviso = Some("Este proyecto no tiene archivo: usa `redes proyecto nuevo --salida`".into());
+            return;
+        };
+        match redes_core::project_io::save(&self.project, &path) {
+            Ok(()) => {
+                self.dirty = false;
+                self.aviso = Some(format!("Guardado {}", path.display()));
             }
-        });
-        self.dirty = false;
+            Err(e) => {
+                self.aviso = Some(format!("No se pudo guardar: {e}"));
+            }
+        }
     }
 
     fn rebuild(&mut self) {

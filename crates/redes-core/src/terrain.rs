@@ -77,6 +77,12 @@ impl TriIndex {
 impl Terrain {
     /// Construye el TIN por triangulación de Delaunay de la planta de los puntos.
     pub fn build(name: &str, epsg: u32, points: Vec<SurfacePoint>) -> Terrain {
+        // `delaunator` indexa con `-1` cuando recibe NaN y el proceso aborta: se filtran los
+        // puntos no finitos antes de triangular (un CSV/DXF hostil puede traerlos).
+        let points: Vec<SurfacePoint> = points
+            .into_iter()
+            .filter(|p| p.e.is_finite() && p.n.is_finite() && p.z.is_finite())
+            .collect();
         let mut bbox = Bbox::default();
         for p in &points {
             bbox.add(p.p2());

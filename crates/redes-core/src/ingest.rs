@@ -366,6 +366,13 @@ pub fn import_dxf(p: &mut Project, path: &Path, tolerance: f64) -> Result<Import
         i += 1;
     }
 
+    // Geometría no finita (un `10` con texto acaba en NaN): se descarta entera antes de usarla.
+    let finito2 = |c: &P2| c.x.is_finite() && c.y.is_finite();
+    let finito3 = |q: &P3| q.x.is_finite() && q.y.is_finite() && q.z.is_finite();
+    circles.retain(|(c, z)| finito2(c) && z.is_finite());
+    points.retain(|(c, z, _)| finito2(c) && z.is_finite());
+    lines.retain(|(v, _, _)| v.iter().all(finito3));
+
     // Nodos desde POINT.
     let mut node_ids: Vec<(ElementId, P2)> = Vec::new();
     for (pos, z, layer) in &points {
@@ -639,12 +646,16 @@ pub fn import_terreno(p: &mut Project, path: &Path, epsg: u32) -> Result<ImportR
             continue;
         }
         match (parts[0].parse::<f64>(), parts[1].parse::<f64>(), parts[2].parse::<f64>()) {
-            (Ok(e), Ok(n), Ok(z)) => pts.push(SurfacePoint::new(e, n, z)),
+            // `"NaN".parse::<f64>()` funciona en Rust: sin este filtro entra un NaN que luego se
+            // serializa como `null` y deja el proyecto imposible de abrir.
+            (Ok(e), Ok(n), Ok(z)) if e.is_finite() && n.is_finite() && z.is_finite() => {
+                pts.push(SurfacePoint::new(e, n, z))
+            }
             _ => {
                 if i == 0 {
                     continue;
                 }
-                rep.descartados.push(format!("línea {}: no numérico", i + 1));
+                rep.descartados.push(format!("línea {}: no numérico o no finito", i + 1));
             }
         }
     }
