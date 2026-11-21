@@ -292,19 +292,15 @@ fn to_datos(m: &BTreeMap<String, PlanDato>) -> BTreeMap<String, Dato> {
         .collect()
 }
 
+/// Subtipo por defecto de una familia: el primero del registro.
+///
+/// Antes era una tabla paralela que se quedó desfasada: 21 de 29 familias recibían un subtipo
+/// inexistente y el objeto se perdía en la importación.
 fn default_subtype(family: &str) -> String {
-    match family {
-        "saneamiento.pozo" => "inspeccion",
-        "saneamiento.tuberia" => "colector_sanitario",
-        "agua.tuberia" => "distribucion_primaria",
-        "saneamiento.descarga" => "emisario_muro",
-        "agua.tanque" => "apoyado_cilindrico",
-        "agua.valvula" => "compuerta",
-        "agua.llave" => "columna",
-        "saneamiento.camara" => "valvulas",
-        _ => "inspeccion",
-    }
-    .to_string()
+    crate::families::family(family)
+        .and_then(|f| f.types.first())
+        .map(|t| t.key.to_string())
+        .unwrap_or_else(|| "inspeccion".to_string())
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -856,6 +852,20 @@ fn today() -> String {
 
 #[cfg(test)]
 mod tests {
+    /// El subtipo por defecto debe existir en su familia (ADV-03).
+    #[test]
+    fn el_subtipo_por_defecto_existe_en_todas_las_familias() {
+        for f in crate::families::families() {
+            let ty = default_subtype(f.key);
+            assert!(
+                f.types.iter().any(|t| t.key == ty),
+                "{}/{}: subtipo por defecto inválido",
+                f.key,
+                ty
+            );
+        }
+    }
+
     use super::*;
 
     #[test]

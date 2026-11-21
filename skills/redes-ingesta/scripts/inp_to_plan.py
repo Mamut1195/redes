@@ -89,7 +89,7 @@ def swmm_plan(sections: dict[str, list[list[str]]], fuente: str) -> tuple[dict, 
                 "tipo": "nodo",
                 "codigo": name,
                 "familia": "saneamiento.descarga",
-                "subtipo": "emisario_final",
+                "subtipo": "emisario_muro",
                 "e": 0.0,
                 "n": 0.0,
                 "cota": invert,
@@ -112,7 +112,7 @@ def swmm_plan(sections: dict[str, list[list[str]]], fuente: str) -> tuple[dict, 
                 "tipo": "arco",
                 "codigo": name,
                 "familia": "saneamiento.tuberia",
-                "subtipo": "colector",
+                "subtipo": "colector_sanitario",
                 "desde": frm,
                 "hasta": to,
                 "diametro_mm": diam_mm,
@@ -179,7 +179,7 @@ def epanet_plan(sections: dict[str, list[list[str]]], fuente: str) -> tuple[dict
                 "tipo": "nodo",
                 "codigo": name,
                 "familia": "agua.tanque",
-                "subtipo": "apoyado",
+                "subtipo": "apoyado_cilindrico",
                 "e": 0.0,
                 "n": 0.0,
                 "cota": head,
@@ -198,7 +198,7 @@ def epanet_plan(sections: dict[str, list[list[str]]], fuente: str) -> tuple[dict
                 "tipo": "nodo",
                 "codigo": name,
                 "familia": "agua.tanque",
-                "subtipo": "apoyado",
+                "subtipo": "apoyado_cilindrico",
                 "e": 0.0,
                 "n": 0.0,
                 "cota": elev,
@@ -220,7 +220,7 @@ def epanet_plan(sections: dict[str, list[list[str]]], fuente: str) -> tuple[dict
                 "tipo": "arco",
                 "codigo": name,
                 "familia": "agua.tuberia",
-                "subtipo": "distribucion",
+                "subtipo": "distribucion_primaria",
                 "desde": n1,
                 "hasta": n2,
                 "diametro_mm": int(round(diam_mm)),
@@ -243,6 +243,18 @@ def epanet_plan(sections: dict[str, list[list[str]]], fuente: str) -> tuple[dict
     return plan, avisos
 
 
+def coordenadas_del_inp(sections: dict[str, list[list[str]]]) -> dict[str, tuple[float, float]]:
+    """Lee `[COORDINATES]` del propio .inp (SWMM y EPANET usan el mismo formato).
+
+    Antes había que pasar un CSV aparte con `--coords`, aunque el archivo ya trajera la planta.
+    """
+    coords: dict[str, tuple[float, float]] = {}
+    for fila in sections.get("COORDINATES", []):
+        if len(fila) >= 3:
+            coords[fila[0]] = (num(fila[1]), num(fila[2]))
+    return coords
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Convierte SWMM/EPANET .inp a redes.plan/1")
     ap.add_argument("--tipo", choices=["swmm", "epanet"], required=True)
@@ -259,24 +271,23 @@ def main() -> int:
     builder = swmm_plan if args.tipo == "swmm" else epanet_plan
     plan, avisos = builder(sections, str(args.archivo))
 
-    # Coordenadas opcionales: el .inp no las trae y sin planta no se puede ver en 3D.
+    # Planta: primero la del propio .inp; `--coords` (CSV) la sobrescribe si se pasa.
+    coords = coordenadas_del_inp(sections)
     if args.coords and args.coords.exists():
-        coords: dict[str, tuple[float, float]] = {}
         for line in args.coords.read_text(encoding="utf-8-sig", errors="replace").splitlines():
             parts = [p.strip() for p in re.split(r"[,;]", line) if p.strip()]
             if len(parts) >= 3:
                 coords[parts[0]] = (num(parts[1]), num(parts[2]))
-        faltan = 0
-        for o in plan["objetos"]:
-            if o["tipo"] == "nodo":
-                if o["codigo"] in coords:
-                    o["e"], o["n"] = coords[o["codigo"]]
-                else:
-                    faltan += 1
-        if faltan:
-            avisos.append(f"{faltan} nodos sin coordenada en {args.coords}")
-    else:
-        avisos.append("sin --coords: todos los nodos quedan en (0,0); el visor los apilará")
+
+    faltan = 0
+    for o in plan["objetos"]:
+        if o["tipo"] == "nodo":
+            if o["codigo"] in coords:
+                o["e"], o["n"] = coords[o["codigo"]]
+            else:
+                faltan += 1
+    if faltan:
+        avisos.append(f"{faltan} nodos sin coordenada; quedan en (0,0)")
 
     args.salida.parent.mkdir(parents=True, exist_ok=True)
     args.salida.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
