@@ -120,10 +120,17 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
     if !plan.schema.starts_with("redes.plan/") {
         return Err(format!("E_FMT_UNSUPPORTED: esquema {}", plan.schema));
     }
-    let mut rep = ImportReport { formato: "plan".into(), ..Default::default() };
+    let mut rep = ImportReport {
+        formato: "plan".into(),
+        ..Default::default()
+    };
 
     if !plan.terreno.is_empty() {
-        let pts = plan.terreno.iter().map(|v| SurfacePoint::new(v[0], v[1], v[2])).collect::<Vec<_>>();
+        let pts = plan
+            .terreno
+            .iter()
+            .map(|v| SurfacePoint::new(v[0], v[1], v[2]))
+            .collect::<Vec<_>>();
         rep.puntos_terreno = pts.len();
         p.terrain = Some(Terrain::build(&plan.proyecto.nombre, 32717, pts));
     }
@@ -131,7 +138,19 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
     // Índice de códigos para resolver `desde`/`hasta`.
     let mut codes: BTreeMap<String, ElementId> = BTreeMap::new();
     for o in &plan.objetos {
-        if let PlanObjeto::Nodo { codigo, familia, subtipo, e, n, cota, cota_terreno, diametro, attrs, datos } = o {
+        if let PlanObjeto::Nodo {
+            codigo,
+            familia,
+            subtipo,
+            e,
+            n,
+            cota,
+            cota_terreno,
+            diametro,
+            attrs,
+            datos,
+        } = o
+        {
             let zt = cota_terreno
                 .or(*cota)
                 .or_else(|| p.terrain.as_ref().and_then(|t| t.z_at(P2::new(*e, *n))))
@@ -141,11 +160,19 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
             if let Some(d) = diametro {
                 a.insert("diametro_interior".to_string(), Value::Num(*d));
             }
-            let code = if codigo.is_empty() { p.next_code(familia) } else { codigo.clone() };
+            let code = if codigo.is_empty() {
+                p.next_code(familia)
+            } else {
+                codigo.clone()
+            };
             let node = Node {
                 id: ElementId::new(0, 0),
                 family: familia.clone(),
-                ty: if subtipo.is_empty() { default_subtype(familia) } else { subtipo.clone() },
+                ty: if subtipo.is_empty() {
+                    default_subtype(familia)
+                } else {
+                    subtipo.clone()
+                },
                 code: code.clone(),
                 pos: P2::new(*e, *n),
                 z_terrain: zt,
@@ -168,9 +195,22 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
     }
 
     for o in &plan.objetos {
-        if let PlanObjeto::Arco { codigo, familia, subtipo, desde, hasta, diametro_mm, vertices, attrs, datos } = o {
+        if let PlanObjeto::Arco {
+            codigo,
+            familia,
+            subtipo,
+            desde,
+            hasta,
+            diametro_mm,
+            vertices,
+            attrs,
+            datos,
+        } = o
+        {
             let (Some(&from), Some(&to)) = (codes.get(desde), codes.get(hasta)) else {
-                rep.descartados.push(format!("arco {codigo}: extremo inexistente ({desde} → {hasta})"));
+                rep.descartados.push(format!(
+                    "arco {codigo}: extremo inexistente ({desde} → {hasta})"
+                ));
                 continue;
             };
             let (a, b) = (p.node(from).unwrap(), p.node(to).unwrap());
@@ -182,11 +222,19 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
                     P3::new(b.pos.x, b.pos.y, b.z_invert),
                 ]
             };
-            let code = if codigo.is_empty() { p.next_code(familia) } else { codigo.clone() };
+            let code = if codigo.is_empty() {
+                p.next_code(familia)
+            } else {
+                codigo.clone()
+            };
             let link = Link {
                 id: ElementId::new(0, 0),
                 family: familia.clone(),
-                ty: if subtipo.is_empty() { default_subtype(familia) } else { subtipo.clone() },
+                ty: if subtipo.is_empty() {
+                    default_subtype(familia)
+                } else {
+                    subtipo.clone()
+                },
                 code,
                 from,
                 to,
@@ -206,7 +254,11 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
     }
 
     p.fuentes.push(Fuente {
-        app: if plan.proyecto.fuente_app.is_empty() { "plan".into() } else { plan.proyecto.fuente_app.clone() },
+        app: if plan.proyecto.fuente_app.is_empty() {
+            "plan".into()
+        } else {
+            plan.proyecto.fuente_app.clone()
+        },
         archivo: if plan.proyecto.fuente_archivo.is_empty() {
             path.display().to_string()
         } else {
@@ -230,7 +282,11 @@ fn to_datos(m: &BTreeMap<String, PlanDato>) -> BTreeMap<String, Dato> {
         .map(|(k, v)| {
             (
                 k.clone(),
-                Dato { valor: v.valor, unidad: v.unidad.clone(), fuente: v.fuente.clone() },
+                Dato {
+                    valor: v.valor,
+                    unidad: v.unidad.clone(),
+                    fuente: v.fuente.clone(),
+                },
             )
         })
         .collect()
@@ -264,7 +320,10 @@ pub fn import_dxf(p: &mut Project, path: &Path, tolerance: f64) -> Result<Import
     if pairs.is_empty() {
         return Err("E_FMT_PARSE: el archivo no parece un DXF ASCII".into());
     }
-    let mut rep = ImportReport { formato: "dxf".into(), ..Default::default() };
+    let mut rep = ImportReport {
+        formato: "dxf".into(),
+        ..Default::default()
+    };
     let mut points: Vec<(P2, f64, String)> = Vec::new();
     let mut circles: Vec<(P2, f64)> = Vec::new();
     let mut lines: Vec<(Vec<P3>, String, String)> = Vec::new();
@@ -273,7 +332,11 @@ pub fn import_dxf(p: &mut Project, path: &Path, tolerance: f64) -> Result<Import
     while i + 1 < pairs.len() {
         let (code, val) = (&pairs[i].0, &pairs[i].1);
         if code == "0"
-            && (val == "POINT" || val == "LINE" || val == "POLYLINE" || val == "LWPOLYLINE" || val == "CIRCLE")
+            && (val == "POINT"
+                || val == "LINE"
+                || val == "POLYLINE"
+                || val == "LWPOLYLINE"
+                || val == "CIRCLE")
         {
             let kind = val.clone();
             i += 1;
@@ -347,7 +410,11 @@ pub fn import_dxf(p: &mut Project, path: &Path, tolerance: f64) -> Result<Import
                         }
                         i = j;
                         if verts.len() >= 2 {
-                            lines.push((verts, layer, if is_3d { "POLYLINE3D" } else { "POLYLINE" }.into()));
+                            lines.push((
+                                verts,
+                                layer,
+                                if is_3d { "POLYLINE3D" } else { "POLYLINE" }.into(),
+                            ));
                         }
                     } else {
                         // LWPOLYLINE: x/y repetidos y una elevación.
@@ -408,7 +475,9 @@ pub fn import_dxf(p: &mut Project, path: &Path, tolerance: f64) -> Result<Import
                 node_ids.push((id, *pos));
                 rep.nodos += 1;
             }
-            Err(e) => rep.descartados.push(format!("punto ({:.2},{:.2}): {e}", pos.x, pos.y)),
+            Err(e) => rep
+                .descartados
+                .push(format!("punto ({:.2},{:.2}): {e}", pos.x, pos.y)),
         }
     }
 
@@ -423,9 +492,12 @@ pub fn import_dxf(p: &mut Project, path: &Path, tolerance: f64) -> Result<Import
         }
         let from = nearest_node(p, &mut node_ids, first, tolerance, &mut rep);
         let to = nearest_node(p, &mut node_ids, last, tolerance, &mut rep);
-        let (Some(from), Some(to)) = (from, to) else { continue };
+        let (Some(from), Some(to)) = (from, to) else {
+            continue;
+        };
         if from == to {
-            rep.descartados.push(format!("polilínea en capa {layer}: extremos coincidentes"));
+            rep.descartados
+                .push(format!("polilínea en capa {layer}: extremos coincidentes"));
             continue;
         }
         let link = Link {
@@ -445,13 +517,18 @@ pub fn import_dxf(p: &mut Project, path: &Path, tolerance: f64) -> Result<Import
         };
         match p.add_link(link) {
             Ok(_) => rep.arcos += 1,
-            Err(e) => rep.descartados.push(format!("polilínea en capa {layer}: {e}")),
+            Err(e) => rep
+                .descartados
+                .push(format!("polilínea en capa {layer}: {e}")),
         }
     }
 
     p.fuentes.push(Fuente {
         app: "CAD (DXF)".into(),
-        archivo: path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default(),
+        archivo: path
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_default(),
         formato: "dxf".into(),
         importado_en: today(),
     });
@@ -531,29 +608,59 @@ fn dxf_pairs(text: &str) -> Vec<(String, String)> {
 /// Importa puntos y líneas de un GeoJSON. Las propiedades `familia`/`family` y `codigo` mandan.
 pub fn import_geojson(p: &mut Project, path: &Path) -> Result<ImportReport, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("E_IO_NOT_FOUND: {e}"))?;
-    let v: serde_json::Value = serde_json::from_str(&text).map_err(|e| format!("E_FMT_PARSE: {e}"))?;
-    let mut rep = ImportReport { formato: "geojson".into(), ..Default::default() };
-    let features = v.get("features").and_then(|f| f.as_array()).cloned().unwrap_or_default();
+    let v: serde_json::Value =
+        serde_json::from_str(&text).map_err(|e| format!("E_FMT_PARSE: {e}"))?;
+    let mut rep = ImportReport {
+        formato: "geojson".into(),
+        ..Default::default()
+    };
+    let features = v
+        .get("features")
+        .and_then(|f| f.as_array())
+        .cloned()
+        .unwrap_or_default();
     let mut codes: BTreeMap<String, ElementId> = BTreeMap::new();
 
     for f in &features {
         let Some(g) = f.get("geometry") else { continue };
         let ty = g.get("type").and_then(|t| t.as_str()).unwrap_or("");
-        let props = f.get("properties").cloned().unwrap_or(serde_json::Value::Null);
+        let props = f
+            .get("properties")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null);
         let fam = props
             .get("familia")
             .or_else(|| props.get("family"))
             .and_then(|x| x.as_str())
-            .unwrap_or(if ty == "Point" { "saneamiento.pozo" } else { "saneamiento.tuberia" })
+            .unwrap_or(if ty == "Point" {
+                "saneamiento.pozo"
+            } else {
+                "saneamiento.tuberia"
+            })
             .to_string();
-        let codigo = props.get("codigo").and_then(|x| x.as_str()).unwrap_or("").to_string();
+        let codigo = props
+            .get("codigo")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string();
         if ty == "Point" {
-            let c = g.get("coordinates").and_then(|c| c.as_array()).cloned().unwrap_or_default();
-            let (Some(e), Some(n)) = (c.first().and_then(|x| x.as_f64()), c.get(1).and_then(|x| x.as_f64())) else {
+            let c = g
+                .get("coordinates")
+                .and_then(|c| c.as_array())
+                .cloned()
+                .unwrap_or_default();
+            let (Some(e), Some(n)) = (
+                c.first().and_then(|x| x.as_f64()),
+                c.get(1).and_then(|x| x.as_f64()),
+            ) else {
                 continue;
             };
             let z = c.get(2).and_then(|x| x.as_f64()).unwrap_or(0.0);
-            let zt = p.terrain.as_ref().and_then(|t| t.z_at(P2::new(e, n))).unwrap_or(z);
+            let zt = p
+                .terrain
+                .as_ref()
+                .and_then(|t| t.z_at(P2::new(e, n)))
+                .unwrap_or(z);
             let node = Node {
                 id: ElementId::new(0, 0),
                 family: fam.clone(),
@@ -571,18 +678,33 @@ pub fn import_geojson(p: &mut Project, path: &Path) -> Result<ImportReport, Stri
             };
             match p.add_node(node) {
                 Ok(id) => {
-                    codes.insert(if codigo.is_empty() { format!("{id}") } else { codigo }, id);
+                    codes.insert(
+                        if codigo.is_empty() {
+                            format!("{id}")
+                        } else {
+                            codigo
+                        },
+                        id,
+                    );
                     rep.nodos += 1;
                 }
                 Err(e) => rep.descartados.push(e),
             }
         } else if ty == "LineString" {
-            let coords = g.get("coordinates").and_then(|c| c.as_array()).cloned().unwrap_or_default();
+            let coords = g
+                .get("coordinates")
+                .and_then(|c| c.as_array())
+                .cloned()
+                .unwrap_or_default();
             let path: Vec<P3> = coords
                 .iter()
                 .filter_map(|c| {
                     let a = c.as_array()?;
-                    Some(P3::new(a.first()?.as_f64()?, a.get(1)?.as_f64()?, a.get(2).and_then(|z| z.as_f64()).unwrap_or(0.0)))
+                    Some(P3::new(
+                        a.first()?.as_f64()?,
+                        a.get(1)?.as_f64()?,
+                        a.get(2).and_then(|z| z.as_f64()).unwrap_or(0.0),
+                    ))
                 })
                 .collect();
             if path.len() < 2 {
@@ -592,14 +714,21 @@ pub fn import_geojson(p: &mut Project, path: &Path) -> Result<ImportReport, Stri
             let to_code = props.get("hasta").and_then(|x| x.as_str()).unwrap_or("");
             let from = codes.get(from_code).copied().or_else(|| {
                 let pos = path[0].p2();
-                p.nodes.iter().find(|n| !n.deleted && n.pos.dist(pos) < 1.0).map(|n| n.id)
+                p.nodes
+                    .iter()
+                    .find(|n| !n.deleted && n.pos.dist(pos) < 1.0)
+                    .map(|n| n.id)
             });
             let to = codes.get(to_code).copied().or_else(|| {
                 let pos = path[path.len() - 1].p2();
-                p.nodes.iter().find(|n| !n.deleted && n.pos.dist(pos) < 1.0).map(|n| n.id)
+                p.nodes
+                    .iter()
+                    .find(|n| !n.deleted && n.pos.dist(pos) < 1.0)
+                    .map(|n| n.id)
             });
             let (Some(from), Some(to)) = (from, to) else {
-                rep.descartados.push("línea sin nodos en sus extremos".into());
+                rep.descartados
+                    .push("línea sin nodos en sus extremos".into());
                 continue;
             };
             let link = Link {
@@ -610,7 +739,10 @@ pub fn import_geojson(p: &mut Project, path: &Path) -> Result<ImportReport, Stri
                 from,
                 to,
                 path,
-                d_mm: props.get("diametro_mm").and_then(|x| x.as_u64()).unwrap_or(200) as u32,
+                d_mm: props
+                    .get("diametro_mm")
+                    .and_then(|x| x.as_u64())
+                    .unwrap_or(200) as u32,
                 attrs: BTreeMap::new(),
                 datos: BTreeMap::new(),
                 estado: EstadoObjeto::Pendiente,
@@ -631,7 +763,10 @@ pub fn import_geojson(p: &mut Project, path: &Path) -> Result<ImportReport, Stri
 pub fn import_terreno(p: &mut Project, path: &Path, epsg: u32) -> Result<ImportReport, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("E_IO_NOT_FOUND: {e}"))?;
     let mut pts = Vec::new();
-    let mut rep = ImportReport { formato: "csv".into(), ..Default::default() };
+    let mut rep = ImportReport {
+        formato: "csv".into(),
+        ..Default::default()
+    };
     for (i, line) in text.lines().enumerate() {
         let l = line.trim();
         if l.is_empty() || l.starts_with('#') {
@@ -642,10 +777,15 @@ pub fn import_terreno(p: &mut Project, path: &Path, epsg: u32) -> Result<ImportR
             .filter(|s| !s.is_empty())
             .collect();
         if parts.len() < 3 {
-            rep.descartados.push(format!("línea {}: menos de 3 columnas", i + 1));
+            rep.descartados
+                .push(format!("línea {}: menos de 3 columnas", i + 1));
             continue;
         }
-        match (parts[0].parse::<f64>(), parts[1].parse::<f64>(), parts[2].parse::<f64>()) {
+        match (
+            parts[0].parse::<f64>(),
+            parts[1].parse::<f64>(),
+            parts[2].parse::<f64>(),
+        ) {
             // `"NaN".parse::<f64>()` funciona en Rust: sin este filtro entra un NaN que luego se
             // serializa como `null` y deja el proyecto imposible de abrir.
             (Ok(e), Ok(n), Ok(z)) if e.is_finite() && n.is_finite() && z.is_finite() => {
@@ -655,7 +795,8 @@ pub fn import_terreno(p: &mut Project, path: &Path, epsg: u32) -> Result<ImportR
                 if i == 0 {
                     continue;
                 }
-                rep.descartados.push(format!("línea {}: no numérico o no finito", i + 1));
+                rep.descartados
+                    .push(format!("línea {}: no numérico o no finito", i + 1));
             }
         }
     }
@@ -663,7 +804,10 @@ pub fn import_terreno(p: &mut Project, path: &Path, epsg: u32) -> Result<ImportR
         return Err("E_FMT_PARSE: se necesitan al menos 3 puntos válidos E,N,Z".into());
     }
     rep.puntos_terreno = pts.len();
-    let name = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "terreno".into());
+    let name = path
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "terreno".into());
     p.terrain = Some(Terrain::build(&name, epsg, pts));
     p.commit("importar terreno");
     Ok(rep)
@@ -688,7 +832,20 @@ fn today() -> String {
         year += 1;
     }
     let leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
-    let months = [31, if leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let months = [
+        31,
+        if leap { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
     let mut m = 0;
     while m < 12 && days >= months[m] {
         days -= months[m];

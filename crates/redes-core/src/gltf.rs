@@ -139,7 +139,7 @@ pub fn triangulos_exportables(p: &Project, con_terreno: bool) -> Malla {
                     P2::new(b.x - nx, b.y - ny),
                     P2::new(a.x - nx, a.y - ny),
                 ];
-                let mut pt = [ [0f32; 3]; 4 ];
+                let mut pt = [[0f32; 3]; 4];
                 let mut ok = true;
                 for (i, q) in esquinas.iter().enumerate() {
                     match cota(*q) {
@@ -180,8 +180,14 @@ pub fn triangulos_exportables(p: &Project, con_terreno: bool) -> Malla {
             for i in 0..n {
                 let q1 = mz.poligono[i];
                 let q2 = mz.poligono[(i + 1) % n];
-                let (b1, b2) = (a_local(P3::new(q1.x, q1.y, base)), a_local(P3::new(q2.x, q2.y, base)));
-                let (t1, t2) = (a_local(P3::new(q1.x, q1.y, top)), a_local(P3::new(q2.x, q2.y, top)));
+                let (b1, b2) = (
+                    a_local(P3::new(q1.x, q1.y, base)),
+                    a_local(P3::new(q2.x, q2.y, base)),
+                );
+                let (t1, t2) = (
+                    a_local(P3::new(q1.x, q1.y, top)),
+                    a_local(P3::new(q2.x, q2.y, top)),
+                );
                 for tri in [[b1, b2, t2], [b1, t2, t1]] {
                     out.tris.push(Triangulo {
                         pos: tri,
@@ -218,7 +224,11 @@ pub fn triangulos_exportables(p: &Project, con_terreno: bool) -> Malla {
             let (zmin, zmax) = t.z_range();
             let zspan = (zmax - zmin).max(1e-6);
             for tri in &t.tris {
-                let pts = [&t.points[tri[0] as usize], &t.points[tri[1] as usize], &t.points[tri[2] as usize]];
+                let pts = [
+                    &t.points[tri[0] as usize],
+                    &t.points[tri[1] as usize],
+                    &t.points[tri[2] as usize],
+                ];
                 let pos = pts.map(|q| a_local(P3::new(q.e, q.n, q.z)));
                 let zc = (pts[0].z + pts[1].z + pts[2].z) / 3.0;
                 let t01 = ((zc - zmin) / zspan).clamp(0.0, 1.0) as f32;
@@ -262,16 +272,32 @@ pub fn exportar_glb(p: &Project, opts: OpcionesGltf) -> Vec<u8> {
         for k in 0..3 {
             let mut pos = tri.pos[k];
             pos[2] -= z0;
-            destino.push(Vertice { pos, normal: tri.normal, color: tri.color });
+            destino.push(Vertice {
+                pos,
+                normal: tri.normal,
+                color: tri.color,
+            });
         }
     }
     construir_glb(&por_familia)
 }
 
 fn normal_de(tri: [[f32; 3]; 3]) -> [f32; 3] {
-    let u = [tri[1][0] - tri[0][0], tri[1][1] - tri[0][1], tri[1][2] - tri[0][2]];
-    let v = [tri[2][0] - tri[0][0], tri[2][1] - tri[0][1], tri[2][2] - tri[0][2]];
-    let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    let u = [
+        tri[1][0] - tri[0][0],
+        tri[1][1] - tri[0][1],
+        tri[1][2] - tri[0][2],
+    ];
+    let v = [
+        tri[2][0] - tri[0][0],
+        tri[2][1] - tri[0][1],
+        tri[2][2] - tri[0][2],
+    ];
+    let n = [
+        u[1] * v[2] - u[2] * v[1],
+        u[2] * v[0] - u[0] * v[2],
+        u[0] * v[1] - u[1] * v[0],
+    ];
     let l = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt().max(1e-9);
     [n[0] / l, n[1] / l, n[2] / l]
 }
@@ -411,7 +437,9 @@ mod tests {
         assert!(n >= 10, "el archivo perdió las calles: {n}");
         let m = triangulos_exportables(&q, false);
         assert!(
-            m.familias.iter().any(|f| f.starts_with("Av.") || f.starts_with("Calle")),
+            m.familias
+                .iter()
+                .any(|f| f.starts_with("Av.") || f.starts_with("Calle")),
             "sin calles en la malla: {:?}",
             m.familias
         );
@@ -422,7 +450,10 @@ mod tests {
     fn la_ciudad_exporta_calles_y_edificios() {
         let p = crate::demo_city::ciudad();
         let malla = triangulos_exportables(&p, false);
-        let hay_calle = malla.familias.iter().any(|f| f.starts_with("Av.") || f.starts_with("Calle"));
+        let hay_calle = malla
+            .familias
+            .iter()
+            .any(|f| f.starts_with("Av.") || f.starts_with("Calle"));
         let hay_cubierta = malla.familias.iter().any(|f| f == "cubierta");
         assert!(hay_calle, "faltan calles: {:?}", malla.familias);
         assert!(hay_cubierta, "faltan cubiertas: {:?}", malla.familias);
@@ -433,7 +464,11 @@ mod tests {
         let p = crate::demo_catalog::catalogo();
         let glb = exportar_glb(&p, OpcionesGltf::default());
         assert_eq!(&glb[0..4], b"glTF", "magic");
-        assert_eq!(u32::from_le_bytes([glb[4], glb[5], glb[6], glb[7]]), 2, "versión");
+        assert_eq!(
+            u32::from_le_bytes([glb[4], glb[5], glb[6], glb[7]]),
+            2,
+            "versión"
+        );
         let total = u32::from_le_bytes([glb[8], glb[9], glb[10], glb[11]]) as usize;
         assert_eq!(total, glb.len(), "el largo declarado debe coincidir");
 
@@ -468,7 +503,11 @@ mod tests {
     fn el_documento_serializado_pesa_lo_razonable() {
         let p = crate::demo_catalog::catalogo();
         let glb = exportar_glb(&p, OpcionesGltf::default());
-        assert!(glb.len() > 10_000, "un catálogo no puede pesar {} bytes", glb.len());
+        assert!(
+            glb.len() > 10_000,
+            "un catálogo no puede pesar {} bytes",
+            glb.len()
+        );
         assert!(glb.len() < 40_000_000, "demasiado grande: {}", glb.len());
     }
 }

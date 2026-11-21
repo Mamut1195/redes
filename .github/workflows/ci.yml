@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  calidad:
+    name: Formato, avisos y pruebas
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      # vendor/rune es una dependencia por ruta: sin red y sin sorpresas.
+      - name: Formato
+        run: cargo fmt -p redes-core -p redes-cli -p redes-app --check
+
+      # Solo se exige lo que es un defecto (correctness); el resto de avisos está en ADV-06.
+      - name: Clippy
+        run: cargo clippy -p redes-core -p redes-cli -p redes-app --all-targets -- -D clippy::correctness
+
+      - name: Pruebas
+        run: cargo test --workspace
+
+      - name: Release
+        run: cargo build --release -p redes-app -p redes-cli
+
+  mutacion:
+    name: Mutación (la suite debe detectar el código roto)
+    runs-on: windows-latest
+    needs: calidad
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Mutar
+        shell: pwsh
+        run: ./scripts/mutar.ps1

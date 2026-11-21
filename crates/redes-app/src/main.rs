@@ -11,7 +11,6 @@ use std::sync::{Arc, Mutex};
 
 use redes_core::families::{self, caps, family};
 use redes_core::model::{EstadoObjeto, Project};
-use std::path::PathBuf;
 use redes_core::terrain::Terrain;
 use redes_core::view::{self, Camera, Layers, Opciones, Prim, Scene};
 use rune::tok::type_;
@@ -19,21 +18,77 @@ use rune::{
     AppSpec, Color, Cx, Drag, El, LineCap, Phase, PointerButton, ScrollSpec, Shape, Tx, WheelEvent,
     canvas, col, el, row, text,
 };
+use std::path::PathBuf;
 
 // ---------------------------------------------------------------------------------------------
 // Paleta
 
-const BG: Color = Color { r: 0.062, g: 0.068, b: 0.082, a: 1.0 };
-const AL: Color = Color { r: 0.87, g: 0.60, b: 0.31, a: 1.0 };
-const AP: Color = Color { r: 0.33, g: 0.63, b: 0.96, a: 1.0 };
-const PANEL: Color = Color { r: 0.100, g: 0.107, b: 0.124, a: 1.0 };
-const PANEL_HI: Color = Color { r: 0.145, g: 0.152, b: 0.174, a: 1.0 };
-const LINE: Color = Color { r: 0.185, g: 0.194, b: 0.220, a: 1.0 };
-const INK: Color = Color { r: 0.910, g: 0.920, b: 0.945, a: 1.0 };
-const DIM: Color = Color { r: 0.560, g: 0.588, b: 0.645, a: 1.0 };
-const OK: Color = Color { r: 0.360, g: 0.900, b: 0.560, a: 1.0 };
-const WARN: Color = Color { r: 0.980, g: 0.760, b: 0.300, a: 1.0 };
-const ERR: Color = Color { r: 0.980, g: 0.420, b: 0.400, a: 1.0 };
+const BG: Color = Color {
+    r: 0.062,
+    g: 0.068,
+    b: 0.082,
+    a: 1.0,
+};
+const AL: Color = Color {
+    r: 0.87,
+    g: 0.60,
+    b: 0.31,
+    a: 1.0,
+};
+const AP: Color = Color {
+    r: 0.33,
+    g: 0.63,
+    b: 0.96,
+    a: 1.0,
+};
+const PANEL: Color = Color {
+    r: 0.100,
+    g: 0.107,
+    b: 0.124,
+    a: 1.0,
+};
+const PANEL_HI: Color = Color {
+    r: 0.145,
+    g: 0.152,
+    b: 0.174,
+    a: 1.0,
+};
+const LINE: Color = Color {
+    r: 0.185,
+    g: 0.194,
+    b: 0.220,
+    a: 1.0,
+};
+const INK: Color = Color {
+    r: 0.910,
+    g: 0.920,
+    b: 0.945,
+    a: 1.0,
+};
+const DIM: Color = Color {
+    r: 0.560,
+    g: 0.588,
+    b: 0.645,
+    a: 1.0,
+};
+const OK: Color = Color {
+    r: 0.360,
+    g: 0.900,
+    b: 0.560,
+    a: 1.0,
+};
+const WARN: Color = Color {
+    r: 0.980,
+    g: 0.760,
+    b: 0.300,
+    a: 1.0,
+};
+const ERR: Color = Color {
+    r: 0.980,
+    g: 0.420,
+    b: 0.400,
+    a: 1.0,
+};
 
 // ---------------------------------------------------------------------------------------------
 // Estado
@@ -133,7 +188,8 @@ impl State {
     /// escritura fallida dejaba la ventana diciendo «guardado» y un lector podía ver 0 bytes.
     fn save(&mut self) {
         let Some(path) = self.path.clone() else {
-            self.aviso = Some("Este proyecto no tiene archivo: usa `redes proyecto nuevo --salida`".into());
+            self.aviso =
+                Some("Este proyecto no tiene archivo: usa `redes proyecto nuevo --salida`".into());
             return;
         };
         match redes_core::project_io::save(&self.project, &path) {
@@ -185,7 +241,11 @@ impl State {
         let id = n.id;
         let alto = (rim - inv).max(0.4);
         let tam = diam.max(alto);
-        self.cam.target = [pos.x - self.project.origin.x, pos.y - self.project.origin.y, rim];
+        self.cam.target = [
+            pos.x - self.project.origin.x,
+            pos.y - self.project.origin.y,
+            rim,
+        ];
         self.cam.distance = (tam * 3.4).clamp(2.5, 60.0);
         self.cam.azimuth = -48.0;
         self.cam.elevation = 16.0;
@@ -200,9 +260,14 @@ impl State {
 
     /// Sale de foco/corte/explosión.
     fn salir_modo(&mut self) {
-        let habia = self.opts.foco.is_some() || self.opts.corte_x.is_some() || self.opts.explosion > 0.0;
+        let habia =
+            self.opts.foco.is_some() || self.opts.corte_x.is_some() || self.opts.explosion > 0.0;
         self.opts = Opciones::default();
-        self.cam.z_scale = if self.project.entorno.is_some() { 2.6 } else { 2.0 };
+        self.cam.z_scale = if self.project.entorno.is_some() {
+            2.6
+        } else {
+            2.0
+        };
         if habia {
             self.fit();
             self.aviso = Some("Modo normal".into());
@@ -260,23 +325,32 @@ impl State {
         let Some(code) = self.sel.clone() else { return };
         self.recordar();
         let project = Arc::make_mut(&mut self.project);
-        if let Some(n) = project.nodes.iter_mut().find(|n| n.code == code && !n.deleted) {
+        if let Some(n) = project
+            .nodes
+            .iter_mut()
+            .find(|n| n.code == code && !n.deleted)
+        {
             match clave {
                 "profundidad" => {
                     // Más profundo = clave más baja; los límites se ordenan para no invertir el clamp.
                     let (bajo, alto) = (n.z_terrain - 12.0, n.z_rim - 0.6);
                     n.z_invert = (n.z_invert + delta).clamp(bajo.min(alto), bajo.max(alto));
-                    n.attrs.insert("cota_clave".to_string(), families::Value::Num(n.z_invert));
+                    n.attrs
+                        .insert("cota_clave".to_string(), families::Value::Num(n.z_invert));
                 }
                 "diametro" => {
                     let actual = n.diametro();
                     let nuevo = (actual + delta).clamp(0.4, 4.0);
-                    n.attrs.insert("diametro_interior".to_string(), families::Value::Num(nuevo));
+                    n.attrs
+                        .insert("diametro_interior".to_string(), families::Value::Num(nuevo));
                 }
                 _ => {
                     let actual = n.num("diametro_nominal").unwrap_or(200.0);
                     let nuevo = (actual + delta).clamp(25.0, 1200.0);
-                    n.attrs.insert("diametro_nominal".to_string(), families::Value::Int(nuevo as i64));
+                    n.attrs.insert(
+                        "diametro_nominal".to_string(),
+                        families::Value::Int(nuevo as i64),
+                    );
                 }
             }
         }
@@ -371,15 +445,19 @@ fn load_project() -> (Project, Option<PathBuf>) {
 }
 
 fn color(c: [f32; 4]) -> Color {
-    Color { r: c[0], g: c[1], b: c[2], a: c[3] }
+    Color {
+        r: c[0],
+        g: c[1],
+        b: c[2],
+        a: c[3],
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
 // Vista
 
 fn button(label: &str) -> El {
-    el()
-        .padding(6.0)
+    el().padding(6.0)
         .radius(6.0)
         .fill(PANEL_HI)
         .border(1.0, LINE)
@@ -388,13 +466,16 @@ fn button(label: &str) -> El {
 }
 
 fn chip(label: &str, on: bool) -> El {
-    el()
-        .padding(5.0)
+    el().padding(5.0)
         .radius(5.0)
         .fill(if on { PANEL_HI } else { PANEL })
         .border(1.0, LINE)
         .cursor(rune::Cursor::Pointer)
-        .child(text(label).font(type_::LABEL).color(if on { INK } else { DIM }))
+        .child(
+            text(label)
+                .font(type_::LABEL)
+                .color(if on { INK } else { DIM }),
+        )
 }
 
 fn kv(k: &str, v: String) -> El {
@@ -420,7 +501,9 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
                     shape = shape.fill(pts.clone(), color(*fill));
                 }
             }
-            Prim::Line { a, b, w, color: c, .. } => {
+            Prim::Line {
+                a, b, w, color: c, ..
+            } => {
                 shape = shape.line(*a, *b, *w, LineCap::Round, color(*c));
             }
         }
@@ -490,13 +573,30 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
     // La capa de etiquetas se superpone al canvas (pin a los cuatro bordes).
     let mut capa = el().pin(Some(0.0), Some(0.0), Some(0.0), Some(0.0));
     for et in s.scene.etiquetas.iter().take(28) {
-        let color_txt = if et.seleccion { OK } else { Color { r: 0.86, g: 0.88, b: 0.92, a: 0.92 } };
+        let color_txt = if et.seleccion {
+            OK
+        } else {
+            Color {
+                r: 0.86,
+                g: 0.88,
+                b: 0.92,
+                a: 0.92,
+            }
+        };
         capa = capa.child(
-            el()
-                .absolute(et.pos[0] + 8.0, et.pos[1] - 6.0)
+            el().absolute(et.pos[0] + 8.0, et.pos[1] - 6.0)
                 .padding(2.0)
-                .fill(Color { r: 0.04, g: 0.045, b: 0.055, a: 0.78 })
-                .child(text(et.texto.clone()).font(type_::MONO_CAPTION).color(color_txt)),
+                .fill(Color {
+                    r: 0.04,
+                    g: 0.045,
+                    b: 0.055,
+                    a: 0.78,
+                })
+                .child(
+                    text(et.texto.clone())
+                        .font(type_::MONO_CAPTION)
+                        .color(color_txt),
+                ),
         );
     }
 
@@ -509,9 +609,19 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
         .clip_rounded(8.0)
         .fill(if s.gpu3d {
             // Transparente: deja ver el pase 3D que se dibuja debajo de la interfaz.
-            Color { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }
+            Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 0.0,
+            }
         } else {
-            Color { r: 0.050, g: 0.055, b: 0.066, a: 1.0 }
+            Color {
+                r: 0.050,
+                g: 0.055,
+                b: 0.066,
+                a: 1.0,
+            }
         })
         .child(stage)
         .child(capa);
@@ -524,7 +634,9 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
         .padding(10.0)
         .gap(3.0)
         .fill(PANEL)
-        .scroll(ScrollSpec { stick_bottom: false });
+        .scroll(ScrollSpec {
+            stick_bottom: false,
+        });
     left = left
         .child(text("Revisión").font(type_::TITLE).color(INK))
         .child(
@@ -554,18 +666,26 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
                     s.layers.terreno = !s.layers.terreno;
                     s.rebuild();
                 }))
-                .child(chip("Alcantarillado", s.layers.alcantarillado).on_press(|s: &mut State| {
-                    s.layers.alcantarillado = !s.layers.alcantarillado;
-                    s.rebuild();
-                }))
-                .child(chip("Agua potable", s.layers.agua).on_press(|s: &mut State| {
-                    s.layers.agua = !s.layers.agua;
-                    s.rebuild();
-                }))
-                .child(chip("Edificios", s.layers.edificios).key("btn-edificios").on_press(|s: &mut State| {
-                    s.layers.edificios = !s.layers.edificios;
-                    s.rebuild();
-                })),
+                .child(
+                    chip("Alcantarillado", s.layers.alcantarillado).on_press(|s: &mut State| {
+                        s.layers.alcantarillado = !s.layers.alcantarillado;
+                        s.rebuild();
+                    }),
+                )
+                .child(
+                    chip("Agua potable", s.layers.agua).on_press(|s: &mut State| {
+                        s.layers.agua = !s.layers.agua;
+                        s.rebuild();
+                    }),
+                )
+                .child(
+                    chip("Edificios", s.layers.edificios)
+                        .key("btn-edificios")
+                        .on_press(|s: &mut State| {
+                            s.layers.edificios = !s.layers.edificios;
+                            s.rebuild();
+                        }),
+                ),
         )
         .child(el().h(10.0))
         .child(text("Leyenda").font(type_::TITLE).color(INK));
@@ -584,13 +704,23 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
                 .gap(6.0)
                 .items_center()
                 .child(text(glifo).font(type_::TITLE).color(col))
-                .child(text(format!("{nombre} · {n}")).font(type_::LABEL).color(DIM)),
+                .child(
+                    text(format!("{nombre} · {n}"))
+                        .font(type_::LABEL)
+                        .color(DIM),
+                ),
         );
     }
 
-    left = left.child(el().h(10.0)).child(text("Cámaras").font(type_::TITLE).color(INK));
+    left = left
+        .child(el().h(10.0))
+        .child(text("Cámaras").font(type_::TITLE).color(INK));
 
-    for (label, az, ev) in [("Planta", 0.0f32, 88.0f32), ("Isométrica", -55.0, 32.0), ("Perfil", -90.0, 4.0)] {
+    for (label, az, ev) in [
+        ("Planta", 0.0f32, 88.0f32),
+        ("Isométrica", -55.0, 32.0),
+        ("Perfil", -90.0, 4.0),
+    ] {
         left = left.child(chip(label, false).on_press(move |s: &mut State| {
             s.cam.azimuth = az;
             s.cam.elevation = ev;
@@ -605,7 +735,9 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
         .padding(12.0)
         .gap(6.0)
         .fill(PANEL)
-        .scroll(ScrollSpec { stick_bottom: false });
+        .scroll(ScrollSpec {
+            stick_bottom: false,
+        });
     right = right.child(text("Inspector").font(type_::TITLE).color(INK));
 
     let sel_node = s.sel.as_deref().and_then(|c| s.project.node_by_code(c));
@@ -622,18 +754,24 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
                 right = right.child(
                     row()
                         .gap(4.0)
-                        .child(chip("Aprobar", n.estado == EstadoObjeto::Aprobado).key("btn-aprobar").on_press(
-                            move |s: &mut State| s.set_estado(&code_a, EstadoObjeto::Aprobado, None),
-                        ))
-                        .child(chip("Observar", n.estado == EstadoObjeto::Observado).key("btn-observar").on_press(
-                            move |s: &mut State| {
-                                s.set_estado(
-                                    &code_o,
-                                    EstadoObjeto::Observado,
-                                    Some("Observado en revisión".to_string()),
-                                )
-                            },
-                        )),
+                        .child(
+                            chip("Aprobar", n.estado == EstadoObjeto::Aprobado)
+                                .key("btn-aprobar")
+                                .on_press(move |s: &mut State| {
+                                    s.set_estado(&code_a, EstadoObjeto::Aprobado, None)
+                                }),
+                        )
+                        .child(
+                            chip("Observar", n.estado == EstadoObjeto::Observado)
+                                .key("btn-observar")
+                                .on_press(move |s: &mut State| {
+                                    s.set_estado(
+                                        &code_o,
+                                        EstadoObjeto::Observado,
+                                        Some("Observado en revisión".to_string()),
+                                    )
+                                }),
+                        ),
                 );
                 if let Some(nota) = &n.nota {
                     right = right.child(text(nota.clone()).font(type_::LABEL).color(WARN).wrap());
@@ -652,23 +790,48 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
             right = right.child(
                 row()
                     .gap(4.0)
-                    .child(chip("− DN", false).key("btn-dn-menos").on_press(|s: &mut State| s.ajustar("dn", -25.0)))
-                    .child(chip("+ DN", false).key("btn-dn-mas").on_press(|s: &mut State| s.ajustar("dn", 25.0)))
-                    .child(chip("− Ø", false).key("btn-dia-menos").on_press(|s: &mut State| s.ajustar("diametro", -0.1)))
-                    .child(chip("+ Ø", false).key("btn-dia-mas").on_press(|s: &mut State| s.ajustar("diametro", 0.1))),
+                    .child(
+                        chip("− DN", false)
+                            .key("btn-dn-menos")
+                            .on_press(|s: &mut State| s.ajustar("dn", -25.0)),
+                    )
+                    .child(
+                        chip("+ DN", false)
+                            .key("btn-dn-mas")
+                            .on_press(|s: &mut State| s.ajustar("dn", 25.0)),
+                    )
+                    .child(
+                        chip("− Ø", false)
+                            .key("btn-dia-menos")
+                            .on_press(|s: &mut State| s.ajustar("diametro", -0.1)),
+                    )
+                    .child(
+                        chip("+ Ø", false)
+                            .key("btn-dia-mas")
+                            .on_press(|s: &mut State| s.ajustar("diametro", 0.1)),
+                    ),
             );
             right = right.child(
                 row()
                     .gap(4.0)
-                    .child(chip("− prof.", false).key("btn-prof-menos").on_press(|s: &mut State| s.ajustar("profundidad", 0.25)))
-                    .child(chip("+ prof.", false).key("btn-prof-mas").on_press(|s: &mut State| s.ajustar("profundidad", -0.25))),
+                    .child(
+                        chip("− prof.", false)
+                            .key("btn-prof-menos")
+                            .on_press(|s: &mut State| s.ajustar("profundidad", 0.25)),
+                    )
+                    .child(
+                        chip("+ prof.", false)
+                            .key("btn-prof-mas")
+                            .on_press(|s: &mut State| s.ajustar("profundidad", -0.25)),
+                    ),
             );
 
             if !n.datos.is_empty() {
                 right = right.child(el().h(6.0));
                 right = right.child(section("Datos importados (no calculados)"));
                 for (k, d) in &n.datos {
-                    right = right.child(kv(k, format!("{:.2} {} · {}", d.valor, d.unidad, d.fuente)));
+                    right =
+                        right.child(kv(k, format!("{:.2} {} · {}", d.valor, d.unidad, d.fuente)));
                 }
             }
             if let Some(def) = family(&n.family) {
@@ -700,18 +863,24 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
                 right = right.child(
                     row()
                         .gap(4.0)
-                        .child(chip("Aprobar", l.estado == EstadoObjeto::Aprobado).key("btn-aprobar").on_press(
-                            move |s: &mut State| s.set_estado(&code_a, EstadoObjeto::Aprobado, None),
-                        ))
-                        .child(chip("Observar", l.estado == EstadoObjeto::Observado).key("btn-observar").on_press(
-                            move |s: &mut State| {
-                                s.set_estado(
-                                    &code_o,
-                                    EstadoObjeto::Observado,
-                                    Some("Observado en revisión".to_string()),
-                                )
-                            },
-                        )),
+                        .child(
+                            chip("Aprobar", l.estado == EstadoObjeto::Aprobado)
+                                .key("btn-aprobar")
+                                .on_press(move |s: &mut State| {
+                                    s.set_estado(&code_a, EstadoObjeto::Aprobado, None)
+                                }),
+                        )
+                        .child(
+                            chip("Observar", l.estado == EstadoObjeto::Observado)
+                                .key("btn-observar")
+                                .on_press(move |s: &mut State| {
+                                    s.set_estado(
+                                        &code_o,
+                                        EstadoObjeto::Observado,
+                                        Some("Observado en revisión".to_string()),
+                                    )
+                                }),
+                        ),
                 );
                 if let Some(nota) = &l.nota {
                     right = right.child(text(nota.clone()).font(type_::LABEL).color(WARN).wrap());
@@ -729,7 +898,8 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
                 right = right.child(el().h(6.0));
                 right = right.child(section("Datos importados (no calculados)"));
                 for (k, d) in &l.datos {
-                    right = right.child(kv(k, format!("{:.2} {} · {}", d.valor, d.unidad, d.fuente)));
+                    right =
+                        right.child(kv(k, format!("{:.2} {} · {}", d.valor, d.unidad, d.fuente)));
                 }
             }
         }
@@ -770,29 +940,67 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
                 .color(DIM),
         )
         .child(el().grow(1.0))
-        .child(button(if s.dirty { "Guardar *" } else { "Guardar" }).key("btn-guardar").on_press(|s: &mut State| s.save()))
-        .child(button("Encuadrar").key("btn-encuadrar").on_press(|s: &mut State| s.fit()))
-        .child(button("Planta").key("btn-planta").on_press(|s: &mut State| {
-            s.cam.azimuth = 0.0;
-            s.cam.elevation = 88.0;
-            s.rebuild();
-        }))
-        .child(button("Isométrica").key("btn-iso").on_press(|s: &mut State| {
-            s.cam.azimuth = -55.0;
-            s.cam.elevation = 32.0;
-            s.rebuild();
-        }))
-        .child(button("Foco").key("btn-foco").on_press(|s: &mut State| s.enfocar()))
-        .child(button(if s.opts.corte_x.is_some() { "Corte *" } else { "Corte" }).key("btn-corte").on_press(
-            |s: &mut State| s.alternar_corte(),
-        ))
         .child(
-            button(if s.opts.explosion > 0.0 { "Explosión *" } else { "Explosión" })
-                .key("btn-explosion")
-                .on_press(|s: &mut State| s.alternar_explosion()),
+            button(if s.dirty { "Guardar *" } else { "Guardar" })
+                .key("btn-guardar")
+                .on_press(|s: &mut State| s.save()),
         )
-        .child(button("Salir").key("btn-salir").on_press(|s: &mut State| s.salir_modo()))
-        .child(button("Deshacer").key("btn-deshacer").on_press(|s: &mut State| s.deshacer()));
+        .child(
+            button("Encuadrar")
+                .key("btn-encuadrar")
+                .on_press(|s: &mut State| s.fit()),
+        )
+        .child(
+            button("Planta")
+                .key("btn-planta")
+                .on_press(|s: &mut State| {
+                    s.cam.azimuth = 0.0;
+                    s.cam.elevation = 88.0;
+                    s.rebuild();
+                }),
+        )
+        .child(
+            button("Isométrica")
+                .key("btn-iso")
+                .on_press(|s: &mut State| {
+                    s.cam.azimuth = -55.0;
+                    s.cam.elevation = 32.0;
+                    s.rebuild();
+                }),
+        )
+        .child(
+            button("Foco")
+                .key("btn-foco")
+                .on_press(|s: &mut State| s.enfocar()),
+        )
+        .child(
+            button(if s.opts.corte_x.is_some() {
+                "Corte *"
+            } else {
+                "Corte"
+            })
+            .key("btn-corte")
+            .on_press(|s: &mut State| s.alternar_corte()),
+        )
+        .child(
+            button(if s.opts.explosion > 0.0 {
+                "Explosión *"
+            } else {
+                "Explosión"
+            })
+            .key("btn-explosion")
+            .on_press(|s: &mut State| s.alternar_explosion()),
+        )
+        .child(
+            button("Salir")
+                .key("btn-salir")
+                .on_press(|s: &mut State| s.salir_modo()),
+        )
+        .child(
+            button("Deshacer")
+                .key("btn-deshacer")
+                .on_press(|s: &mut State| s.deshacer()),
+        );
 
     // --- barra de estado ---
     let status = row()
@@ -810,15 +1018,25 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
             .color(DIM),
         )
         .child(
-            text(format!("{} objetos · {} malla · {} líneas · {} etq", s.project.count(), s.scene.tri_count, s.scene.line_count, s.scene.etiquetas.len()))
-                .font(type_::MONO_CAPTION)
-                .color(DIM),
+            text(format!(
+                "{} objetos · {} malla · {} líneas · {} etq",
+                s.project.count(),
+                s.scene.tri_count,
+                s.scene.line_count,
+                s.scene.etiquetas.len()
+            ))
+            .font(type_::MONO_CAPTION)
+            .color(DIM),
         )
         .child(el().grow(1.0))
         .child(
             text(format!(
                 "{}{}",
-                if s.opts.foco.is_some() { "foco · " } else { "" },
+                if s.opts.foco.is_some() {
+                    "foco · "
+                } else {
+                    ""
+                },
                 if s.opts.corte_x.is_some() {
                     "corte · "
                 } else if s.opts.explosion > 0.0 {
@@ -841,9 +1059,13 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
                 .color(WARN),
         )
         .child(
-            text(if obs_count(&s.project) > 0 { "hay observaciones" } else { "revisión al día" })
-                .font(type_::LABEL)
-                .color(if obs_count(&s.project) > 0 { ERR } else { DIM }),
+            text(if obs_count(&s.project) > 0 {
+                "hay observaciones"
+            } else {
+                "revisión al día"
+            })
+            .font(type_::LABEL)
+            .color(if obs_count(&s.project) > 0 { ERR } else { DIM }),
         );
 
     col()
@@ -852,7 +1074,12 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
         // Con el pase 3D, el fondo lo pone el compositor: si el contenedor pintara, taparía el
         // modelo antes de que se dibujara la interfaz.
         .fill(if s.gpu3d {
-            Color { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }
+            Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 0.0,
+            }
         } else {
             BG
         })
@@ -888,8 +1115,14 @@ fn contar_redes(p: &Project) -> (usize, usize) {
 }
 
 fn obs_count(p: &Project) -> usize {
-    p.nodes.iter().filter(|n| !n.deleted && n.estado == EstadoObjeto::Observado).count()
-        + p.links.iter().filter(|l| !l.deleted && l.estado == EstadoObjeto::Observado).count()
+    p.nodes
+        .iter()
+        .filter(|n| !n.deleted && n.estado == EstadoObjeto::Observado)
+        .count()
+        + p.links
+            .iter()
+            .filter(|l| !l.deleted && l.estado == EstadoObjeto::Observado)
+            .count()
 }
 
 fn family_label(key: &str) -> &'static str {
@@ -908,7 +1141,12 @@ fn main() {
                     s.cam.azimuth = -55.0;
                     s.cam.elevation = 32.0;
                     s.fitted = true;
-                    s.sel = s.project.nodes.iter().find(|n| !n.deleted).map(|n| n.code.clone());
+                    s.sel = s
+                        .project
+                        .nodes
+                        .iter()
+                        .find(|n| !n.deleted)
+                        .map(|n| n.code.clone());
                     s.rebuild();
                 }) as fn(&mut State),
             ),
@@ -930,7 +1168,12 @@ fn main() {
                     s.cam.azimuth = -68.0;
                     s.cam.elevation = 12.0;
                     s.fitted = true;
-                    s.sel = s.project.nodes.iter().find(|n| !n.deleted).map(|n| n.code.clone());
+                    s.sel = s
+                        .project
+                        .nodes
+                        .iter()
+                        .find(|n| !n.deleted)
+                        .map(|n| n.code.clone());
                     s.rebuild();
                 }) as fn(&mut State),
             ),
@@ -1003,7 +1246,12 @@ fn main() {
                     s.cam.distance = 16.0;
                     s.cam.azimuth = -64.0;
                     s.cam.elevation = 22.0;
-                    s.sel = s.project.nodes.iter().find(|n| !n.deleted && n.family == "saneamiento.pozo").map(|n| n.code.clone());
+                    s.sel = s
+                        .project
+                        .nodes
+                        .iter()
+                        .find(|n| !n.deleted && n.family == "saneamiento.pozo")
+                        .map(|n| n.code.clone());
                     s.fitted = true;
                     s.rebuild();
                 }) as fn(&mut State),
@@ -1103,7 +1351,9 @@ fn caps_of(family_key: &str) -> u32 {
 
 #[allow(dead_code)]
 fn is_viewable(family_key: &str) -> bool {
-    family(family_key).map(|f| f.can(caps::HYDRAULIC_NODE) || f.can(caps::ATTACHABLE)).unwrap_or(false)
+    family(family_key)
+        .map(|f| f.can(caps::HYDRAULIC_NODE) || f.can(caps::ATTACHABLE))
+        .unwrap_or(false)
 }
 
 #[cfg(test)]
@@ -1117,15 +1367,33 @@ mod tests {
         let mut st = State::new();
         st.sel = Some("PZ-001".to_string());
         st.rebuild();
-        let mut rt = Runtime::new(st, view, (1280.0, 800.0), Env { system_dark: true, scale: 1.0 });
+        let mut rt = Runtime::new(
+            st,
+            view,
+            (1280.0, 800.0),
+            Env {
+                system_dark: true,
+                scale: 1.0,
+            },
+        );
         rt.frame(0.0);
         rt.frame(1.0 / 60.0);
-        let (x, y) = rt.find("btn-observar").expect("el chip Observar debe estar montado");
+        let (x, y) = rt
+            .find("btn-observar")
+            .expect("el chip Observar debe estar montado");
         rt.pointer_down(x, y);
         rt.pointer_up(x, y);
         rt.frame(1.0 / 60.0);
-        let n = rt.state.project.node_by_code("PZ-001").expect("PZ-001 existe");
-        assert_eq!(n.estado, EstadoObjeto::Observado, "el clic debe observar el pozo");
+        let n = rt
+            .state
+            .project
+            .node_by_code("PZ-001")
+            .expect("PZ-001 existe");
+        assert_eq!(
+            n.estado,
+            EstadoObjeto::Observado,
+            "el clic debe observar el pozo"
+        );
         assert!(n.nota.is_some(), "la observacion deja nota");
         assert!(rt.state.dirty, "queda un cambio sin guardar");
     }
@@ -1136,15 +1404,32 @@ mod tests {
         let mut st = State::new();
         st.sel = Some("PZ-001".to_string());
         st.rebuild();
-        let mut rt = Runtime::new(st, view, (1280.0, 800.0), Env { system_dark: true, scale: 1.0 });
+        let mut rt = Runtime::new(
+            st,
+            view,
+            (1280.0, 800.0),
+            Env {
+                system_dark: true,
+                scale: 1.0,
+            },
+        );
         rt.frame(0.0);
-        let (x, y) = rt.find("btn-foco").expect("el botón Foco debe estar montado");
+        let (x, y) = rt
+            .find("btn-foco")
+            .expect("el botón Foco debe estar montado");
         rt.pointer_down(x, y);
         rt.pointer_up(x, y);
         rt.frame(1.0 / 60.0);
         assert!(rt.state.opts.foco.is_some(), "queda un objeto enfocado");
-        assert!(rt.state.cam.distance < 20.0, "la cámara se acerca: {}", rt.state.cam.distance);
-        assert!((rt.state.cam.z_scale - 1.0).abs() < 1e-9, "en foco se dibuja a escala real");
+        assert!(
+            rt.state.cam.distance < 20.0,
+            "la cámara se acerca: {}",
+            rt.state.cam.distance
+        );
+        assert!(
+            (rt.state.cam.z_scale - 1.0).abs() < 1e-9,
+            "en foco se dibuja a escala real"
+        );
     }
 
     /// Corte: el plano se activa y se puede desactivar.
@@ -1153,9 +1438,19 @@ mod tests {
         let mut st = State::new();
         st.sel = Some("PZ-001".to_string());
         st.rebuild();
-        let mut rt = Runtime::new(st, view, (1280.0, 800.0), Env { system_dark: true, scale: 1.0 });
+        let mut rt = Runtime::new(
+            st,
+            view,
+            (1280.0, 800.0),
+            Env {
+                system_dark: true,
+                scale: 1.0,
+            },
+        );
         rt.frame(0.0);
-        let (x, y) = rt.find("btn-corte").expect("el botón Corte debe estar montado");
+        let (x, y) = rt
+            .find("btn-corte")
+            .expect("el botón Corte debe estar montado");
         rt.pointer_down(x, y);
         rt.pointer_up(x, y);
         rt.frame(1.0 / 60.0);
@@ -1172,9 +1467,19 @@ mod tests {
         let mut st = State::new();
         st.sel = Some("PZ-001".to_string());
         st.rebuild();
-        let mut rt = Runtime::new(st, view, (1280.0, 800.0), Env { system_dark: true, scale: 1.0 });
+        let mut rt = Runtime::new(
+            st,
+            view,
+            (1280.0, 800.0),
+            Env {
+                system_dark: true,
+                scale: 1.0,
+            },
+        );
         rt.frame(0.0);
-        let (x, y) = rt.find("btn-explosion").expect("el botón Explosión debe estar montado");
+        let (x, y) = rt
+            .find("btn-explosion")
+            .expect("el botón Explosión debe estar montado");
         rt.pointer_down(x, y);
         rt.pointer_up(x, y);
         rt.frame(1.0 / 60.0);
@@ -1187,24 +1492,48 @@ mod tests {
         let mut st = State::new();
         st.sel = Some("PZ-001".to_string());
         st.rebuild();
-        let mut rt = Runtime::new(st, view, (1280.0, 800.0), Env { system_dark: true, scale: 1.0 });
+        let mut rt = Runtime::new(
+            st,
+            view,
+            (1280.0, 800.0),
+            Env {
+                system_dark: true,
+                scale: 1.0,
+            },
+        );
         rt.frame(0.0);
-        let (x, y) = rt.find("btn-dn-mas").expect("el chip + DN debe estar montado");
+        let (x, y) = rt
+            .find("btn-dn-mas")
+            .expect("el chip + DN debe estar montado");
         rt.pointer_down(x, y);
         rt.pointer_up(x, y);
         rt.frame(1.0 / 60.0);
 
-        let n = rt.state.project.node_by_code("PZ-001").expect("PZ-001 existe");
+        let n = rt
+            .state
+            .project
+            .node_by_code("PZ-001")
+            .expect("PZ-001 existe");
         assert_eq!(n.num("diametro_nominal"), Some(225.0), "el DN sube 25 mm");
         assert!(rt.state.dirty, "el cambio deja el documento sucio");
         assert_eq!(rt.state.historial.len(), 1, "se apila un paso de deshacer");
 
-        let (x, y) = rt.find("btn-deshacer").expect("el botón Deshacer debe estar montado");
+        let (x, y) = rt
+            .find("btn-deshacer")
+            .expect("el botón Deshacer debe estar montado");
         rt.pointer_down(x, y);
         rt.pointer_up(x, y);
         rt.frame(1.0 / 60.0);
-        let n = rt.state.project.node_by_code("PZ-001").expect("PZ-001 existe");
-        assert_eq!(n.num("diametro_nominal"), None, "Deshacer revierte el parámetro");
+        let n = rt
+            .state
+            .project
+            .node_by_code("PZ-001")
+            .expect("PZ-001 existe");
+        assert_eq!(
+            n.num("diametro_nominal"),
+            None,
+            "Deshacer revierte el parámetro"
+        );
     }
 
     /// Salir vuelve al modo normal.
@@ -1213,7 +1542,15 @@ mod tests {
         let mut st = State::new();
         st.sel = Some("PZ-001".to_string());
         st.rebuild();
-        let mut rt = Runtime::new(st, view, (1280.0, 800.0), Env { system_dark: true, scale: 1.0 });
+        let mut rt = Runtime::new(
+            st,
+            view,
+            (1280.0, 800.0),
+            Env {
+                system_dark: true,
+                scale: 1.0,
+            },
+        );
         rt.frame(0.0);
         let (x, y) = rt.find("btn-corte").expect("Corte montado");
         rt.pointer_down(x, y);
@@ -1232,7 +1569,15 @@ mod tests {
     #[test]
     fn sin_seleccion_no_hay_chips() {
         let st = State::new();
-        let mut rt = Runtime::new(st, view, (1280.0, 800.0), Env { system_dark: true, scale: 1.0 });
+        let mut rt = Runtime::new(
+            st,
+            view,
+            (1280.0, 800.0),
+            Env {
+                system_dark: true,
+                scale: 1.0,
+            },
+        );
         rt.frame(0.0);
         assert!(rt.find("btn-observar").is_none());
     }

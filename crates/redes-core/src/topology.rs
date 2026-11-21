@@ -37,7 +37,10 @@ impl Topology {
         let mut flow_forward = BTreeMap::new();
         for l in p.links.iter().filter(|l| !l.deleted) {
             // El sentido en gravedad lo imponen las cotas: aguas abajo = clave menor.
-            let (z0, z1) = (l.path.first().map(|q| q.z).unwrap_or(0.0), l.path.last().map(|q| q.z).unwrap_or(0.0));
+            let (z0, z1) = (
+                l.path.first().map(|q| q.z).unwrap_or(0.0),
+                l.path.last().map(|q| q.z).unwrap_or(0.0),
+            );
             flow_forward.insert(l.id, z0 >= z1);
             incident.entry(l.from).or_default().push(l.id);
             incident.entry(l.to).or_default().push(l.id);
@@ -87,11 +90,20 @@ impl Topology {
             }
         }
 
-        Topology { incident, degree, components, flow_forward, stranded }
+        Topology {
+            incident,
+            degree,
+            components,
+            flow_forward,
+            stranded,
+        }
     }
 
     pub fn links_at(&self, node: ElementId) -> &[ElementId] {
-        self.incident.get(&node).map(|v| v.as_slice()).unwrap_or(&[])
+        self.incident
+            .get(&node)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
     }
 
     pub fn degree_of(&self, node: ElementId) -> usize {
@@ -108,7 +120,10 @@ impl Topology {
 }
 
 fn is_source(family: &str) -> bool {
-    matches!(family, "agua.tanque" | "agua.captacion" | "agua.planta" | "saneamiento.bombeo")
+    matches!(
+        family,
+        "agua.tanque" | "agua.captacion" | "agua.planta" | "saneamiento.bombeo"
+    )
 }
 
 #[cfg(test)]

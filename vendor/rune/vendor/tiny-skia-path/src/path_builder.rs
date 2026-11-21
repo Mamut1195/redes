@@ -224,7 +224,11 @@ impl PathBuilder {
             self.inject_move_to_if_needed();
 
             let last = self.last_point().unwrap();
-            let tolerance = if self.conic_tolerance > 0.0 { self.conic_tolerance } else { 0.25 };
+            let tolerance = if self.conic_tolerance > 0.0 {
+                self.conic_tolerance
+            } else {
+                0.25
+            };
             let quadder = path_geometry::AutoConicToQuads::compute(
                 last,
                 Point::from_xy(x1, y1),

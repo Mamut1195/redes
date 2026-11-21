@@ -12,9 +12,7 @@ use std::collections::BTreeMap;
 use crate::city::{Calle, Entorno, Manzana};
 use crate::families::Value;
 use crate::geom::{P2, P3};
-use crate::model::{
-    Dato, ElementId, EstadoObjeto, EstadoProyecto, Fuente, Link, Node, Project,
-};
+use crate::model::{Dato, ElementId, EstadoObjeto, EstadoProyecto, Fuente, Link, Node, Project};
 use crate::terrain::{SurfacePoint, Terrain};
 
 /// Origen local del proyecto (UTM 17S, sur de Quito).
@@ -147,7 +145,11 @@ pub fn ciudad() -> Project {
                     } else {
                         azar(3.5, 7.5)
                     };
-                    let uso = if by == 1 && ky == 1 { "comercio" } else { "vivienda" };
+                    let uso = if by == 1 && ky == 1 {
+                        "comercio"
+                    } else {
+                        "vivienda"
+                    };
                     manzanas.push(Manzana {
                         poligono: vec![
                             P2::new(ORIGEN_E + lx0, ORIGEN_N + ly0),
@@ -172,7 +174,13 @@ pub fn ciudad() -> Project {
 
     // Troncal: Av. Central, de este a oeste (el terreno baja hacia el oeste).
     for x in TRANSVERSALES.iter().rev() {
-        let id = pozo(&mut p, ORIGEN_E + x, ORIGEN_N + AVENIDAS[1], "inspeccion", 1.30);
+        let id = pozo(
+            &mut p,
+            ORIGEN_E + x,
+            ORIGEN_N + AVENIDAS[1],
+            "inspeccion",
+            1.30,
+        );
         troncal.push(id);
         pozos.insert(((*x * 10.0) as i64, (AVENIDAS[1] * 10.0) as i64), id);
     }
@@ -182,9 +190,21 @@ pub fn ciudad() -> Project {
     // Álamos (sur) hasta el troncal de su misma calle.
     for x in TRANSVERSALES.iter().rev() {
         let medio_n = pozo(&mut p, ORIGEN_E + x, ORIGEN_N + 448.0, "inspeccion", 1.10);
-        let alto_n = pozo(&mut p, ORIGEN_E + x, ORIGEN_N + AVENIDAS[2], "inspeccion", 1.10);
+        let alto_n = pozo(
+            &mut p,
+            ORIGEN_E + x,
+            ORIGEN_N + AVENIDAS[2],
+            "inspeccion",
+            1.10,
+        );
         let medio_s = pozo(&mut p, ORIGEN_E + x, ORIGEN_N + 262.0, "inspeccion", 1.10);
-        let alto_s = pozo(&mut p, ORIGEN_E + x, ORIGEN_N + AVENIDAS[0], "inspeccion", 1.10);
+        let alto_s = pozo(
+            &mut p,
+            ORIGEN_E + x,
+            ORIGEN_N + AVENIDAS[0],
+            "inspeccion",
+            1.10,
+        );
 
         let cruce = pozos[&(((*x * 10.0) as i64), (AVENIDAS[1] * 10.0) as i64)];
         // Norte: alto → medio → cruce
@@ -207,14 +227,21 @@ pub fn ciudad() -> Project {
             z_rim: tanque_z + 7.0,
             z_invert: tanque_z,
             attrs: BTreeMap::from([
-                ("tipo_tanque".to_string(), Value::Text("apoyado_cilindrico".into())),
+                (
+                    "tipo_tanque".to_string(),
+                    Value::Text("apoyado_cilindrico".into()),
+                ),
                 ("volumen_util".to_string(), Value::Num(850.0)),
                 ("cota_piso".to_string(), Value::Num(tanque_z)),
                 ("cota_nivel_max".to_string(), Value::Num(tanque_z + 6.0)),
             ]),
             datos: BTreeMap::from([(
                 "poblacion_servida".to_string(),
-                Dato { valor: 9_400.0, unidad: "hab".into(), fuente: "Municipio".into() },
+                Dato {
+                    valor: 9_400.0,
+                    unidad: "hab".into(),
+                    fuente: "Municipio".into(),
+                },
             )]),
             estado: EstadoObjeto::Aprobado,
             nota: None,
@@ -262,7 +289,10 @@ pub fn ciudad() -> Project {
             code: String::new(),
             from: w[0],
             to: w[1],
-            path: vec![P3::new(pa.x, pa.y, a.1 - 1.4), P3::new(pb.x, pb.y, b.1 - 1.4)],
+            path: vec![
+                P3::new(pa.x, pa.y, a.1 - 1.4),
+                P3::new(pb.x, pb.y, b.1 - 1.4),
+            ],
             d_mm: 200,
             attrs: BTreeMap::from([
                 ("material".to_string(), Value::Text("PVC".into())),
@@ -361,7 +391,10 @@ fn disenar_troncal(p: &mut Project, cadena: &[ElementId], pendiente: f64) {
     claves[0] = rims[0] - 2.30;
 
     for i in 1..cadena.len() {
-        let (a, b) = (p.node(cadena[i - 1]).unwrap().pos, p.node(cadena[i]).unwrap().pos);
+        let (a, b) = (
+            p.node(cadena[i - 1]).unwrap().pos,
+            p.node(cadena[i]).unwrap().pos,
+        );
         let l = a.dist(b).max(1.0);
         // Al menos `pendiente`, y nunca más somero que COVER_MIN.
         let mut z = (claves[i - 1] - pendiente * l).min(rims[i] - COVER_MIN);
@@ -378,7 +411,15 @@ fn disenar_troncal(p: &mut Project, cadena: &[ElementId], pendiente: f64) {
             n.attrs.insert("cota_clave".to_string(), Value::Num(clave));
         }
         if i + 1 < cadena.len() {
-            conectar(p, cadena[i], cadena[i + 1], claves[i], claves[i + 1], 315, "interceptor");
+            conectar(
+                p,
+                cadena[i],
+                cadena[i + 1],
+                claves[i],
+                claves[i + 1],
+                315,
+                "interceptor",
+            );
         }
     }
 }
@@ -394,7 +435,10 @@ fn disenar_lateral(p: &mut Project, cadena: &[ElementId], pendiente: f64) {
 
     // Aguas arriba, la clave sube con la pendiente, pero nunca por encima del recubrimiento.
     for i in (0..n - 1).rev() {
-        let (a, b) = (p.node(cadena[i]).unwrap().pos, p.node(cadena[i + 1]).unwrap().pos);
+        let (a, b) = (
+            p.node(cadena[i]).unwrap().pos,
+            p.node(cadena[i + 1]).unwrap().pos,
+        );
         let l = a.dist(b).max(1.0);
         let z = (claves[i + 1] + pendiente * l).min(rims[i] - COVER_MIN);
         // Si la loma obliga a enterrar más de la cuenta, se sube la clave (pozo de caída).
@@ -405,11 +449,20 @@ fn disenar_lateral(p: &mut Project, cadena: &[ElementId], pendiente: f64) {
         let clave = claves[i];
         if let Some(node) = p.nodes.iter_mut().find(|node| node.id == *id) {
             node.z_invert = clave;
-            node.attrs.insert("cota_clave".to_string(), Value::Num(clave));
+            node.attrs
+                .insert("cota_clave".to_string(), Value::Num(clave));
         }
     }
     for i in 0..n - 1 {
-        conectar(p, cadena[i], cadena[i + 1], claves[i], claves[i + 1], 200, "colector_sanitario");
+        conectar(
+            p,
+            cadena[i],
+            cadena[i + 1],
+            claves[i],
+            claves[i + 1],
+            200,
+            "colector_sanitario",
+        );
     }
 }
 
@@ -428,7 +481,11 @@ fn conectar(
         (a.pos, b.pos)
     };
     let longitud = a.dist(b);
-    let pendiente = if longitud > 0.0 { (z_in - z_out) / longitud } else { 0.0 };
+    let pendiente = if longitud > 0.0 {
+        (z_in - z_out) / longitud
+    } else {
+        0.0
+    };
     let mut datos = BTreeMap::new();
     datos.insert(
         "caudal_diseno".to_string(),
@@ -480,7 +537,11 @@ mod tests {
     fn la_tapa_del_pozo_esta_en_la_calle() {
         let p = proyecto();
         let t = p.terrain.as_ref().unwrap();
-        for n in p.nodes.iter().filter(|n| !n.deleted && n.family == "saneamiento.pozo") {
+        for n in p
+            .nodes
+            .iter()
+            .filter(|n| !n.deleted && n.family == "saneamiento.pozo")
+        {
             let z = t.z_at(n.pos).expect("el pozo debe caer dentro del TIN");
             assert!(
                 (n.z_rim - z).abs() < 0.35,
@@ -495,7 +556,11 @@ mod tests {
     #[test]
     fn el_recubrimiento_es_razonable() {
         let p = proyecto();
-        for n in p.nodes.iter().filter(|n| !n.deleted && n.family == "saneamiento.pozo") {
+        for n in p
+            .nodes
+            .iter()
+            .filter(|n| !n.deleted && n.family == "saneamiento.pozo")
+        {
             let recubrimiento = n.z_rim - n.z_invert;
             assert!(
                 (1.0..=6.2).contains(&recubrimiento),
@@ -509,7 +574,11 @@ mod tests {
     #[test]
     fn todos_los_colectores_bajan() {
         let p = proyecto();
-        for l in p.links.iter().filter(|l| !l.deleted && l.family == "saneamiento.tuberia") {
+        for l in p
+            .links
+            .iter()
+            .filter(|l| !l.deleted && l.family == "saneamiento.tuberia")
+        {
             let (zi, zo) = (l.path[0].z, l.path[1].z);
             let pendiente = (zi - zo) / l.length_2d().max(1e-6);
             assert!(

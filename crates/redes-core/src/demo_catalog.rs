@@ -43,7 +43,14 @@ pub fn catalogo() -> Project {
 
     // Hilera de pozos con sus tuberías (fila de arriba, y = 36).
     let mut pozos = Vec::new();
-    let tipos = ["inspeccion", "caida_exterior", "resalto", "ciego", "disipador", "con_arenero"];
+    let tipos = [
+        "inspeccion",
+        "caida_exterior",
+        "resalto",
+        "ciego",
+        "disipador",
+        "con_arenero",
+    ];
     for (i, tipo) in tipos.iter().enumerate() {
         let x = 10.0 + i as f64 * 11.0;
         let e = ORIGEN_E + x;
@@ -60,10 +67,16 @@ pub fn catalogo() -> Project {
                 z_rim: z,
                 z_invert: z - 2.2,
                 attrs: BTreeMap::from([
-                    ("diametro_interior".to_string(), Value::Num(if *tipo == "inspeccion" { 1.2 } else { 1.5 })),
+                    (
+                        "diametro_interior".to_string(),
+                        Value::Num(if *tipo == "inspeccion" { 1.2 } else { 1.5 }),
+                    ),
                     ("cota_tapa".to_string(), Value::Num(z)),
                     ("cota_clave".to_string(), Value::Num(z - 2.2)),
-                    ("altura_caida".to_string(), Value::Num(if tipo.starts_with("caida") { 0.8 } else { 0.0 })),
+                    (
+                        "altura_caida".to_string(),
+                        Value::Num(if tipo.starts_with("caida") { 0.8 } else { 0.0 }),
+                    ),
                 ]),
                 datos: BTreeMap::new(),
                 estado: EstadoObjeto::Pendiente,
@@ -86,7 +99,10 @@ pub fn catalogo() -> Project {
             code: String::new(),
             from: w[0],
             to: w[1],
-            path: vec![P3::new(a.x, a.y, cota(a.x - ORIGEN_E) - 2.2), P3::new(b.x, b.y, cota(b.x - ORIGEN_E) - 2.3)],
+            path: vec![
+                P3::new(a.x, a.y, cota(a.x - ORIGEN_E) - 2.2),
+                P3::new(b.x, b.y, cota(b.x - ORIGEN_E) - 2.3),
+            ],
             d_mm: 250,
             attrs: BTreeMap::from([("material".to_string(), Value::Text("PVC".into()))]),
             datos: BTreeMap::new(),
@@ -100,13 +116,48 @@ pub fn catalogo() -> Project {
     // Hilera de accesorios y equipos (fila de abajo, y = 14).
     let mut fila = Vec::new();
     let equipos: [(&str, &str, u32, BTreeMap<String, Value>); 8] = [
-        ("agua.valvula", "compuerta", 200, BTreeMap::from([("diametro_nominal".to_string(), Value::Int(200))])),
-        ("agua.valvula", "mariposa", 250, BTreeMap::from([("diametro_nominal".to_string(), Value::Int(250))])),
-        ("agua.valvula", "retencion", 200, BTreeMap::from([("diametro_nominal".to_string(), Value::Int(200))])),
-        ("agua.valvula", "reduccion_presion", 150, BTreeMap::from([("diametro_nominal".to_string(), Value::Int(150))])),
-        ("agua.hidrante", "columna", 100, BTreeMap::from([("diametro_nominal".to_string(), Value::Int(100))])),
-        ("agua.medidor", "chorro_multiple", 25, BTreeMap::from([("diametro_nominal".to_string(), Value::Int(25))])),
-        ("saneamiento.camara", "valvulas", 150, BTreeMap::from([("diametro_interior".to_string(), Value::Num(1.5))])),
+        (
+            "agua.valvula",
+            "compuerta",
+            200,
+            BTreeMap::from([("diametro_nominal".to_string(), Value::Int(200))]),
+        ),
+        (
+            "agua.valvula",
+            "mariposa",
+            250,
+            BTreeMap::from([("diametro_nominal".to_string(), Value::Int(250))]),
+        ),
+        (
+            "agua.valvula",
+            "retencion",
+            200,
+            BTreeMap::from([("diametro_nominal".to_string(), Value::Int(200))]),
+        ),
+        (
+            "agua.valvula",
+            "reduccion_presion",
+            150,
+            BTreeMap::from([("diametro_nominal".to_string(), Value::Int(150))]),
+        ),
+        (
+            "agua.hidrante",
+            "columna",
+            100,
+            BTreeMap::from([("diametro_nominal".to_string(), Value::Int(100))]),
+        ),
+        (
+            "agua.medidor",
+            "chorro_multiple",
+            25,
+            BTreeMap::from([("diametro_nominal".to_string(), Value::Int(25))]),
+        ),
+        (
+            "saneamiento.camara",
+            "valvulas",
+            150,
+            BTreeMap::from([("diametro_interior".to_string(), Value::Num(1.5))]),
+        ),
         ("saneamiento.sumidero", "calzada", 200, BTreeMap::new()),
     ];
     for (i, (familia, tipo, _dn, attrs)) in equipos.iter().enumerate() {
@@ -200,7 +251,10 @@ pub fn catalogo() -> Project {
         attrs.insert("tipo_cruce".to_string(), Value::Text("via".into()));
         attrs.insert("tipo_hito".to_string(), Value::Text("bm".into()));
         attrs.insert("tipo_receptor".to_string(), Value::Text("quebrada".into()));
-        attrs.insert("tipo_captacion".to_string(), Value::Text("manantial".into()));
+        attrs.insert(
+            "tipo_captacion".to_string(),
+            Value::Text("manantial".into()),
+        );
         attrs.insert("tipo_planta".to_string(), Value::Text("ptap".into()));
         p.add_node(Node {
             id: ElementId::new(0, 0),
@@ -323,7 +377,11 @@ pub fn catalogo() -> Project {
         attrs: BTreeMap::from([("cota_entrega".to_string(), Value::Num(z_desc - 1.4))]),
         datos: BTreeMap::from([(
             "caudal_max".to_string(),
-            Dato { valor: 42.0, unidad: "L/s".into(), fuente: "SWMM".into() },
+            Dato {
+                valor: 42.0,
+                unidad: "L/s".into(),
+                fuente: "SWMM".into(),
+            },
         )]),
         estado: EstadoObjeto::Pendiente,
         nota: None,

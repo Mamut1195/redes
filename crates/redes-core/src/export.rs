@@ -17,7 +17,11 @@ pub fn export_dxf(p: &Project, path: &Path) -> Result<usize, String> {
 }
 
 /// Igual que [export_dxf], pero puede entregar solo lo aprobado (--solo-aprobados).
-pub fn export_dxf_filtered(p: &Project, path: &Path, solo_aprobados: bool) -> Result<usize, String> {
+pub fn export_dxf_filtered(
+    p: &Project,
+    path: &Path,
+    solo_aprobados: bool,
+) -> Result<usize, String> {
     let mut s = String::with_capacity(64 * 1024);
     // Cabecera mínima.
     s.push_str("0\nSECTION\n2\nHEADER\n0\nENDSEC\n");
@@ -27,7 +31,9 @@ pub fn export_dxf_filtered(p: &Project, path: &Path, solo_aprobados: bool) -> Re
     let mut layers: BTreeMap<String, String> = BTreeMap::new();
     let mut n = 0usize;
 
-    for node in p.nodes.iter().filter(|x| !x.deleted && (!solo_aprobados || x.estado == crate::model::EstadoObjeto::Aprobado)) {
+    for node in p.nodes.iter().filter(|x| {
+        !x.deleted && (!solo_aprobados || x.estado == crate::model::EstadoObjeto::Aprobado)
+    }) {
         let layer = layer_name(&node.family);
         layers.insert(layer.clone(), layer.clone());
         // Punto con cota.
@@ -55,7 +61,9 @@ pub fn export_dxf_filtered(p: &Project, path: &Path, solo_aprobados: bool) -> Re
         n += 1;
     }
 
-    for link in p.links.iter().filter(|x| !x.deleted && (!solo_aprobados || x.estado == crate::model::EstadoObjeto::Aprobado)) {
+    for link in p.links.iter().filter(|x| {
+        !x.deleted && (!solo_aprobados || x.estado == crate::model::EstadoObjeto::Aprobado)
+    }) {
         let layer = layer_name(&link.family);
         layers.insert(layer.clone(), layer.clone());
         if link.path.len() < 2 {
@@ -64,7 +72,12 @@ pub fn export_dxf_filtered(p: &Project, path: &Path, solo_aprobados: bool) -> Re
         // POLYLINE 3D con flag 8.
         write!(s, "0\nPOLYLINE\n8\n{}\n66\n1\n70\n8\n", layer).ok();
         for v in &link.path {
-            write!(s, "0\nVERTEX\n8\n{}\n10\n{:.4}\n20\n{:.4}\n30\n{:.4}\n", layer, v.x, v.y, v.z).ok();
+            write!(
+                s,
+                "0\nVERTEX\n8\n{}\n10\n{:.4}\n20\n{:.4}\n30\n{:.4}\n",
+                layer, v.x, v.y, v.z
+            )
+            .ok();
         }
         s.push_str("0\nSEQEND\n8\n");
         s.push_str(&layer);
@@ -84,7 +97,13 @@ pub fn export_dxf_filtered(p: &Project, path: &Path, solo_aprobados: bool) -> Re
 
 fn layer_name(family_key: &str) -> String {
     family(family_key)
-        .map(|f| format!("{}_{}", f.code_prefix, f.label.replace(' ', "_").to_uppercase()))
+        .map(|f| {
+            format!(
+                "{}_{}",
+                f.code_prefix,
+                f.label.replace(' ', "_").to_uppercase()
+            )
+        })
         .unwrap_or_else(|| "REDES".into())
 }
 
@@ -102,7 +121,8 @@ pub fn export_geojson(p: &Project, path: &Path) -> Result<usize, String> {
             "nota": n.nota,
         });
         for (k, d) in &n.datos {
-            props[k] = serde_json::json!({ "valor": d.valor, "unidad": d.unidad, "fuente": d.fuente });
+            props[k] =
+                serde_json::json!({ "valor": d.valor, "unidad": d.unidad, "fuente": d.fuente });
         }
         features.push(serde_json::json!({
             "type": "Feature",
@@ -124,7 +144,8 @@ pub fn export_geojson(p: &Project, path: &Path) -> Result<usize, String> {
             "nota": l.nota,
         });
         for (k, d) in &l.datos {
-            props[k] = serde_json::json!({ "valor": d.valor, "unidad": d.unidad, "fuente": d.fuente });
+            props[k] =
+                serde_json::json!({ "valor": d.valor, "unidad": d.unidad, "fuente": d.fuente });
         }
         features.push(serde_json::json!({
             "type": "Feature",

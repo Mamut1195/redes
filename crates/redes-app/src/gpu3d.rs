@@ -104,7 +104,9 @@ impl Geometria {
         // La app dibuja con z exagerada: se aplica aquí, una sola vez por reconstrucción.
         let mut empujar = |pos: [f32; 3], normal: [f32; 3], color: [f32; 3]| {
             let z = (pos[2] - zr) * k + zr;
-            for v in [pos[0], pos[1], z, normal[0], normal[1], normal[2], color[0], color[1], color[2]] {
+            for v in [
+                pos[0], pos[1], z, normal[0], normal[1], normal[2], color[0], color[1], color[2],
+            ] {
                 self.bytes.extend_from_slice(&v.to_le_bytes());
             }
         };
@@ -141,7 +143,10 @@ pub struct Compositor3d {
 
 impl Compositor3d {
     pub fn new() -> Compositor3d {
-        Compositor3d { ultima_generacion: 0, recursos: None }
+        Compositor3d {
+            ultima_generacion: 0,
+            recursos: None,
+        }
     }
 
     fn asegurar(&mut self, device: &wgpu::Device, size: (u32, u32), formato: wgpu::TextureFormat) {
@@ -185,9 +190,21 @@ impl Compositor3d {
                     array_stride: 36,
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &[
-                        wgpu::VertexAttribute { format: wgpu::VertexFormat::Float32x3, offset: 0, shader_location: 0 },
-                        wgpu::VertexAttribute { format: wgpu::VertexFormat::Float32x3, offset: 12, shader_location: 1 },
-                        wgpu::VertexAttribute { format: wgpu::VertexFormat::Float32x3, offset: 24, shader_location: 2 },
+                        wgpu::VertexAttribute {
+                            format: wgpu::VertexFormat::Float32x3,
+                            offset: 0,
+                            shader_location: 0,
+                        },
+                        wgpu::VertexAttribute {
+                            format: wgpu::VertexFormat::Float32x3,
+                            offset: 12,
+                            shader_location: 1,
+                        },
+                        wgpu::VertexAttribute {
+                            format: wgpu::VertexFormat::Float32x3,
+                            offset: 24,
+                            shader_location: 2,
+                        },
                     ],
                 })],
             },
@@ -226,11 +243,18 @@ impl Compositor3d {
         let bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("redes-3d-bind"),
             layout: &modulo,
-            entries: &[wgpu::BindGroupEntry { binding: 0, resource: uniforme.as_entire_binding() }],
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: uniforme.as_entire_binding(),
+            }],
         });
         let depth = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("redes-3d-depth"),
-            size: wgpu::Extent3d { width: size.0.max(1), height: size.1.max(1), depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width: size.0.max(1),
+                height: size.1.max(1),
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -246,7 +270,17 @@ impl Compositor3d {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        self.recursos = Some(Recursos { pipeline, bind, depth, depth_view, tamano: size, formato, vertices, uniforme, capacidad });
+        self.recursos = Some(Recursos {
+            pipeline,
+            bind,
+            depth,
+            depth_view,
+            tamano: size,
+            formato,
+            vertices,
+            uniforme,
+            capacidad,
+        });
     }
 }
 
@@ -287,13 +321,21 @@ impl Compositor<crate::State> for Compositor3d {
                 depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.050, g: 0.055, b: 0.066, a: 1.0 }),
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.050,
+                        g: 0.055,
+                        b: 0.066,
+                        a: 1.0,
+                    }),
                     store: wgpu::StoreOp::Store,
                 },
             })],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                 view: &r.depth_view,
-                depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Clear(1.0), store: wgpu::StoreOp::Store }),
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Store,
+                }),
                 stencil_ops: None,
             }),
             timestamp_writes: None,
@@ -317,7 +359,10 @@ impl Compositor<crate::State> for Compositor3d {
                 view: f.target,
                 depth_slice: None,
                 resolve_target: None,
-                ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
             })],
             depth_stencil_attachment: None,
             timestamp_writes: None,
@@ -341,6 +386,8 @@ fn bytemap(v: &[f32]) -> &[u8] {
 pub fn activo() -> bool {
     let args = rune::extra_args();
     let por_flag = args.iter().any(|a| a == "--gpu3d");
-    let por_entorno = std::env::var("REDES_GPU3D").map(|v| v == "1").unwrap_or(false);
+    let por_entorno = std::env::var("REDES_GPU3D")
+        .map(|v| v == "1")
+        .unwrap_or(false);
     por_flag || por_entorno
 }

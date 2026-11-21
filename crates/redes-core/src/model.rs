@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::families::{family, Value};
+use crate::families::{Value, family};
 use crate::geom::{Bbox, P2, P3};
 use crate::terrain::Terrain;
 
@@ -33,7 +33,10 @@ impl ElementId {
     }
     pub fn parse(s: &str) -> Option<ElementId> {
         let (a, b) = s.split_once('.')?;
-        Some(ElementId::new(u32::from_str_radix(a, 16).ok()?, u32::from_str_radix(b, 16).ok()?))
+        Some(ElementId::new(
+            u32::from_str_radix(a, 16).ok()?,
+            u32::from_str_radix(b, 16).ok()?,
+        ))
     }
 }
 
@@ -181,7 +184,10 @@ impl Link {
         self.d_mm as f64 / 1000.0
     }
     pub fn length_2d(&self) -> f64 {
-        self.path.windows(2).map(|w| w[0].p2().dist(w[1].p2())).sum()
+        self.path
+            .windows(2)
+            .map(|w| w[0].p2().dist(w[1].p2()))
+            .sum()
     }
     pub fn length_3d(&self) -> f64 {
         crate::geom::polyline_len_3d(&self.path)
@@ -272,25 +278,26 @@ impl Project {
         self.links.iter().find(|l| l.id == id && !l.deleted)
     }
     pub fn node_by_code(&self, code: &str) -> Option<&Node> {
-        self.nodes.iter().find(|n| !n.deleted && n.code.eq_ignore_ascii_case(code))
+        self.nodes
+            .iter()
+            .find(|n| !n.deleted && n.code.eq_ignore_ascii_case(code))
     }
     pub fn link_by_code(&self, code: &str) -> Option<&Link> {
-        self.links.iter().find(|l| !l.deleted && l.code.eq_ignore_ascii_case(code))
+        self.links
+            .iter()
+            .find(|l| !l.deleted && l.code.eq_ignore_ascii_case(code))
     }
 
     /// Siguiente código libre de una familia (`PZ-001`, `PZ-002`…).
     pub fn next_code(&self, family_key: &str) -> String {
         let prefix = family(family_key).map(|f| f.code_prefix).unwrap_or("EL");
-        let mut n = self
-            .nodes
-            .iter()
-            .filter(|x| x.family == family_key)
-            .count()
+        let mut n = self.nodes.iter().filter(|x| x.family == family_key).count()
             + self.links.iter().filter(|x| x.family == family_key).count()
             + 1;
         loop {
             let code = format!("{prefix}-{n:03}");
-            let taken = self.nodes.iter().any(|x| x.code == code) || self.links.iter().any(|x| x.code == code);
+            let taken = self.nodes.iter().any(|x| x.code == code)
+                || self.links.iter().any(|x| x.code == code);
             if !taken {
                 return code;
             }
@@ -300,15 +307,26 @@ impl Project {
 
     /// Añade un nodo. Solo valida estructura: familia, subtipo y código único.
     pub fn add_node(&mut self, mut node: Node) -> Result<ElementId, String> {
-        let def = family(&node.family).ok_or_else(|| format!("familia desconocida: {}", node.family))?;
+        let def =
+            family(&node.family).ok_or_else(|| format!("familia desconocida: {}", node.family))?;
         if def.ty(&node.ty).is_none() {
-            return Err(format!("subtipo '{}' no existe en {}", node.ty, node.family));
+            return Err(format!(
+                "subtipo '{}' no existe en {}",
+                node.ty, node.family
+            ));
         }
         if node.code.is_empty() {
             node.code = self.next_code(&node.family);
         }
-        if self.nodes.iter().any(|n| !n.deleted && n.code.eq_ignore_ascii_case(&node.code)) {
-            return Err(format!("E_STATE_DUPLICATE_NAME: código duplicado {}", node.code));
+        if self
+            .nodes
+            .iter()
+            .any(|n| !n.deleted && n.code.eq_ignore_ascii_case(&node.code))
+        {
+            return Err(format!(
+                "E_STATE_DUPLICATE_NAME: código duplicado {}",
+                node.code
+            ));
         }
         node.id = self.alloc();
         let id = node.id;
@@ -318,9 +336,13 @@ impl Project {
 
     /// Añade un arco entre dos nodos existentes.
     pub fn add_link(&mut self, mut link: Link) -> Result<ElementId, String> {
-        let def = family(&link.family).ok_or_else(|| format!("familia desconocida: {}", link.family))?;
+        let def =
+            family(&link.family).ok_or_else(|| format!("familia desconocida: {}", link.family))?;
         if def.ty(&link.ty).is_none() {
-            return Err(format!("subtipo '{}' no existe en {}", link.ty, link.family));
+            return Err(format!(
+                "subtipo '{}' no existe en {}",
+                link.ty, link.family
+            ));
         }
         if link.from == link.to {
             return Err("E_TOPO_SELF_LOOP: el arco empieza y termina en el mismo nodo".into());
@@ -331,8 +353,15 @@ impl Project {
         if link.code.is_empty() {
             link.code = self.next_code(&link.family);
         }
-        if self.links.iter().any(|l| !l.deleted && l.code.eq_ignore_ascii_case(&link.code)) {
-            return Err(format!("E_STATE_DUPLICATE_NAME: código duplicado {}", link.code));
+        if self
+            .links
+            .iter()
+            .any(|l| !l.deleted && l.code.eq_ignore_ascii_case(&link.code))
+        {
+            return Err(format!(
+                "E_STATE_DUPLICATE_NAME: código duplicado {}",
+                link.code
+            ));
         }
         link.id = self.alloc();
         let id = link.id;
@@ -342,12 +371,19 @@ impl Project {
 
     pub fn commit(&mut self, command: &str) {
         self.revision += 1;
-        self.journal.push(JournalEntry { revision: self.revision, command: command.to_string() });
+        self.journal.push(JournalEntry {
+            revision: self.revision,
+            command: command.to_string(),
+        });
     }
 
     pub fn remove(&mut self, id: ElementId) -> Result<(), String> {
         if let Some(n) = self.nodes.iter_mut().find(|n| n.id == id) {
-            if self.links.iter().any(|l| !l.deleted && (l.from == id || l.to == id)) {
+            if self
+                .links
+                .iter()
+                .any(|l| !l.deleted && (l.from == id || l.to == id))
+            {
                 return Err("E_STATE_REFERENCED: el nodo tiene arcos conectados".into());
             }
             n.deleted = true;
@@ -407,7 +443,8 @@ impl Project {
     }
 
     pub fn count(&self) -> usize {
-        self.nodes.iter().filter(|n| !n.deleted).count() + self.links.iter().filter(|l| !l.deleted).count()
+        self.nodes.iter().filter(|n| !n.deleted).count()
+            + self.links.iter().filter(|l| !l.deleted).count()
     }
 
     /// Cuántos objetos hay en cada estado de revisión.

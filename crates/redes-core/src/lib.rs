@@ -22,8 +22,8 @@ pub mod demo_city;
 pub mod envelope;
 pub mod export;
 pub mod families;
-pub mod gltf;
 pub mod geom;
+pub mod gltf;
 pub mod ingest;
 pub mod model;
 pub mod parts;
@@ -37,7 +37,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub mod prelude {
     pub use crate::envelope::Envelope;
-    pub use crate::families::{family, FamilyDef, Value, FAMILIES};
+    pub use crate::families::{FAMILIES, FamilyDef, Value, family};
     pub use crate::geom::{Bbox, P2, P3};
     pub use crate::model::{Dato, ElementId, EstadoObjeto, EstadoProyecto, Link, Node, Project};
     pub use crate::view::{Camera, Scene};

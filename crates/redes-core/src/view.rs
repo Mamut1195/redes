@@ -75,7 +75,8 @@ impl Camera {
         }
     }
 
-    pub fn eye(&self) -> [f64; 3] {        let az = (self.azimuth as f64).to_radians();
+    pub fn eye(&self) -> [f64; 3] {
+        let az = (self.azimuth as f64).to_radians();
         let el = (self.elevation as f64).to_radians();
         [
             self.target[0] + self.distance * el.cos() * az.cos(),
@@ -86,7 +87,11 @@ impl Camera {
 
     fn basis(&self) -> ([f64; 3], [f64; 3], [f64; 3]) {
         let eye = self.eye();
-        let f = normalize([self.target[0] - eye[0], self.target[1] - eye[1], self.target[2] - eye[2]]);
+        let f = normalize([
+            self.target[0] - eye[0],
+            self.target[1] - eye[1],
+            self.target[2] - eye[2],
+        ]);
         let up = [0.0, 0.0, 1.0];
         let mut right = cross(f, up);
         if len(right) < 1e-9 {
@@ -123,7 +128,12 @@ impl Camera {
         let proy = [
             [fc / aspect, 0.0, 0.0, 0.0],
             [0.0, fc, 0.0, 0.0],
-            [0.0, 0.0, lejos / (cerca - lejos), lejos * cerca / (cerca - lejos)],
+            [
+                0.0,
+                0.0,
+                lejos / (cerca - lejos),
+                lejos * cerca / (cerca - lejos),
+            ],
             [0.0, 0.0, -1.0, 0.0],
         ];
         // Exageración vertical alrededor de la cota del objetivo.
@@ -170,7 +180,11 @@ impl Camera {
 
     fn forward(&self) -> [f64; 3] {
         let eye = self.eye();
-        normalize([self.target[0] - eye[0], self.target[1] - eye[1], self.target[2] - eye[2]])
+        normalize([
+            self.target[0] - eye[0],
+            self.target[1] - eye[1],
+            self.target[2] - eye[2],
+        ])
     }
 
     fn focal(&self) -> f64 {
@@ -180,7 +194,11 @@ impl Camera {
     /// Distancia del punto al plano de la cámara (para ordenar).
     pub fn depth(&self, p: [f64; 3]) -> f64 {
         dot(
-            [p[0] - self.eye()[0], p[1] - self.eye()[1], p[2] - self.eye()[2]],
+            [
+                p[0] - self.eye()[0],
+                p[1] - self.eye()[1],
+                p[2] - self.eye()[2],
+            ],
             self.forward(),
         )
     }
@@ -202,13 +220,21 @@ impl Camera {
 }
 
 fn lerp3(a: [f64; 3], b: [f64; 3], t: f64) -> [f64; 3] {
-    [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
+    [
+        a[0] + (b[0] - a[0]) * t,
+        a[1] + (b[1] - a[1]) * t,
+        a[2] + (b[2] - a[2]) * t,
+    ]
 }
 fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
-    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
 }
 fn len(a: [f64; 3]) -> f64 {
     dot(a, a).sqrt()
@@ -231,16 +257,32 @@ pub struct Layers {
 
 impl Default for Layers {
     fn default() -> Self {
-        Layers { terreno: true, alcantarillado: true, agua: true, nodos: true, edificios: true }
+        Layers {
+            terreno: true,
+            alcantarillado: true,
+            agua: true,
+            nodos: true,
+            edificios: true,
+        }
     }
 }
 
 #[derive(Clone, Debug)]
 pub enum Prim {
     /// Polígono relleno ya proyectado.
-    Poly { pts: Vec<[f32; 2]>, fill: [f32; 4], depth: f32 },
+    Poly {
+        pts: Vec<[f32; 2]>,
+        fill: [f32; 4],
+        depth: f32,
+    },
     /// Segmento con ancho en puntos.
-    Line { a: [f32; 2], b: [f32; 2], w: f32, color: [f32; 4], depth: f32 },
+    Line {
+        a: [f32; 2],
+        b: [f32; 2],
+        w: f32,
+        color: [f32; 4],
+        depth: f32,
+    },
 }
 
 /// Modos de inspección de detalle (fase 2): corte, explosión y foco.
@@ -335,18 +377,16 @@ pub fn build_opts(
                     n = [-n[0], -n[1], -n[2]];
                 }
                 let shade = (0.42 + 0.58 * dot(n, light).max(0.0)) as f32;
-                let (Some(sa), Some(sb), Some(sc)) = (cam.project(pa), cam.project(pb), cam.project(pc)) else {
+                let (Some(sa), Some(sb), Some(sc)) =
+                    (cam.project(pa), cam.project(pb), cam.project(pc))
+                else {
                     continue;
                 };
                 let depth = (cam.depth(pa) + cam.depth(pb) + cam.depth(pc)) as f32 / 3.0;
                 let fog = fog(depth, cam.distance as f32);
                 // Color por cota (verde valle ? ocre altura) con sombreado por normal.
                 let t01 = (((a.z + b.z + c.z) / 3.0 - zmin) / zspan).clamp(0.0, 1.0) as f32;
-                let base = [
-                    0.26 + 0.34 * t01,
-                    0.40 + 0.16 * t01,
-                    0.26 + 0.06 * t01,
-                ];
+                let base = [0.26 + 0.34 * t01, 0.40 + 0.16 * t01, 0.26 + 0.06 * t01];
                 prims.push(Prim::Poly {
                     pts: expand(&[sa, sb, sc], 0.6),
                     // Opaco: la niebla se mezcla contra el fondo en el color, no con alfa.
@@ -365,7 +405,9 @@ pub fn build_opts(
     }
 
     // --- ciudad: calles y manzanas ---
-    if layers.edificios && let Some(ent) = &p.entorno {
+    if layers.edificios
+        && let Some(ent) = &p.entorno
+    {
         // Cota del terreno para apoyar calles y edificios. Si el punto cae fuera del TIN se
         // recorta al borde; si aun asi no hay dato, el elemento no se dibuja (nunca a cota 0).
         let z_de = |q: crate::geom::P2| -> Option<f64> {
@@ -401,7 +443,10 @@ pub fn build_opts(
                 let mut prof = Vec::with_capacity(4);
                 let mut ok = true;
                 for q in esquinas {
-                    let Some(z) = z_de(q) else { ok = false; break };
+                    let Some(z) = z_de(q) else {
+                        ok = false;
+                        break;
+                    };
                     let local = to_local(P3::new(q.x, q.y, z + 0.22));
                     match cam.project(local) {
                         Some(s) => {
@@ -432,11 +477,20 @@ pub fn build_opts(
                     for (px, py) in [
                         (a.x + sx * off, a.y + sy * off),
                         (b.x + sx * off, b.y + sy * off),
-                        (b.x + sx * (off + lado * ancho_acera), b.y + sy * (off + lado * ancho_acera)),
-                        (a.x + sx * (off + lado * ancho_acera), a.y + sy * (off + lado * ancho_acera)),
+                        (
+                            b.x + sx * (off + lado * ancho_acera),
+                            b.y + sy * (off + lado * ancho_acera),
+                        ),
+                        (
+                            a.x + sx * (off + lado * ancho_acera),
+                            a.y + sy * (off + lado * ancho_acera),
+                        ),
                     ] {
                         let q = crate::geom::P2::new(px, py);
-                        let Some(z) = z_de(q) else { aok = false; break };
+                        let Some(z) = z_de(q) else {
+                            aok = false;
+                            break;
+                        };
                         let local = to_local(P3::new(px, py, z + 0.26));
                         match cam.project(local) {
                             Some(s) => {
@@ -493,8 +547,10 @@ pub fn build_opts(
                 for s in 0..trozos {
                     let t0 = s as f64 / trozos as f64;
                     let t1 = (s + 1) as f64 / trozos as f64;
-                    let a = crate::geom::P2::new(p1.x + (p2.x - p1.x) * t0, p1.y + (p2.y - p1.y) * t0);
-                    let b = crate::geom::P2::new(p1.x + (p2.x - p1.x) * t1, p1.y + (p2.y - p1.y) * t1);
+                    let a =
+                        crate::geom::P2::new(p1.x + (p2.x - p1.x) * t0, p1.y + (p2.y - p1.y) * t0);
+                    let b =
+                        crate::geom::P2::new(p1.x + (p2.x - p1.x) * t1, p1.y + (p2.y - p1.y) * t1);
                     let quad = [
                         to_local(P3::new(a.x, a.y, base)),
                         to_local(P3::new(b.x, b.y, base)),
@@ -535,14 +591,18 @@ pub fn build_opts(
             let cx = mz.poligono.iter().map(|q| q.x).sum::<f64>() / n as f64;
             let cy = mz.poligono.iter().map(|q| q.y).sum::<f64>() / n as f64;
             let centro = to_local(P3::new(cx, cy, top));
-            let Some(cs) = cam.project(centro) else { continue };
+            let Some(cs) = cam.project(centro) else {
+                continue;
+            };
             let cd = cam.depth(centro);
             for i in 0..n {
                 let q1 = mz.poligono[i];
                 let q2 = mz.poligono[(i + 1) % n];
                 let a = to_local(P3::new(q1.x, q1.y, top));
                 let b = to_local(P3::new(q2.x, q2.y, top));
-                let (Some(sa), Some(sb)) = (cam.project(a), cam.project(b)) else { continue };
+                let (Some(sa), Some(sb)) = (cam.project(a), cam.project(b)) else {
+                    continue;
+                };
                 let depth = ((cd + cam.depth(a) + cam.depth(b)) / 3.0) as f32;
                 let f = fog(depth, cam.distance as f32);
                 city.push(Prim::Poly {
@@ -569,7 +629,11 @@ pub fn build_opts(
             continue;
         }
         let sel = selected.map(|s| s == l.code).unwrap_or(false);
-        let (lr, lg, lb): (f32, f32, f32) = if es_agua { (0.33, 0.63, 0.96) } else { (0.87, 0.60, 0.31) };
+        let (lr, lg, lb): (f32, f32, f32) = if es_agua {
+            (0.33, 0.63, 0.96)
+        } else {
+            (0.87, 0.60, 0.31)
+        };
         let mat = if es_agua {
             crate::parts::Material::new(0.34, 0.55, 0.82)
         } else {
@@ -577,8 +641,14 @@ pub fn build_opts(
         };
         // El tubo no atraviesa el pozo: se recorta en su pared.
         let mut traza = l.path.clone();
-        let r0 = p.node(l.from).map(|n| n.diametro() * 0.5 + 0.15).unwrap_or(0.4);
-        let r1 = p.node(l.to).map(|n| n.diametro() * 0.5 + 0.15).unwrap_or(0.4);
+        let r0 = p
+            .node(l.from)
+            .map(|n| n.diametro() * 0.5 + 0.15)
+            .unwrap_or(0.4);
+        let r1 = p
+            .node(l.to)
+            .map(|n| n.diametro() * 0.5 + 0.15)
+            .unwrap_or(0.4);
         recortar_extremos(&mut traza, r0, r1);
 
         // Los tubos se construyen en coordenadas LOCALES: con UTM en f32 el paso es ~1 m y la
@@ -588,13 +658,19 @@ pub fn build_opts(
             let wb = P3::new(w[1].x - p.origin.x, w[1].y - p.origin.y, w[1].z);
             let a = to_local(w[0]);
             let b = to_local(w[1]);
-            let Some((sa, sb)) = cam.project_segment(a, b) else { continue };
+            let Some((sa, sb)) = cam.project_segment(a, b) else {
+                continue;
+            };
             let depth = ((cam.depth(a) + cam.depth(b)) * 0.5) as f32;
             let r_px = (l.d_m() * 0.5 * cam.focal() / depth.max(1.0) as f64) as f32;
 
             if r_px < 2.2 {
                 // A lo lejos, la tubería es una línea: mismo color, mucho menos coste.
-                let width = if sel { 4.5 } else { (r_px * 2.0).clamp(1.2, 6.0) };
+                let width = if sel {
+                    4.5
+                } else {
+                    (r_px * 2.0).clamp(1.2, 6.0)
+                };
                 let fog = fog(depth, cam.distance as f32);
                 net.push(Prim::Line {
                     a: sa,
@@ -613,9 +689,21 @@ pub fn build_opts(
             for tri in &malla.tris {
                 // La malla ya está en local: se aplica solo la exageración vertical.
                 let verts = [
-                    [tri.p[0][0] as f64, tri.p[0][1] as f64, (tri.p[0][2] as f64 - zr) * k + zr],
-                    [tri.p[1][0] as f64, tri.p[1][1] as f64, (tri.p[1][2] as f64 - zr) * k + zr],
-                    [tri.p[2][0] as f64, tri.p[2][1] as f64, (tri.p[2][2] as f64 - zr) * k + zr],
+                    [
+                        tri.p[0][0] as f64,
+                        tri.p[0][1] as f64,
+                        (tri.p[0][2] as f64 - zr) * k + zr,
+                    ],
+                    [
+                        tri.p[1][0] as f64,
+                        tri.p[1][1] as f64,
+                        (tri.p[1][2] as f64 - zr) * k + zr,
+                    ],
+                    [
+                        tri.p[2][0] as f64,
+                        tri.p[2][1] as f64,
+                        (tri.p[2][2] as f64 - zr) * k + zr,
+                    ],
                 ];
                 // El corte secciona también las tuberías.
                 let (trozos, arista) = match opts.corte_x {
@@ -635,30 +723,39 @@ pub fn build_opts(
                     }
                 }
                 for trozo in trozos {
-                let mut pts = Vec::with_capacity(3);
-                let mut d = 0.0;
-                let mut ok = true;
-                for v in trozo {
-                    match cam.project(v) {
-                        Some(s) => {
-                            pts.push(s);
-                            d += cam.depth(v);
+                    let mut pts = Vec::with_capacity(3);
+                    let mut d = 0.0;
+                    let mut ok = true;
+                    for v in trozo {
+                        match cam.project(v) {
+                            Some(s) => {
+                                pts.push(s);
+                                d += cam.depth(v);
+                            }
+                            None => ok = false,
                         }
-                        None => ok = false,
                     }
-                }
-                if !ok {
-                    continue;
-                }
-                let depth_t = (d / 3.0) as f32;
-                let f = fog(depth_t, cam.distance as f32);
-                let c = if sel { [0.36, 0.95, 0.56, 1.0] } else { [tri.color[0], tri.color[1], tri.color[2], 1.0] };
-                net.push(Prim::Poly {
-                    pts: expand(&pts, 0.35),
-                    fill: [c[0] * f + 0.050 * (1.0 - f), c[1] * f + 0.055 * (1.0 - f), c[2] * f + 0.066 * (1.0 - f), 1.0],
-                    depth: depth_t,
-                });
-                line_count += 1;
+                    if !ok {
+                        continue;
+                    }
+                    let depth_t = (d / 3.0) as f32;
+                    let f = fog(depth_t, cam.distance as f32);
+                    let c = if sel {
+                        [0.36, 0.95, 0.56, 1.0]
+                    } else {
+                        [tri.color[0], tri.color[1], tri.color[2], 1.0]
+                    };
+                    net.push(Prim::Poly {
+                        pts: expand(&pts, 0.35),
+                        fill: [
+                            c[0] * f + 0.050 * (1.0 - f),
+                            c[1] * f + 0.055 * (1.0 - f),
+                            c[2] * f + 0.066 * (1.0 - f),
+                            1.0,
+                        ],
+                        depth: depth_t,
+                    });
+                    line_count += 1;
                 }
             }
         }
@@ -667,7 +764,9 @@ pub fn build_opts(
     // --- nodos: piezas paramétricas por familia ---
     if layers.nodos {
         for n in p.nodes.iter().filter(|n| !n.deleted) {
-            let Some(def) = family(&n.family) else { continue };
+            let Some(def) = family(&n.family) else {
+                continue;
+            };
             // Se dibuja lo que tiene forma: nodos hidráulicos, acometidas y también el resto de
             // familias con geometría propia (accesorios, tapas, hitos, cruces…).
             if !def.can(caps::HYDRAULIC_NODE)
@@ -703,7 +802,11 @@ pub fn build_opts(
             if r_px < 3.0 {
                 if let Some(c) = cam.project(top) {
                     let sz = if sel { 6.0 } else { 3.6 };
-                    let base: [f32; 3] = if es_agua { [0.33, 0.63, 0.96] } else { [0.87, 0.60, 0.31] };
+                    let base: [f32; 3] = if es_agua {
+                        [0.33, 0.63, 0.96]
+                    } else {
+                        [0.87, 0.60, 0.31]
+                    };
                     let col = tinte.unwrap_or(base);
                     net.push(Prim::Poly {
                         pts: vec![
@@ -734,77 +837,89 @@ pub fn build_opts(
             let explotar = opts.explosion > 0.0 && opts.foco == Some(n.id);
 
             for (indice_parte, parte) in partes.iter().enumerate() {
-            for tri in &parte.mesh.tris {
-                let mut dz = 0.0f64;
-                if explotar {
-                    // Reparto proporcional: la pila entera se abre ~0,85 de la altura de la pieza.
-                    let n = partes.len().max(2) as f32;
-                    let t = indice_parte as f32 / (n - 1.0);
-                    dz = (t * opts.explosion * altura_pieza * 0.85) as f64;
-                }
-                let tri_local = [
-                    to_local(P3::new(tri.p[0][0] as f64 + n.pos.x, tri.p[0][1] as f64 + n.pos.y, tri.p[0][2] as f64 + n.z_invert + dz)),
-                    to_local(P3::new(tri.p[1][0] as f64 + n.pos.x, tri.p[1][1] as f64 + n.pos.y, tri.p[1][2] as f64 + n.z_invert + dz)),
-                    to_local(P3::new(tri.p[2][0] as f64 + n.pos.x, tri.p[2][1] as f64 + n.pos.y, tri.p[2][2] as f64 + n.z_invert + dz)),
-                ];
-
-                // Corte vertical: se recorta el triángulo y se marca la arista de corte.
-                let (trozos, corte) = match opts.corte_x {
-                    Some(xc) => cortar_tri(tri_local, xc),
-                    None => (vec![tri_local], None),
-                };
-                if let Some((a, b)) = corte {
-                    if let (Some(sa), Some(sb)) = (cam.project(a), cam.project(b)) {
-                        net.push(Prim::Line {
-                            a: sa,
-                            b: sb,
-                            w: 1.6,
-                            color: [0.98, 0.86, 0.42, 1.0],
-                            depth: ((cam.depth(a) + cam.depth(b)) * 0.5) as f32,
-                        });
-                        line_count += 1;
+                for tri in &parte.mesh.tris {
+                    let mut dz = 0.0f64;
+                    if explotar {
+                        // Reparto proporcional: la pila entera se abre ~0,85 de la altura de la pieza.
+                        let n = partes.len().max(2) as f32;
+                        let t = indice_parte as f32 / (n - 1.0);
+                        dz = (t * opts.explosion * altura_pieza * 0.85) as f64;
                     }
-                }
+                    let tri_local = [
+                        to_local(P3::new(
+                            tri.p[0][0] as f64 + n.pos.x,
+                            tri.p[0][1] as f64 + n.pos.y,
+                            tri.p[0][2] as f64 + n.z_invert + dz,
+                        )),
+                        to_local(P3::new(
+                            tri.p[1][0] as f64 + n.pos.x,
+                            tri.p[1][1] as f64 + n.pos.y,
+                            tri.p[1][2] as f64 + n.z_invert + dz,
+                        )),
+                        to_local(P3::new(
+                            tri.p[2][0] as f64 + n.pos.x,
+                            tri.p[2][1] as f64 + n.pos.y,
+                            tri.p[2][2] as f64 + n.z_invert + dz,
+                        )),
+                    ];
 
-                for q in trozos {
-                let mut pts = Vec::with_capacity(3);
-                let mut prof = 0.0;
-                let mut ok = true;
-                for v in q {
-                    match cam.project(v) {
-                        Some(s) => {
-                            pts.push(s);
-                            prof += cam.depth(v);
+                    // Corte vertical: se recorta el triángulo y se marca la arista de corte.
+                    let (trozos, corte) = match opts.corte_x {
+                        Some(xc) => cortar_tri(tri_local, xc),
+                        None => (vec![tri_local], None),
+                    };
+                    if let Some((a, b)) = corte {
+                        if let (Some(sa), Some(sb)) = (cam.project(a), cam.project(b)) {
+                            net.push(Prim::Line {
+                                a: sa,
+                                b: sb,
+                                w: 1.6,
+                                color: [0.98, 0.86, 0.42, 1.0],
+                                depth: ((cam.depth(a) + cam.depth(b)) * 0.5) as f32,
+                            });
+                            line_count += 1;
                         }
-                        None => ok = false,
+                    }
+
+                    for q in trozos {
+                        let mut pts = Vec::with_capacity(3);
+                        let mut prof = 0.0;
+                        let mut ok = true;
+                        for v in q {
+                            match cam.project(v) {
+                                Some(s) => {
+                                    pts.push(s);
+                                    prof += cam.depth(v);
+                                }
+                                None => ok = false,
+                            }
+                        }
+                        if !ok {
+                            continue;
+                        }
+                        let depth = (prof / 3.0) as f32;
+                        let f = fog(depth, cam.distance as f32);
+                        let base = tinte.unwrap_or([tri.color[0], tri.color[1], tri.color[2]]);
+                        // Un objeto seleccionado u observado conserva el sombreado pero cambia de tono.
+                        let (cr, cg, cb) = if tinte.is_some() {
+                            let k = (tri.color[0] + tri.color[1] + tri.color[2]) / 2.4;
+                            (base[0] * k, base[1] * k, base[2] * k)
+                        } else {
+                            (base[0], base[1], base[2])
+                        };
+                        net.push(Prim::Poly {
+                            pts: expand(&pts, 0.3),
+                            fill: [
+                                cr * f + 0.050 * (1.0 - f),
+                                cg * f + 0.055 * (1.0 - f),
+                                cb * f + 0.066 * (1.0 - f),
+                                1.0,
+                            ],
+                            depth,
+                        });
+                        tri_count += 1;
                     }
                 }
-                if !ok {
-                    continue;
-                }
-                let depth = (prof / 3.0) as f32;
-                let f = fog(depth, cam.distance as f32);
-                let base = tinte.unwrap_or([tri.color[0], tri.color[1], tri.color[2]]);
-                // Un objeto seleccionado u observado conserva el sombreado pero cambia de tono.
-                let (cr, cg, cb) = if tinte.is_some() {
-                    let k = (tri.color[0] + tri.color[1] + tri.color[2]) / 2.4;
-                    (base[0] * k, base[1] * k, base[2] * k)
-                } else {
-                    (base[0], base[1], base[2])
-                };
-                net.push(Prim::Poly {
-                    pts: expand(&pts, 0.3),
-                    fill: [
-                        cr * f + 0.050 * (1.0 - f),
-                        cg * f + 0.055 * (1.0 - f),
-                        cb * f + 0.066 * (1.0 - f),
-                        1.0,
-                    ],
-                    depth,
-                });
-                tri_count += 1;
-                }
-            }
             }
 
             // Etiqueta: solo cuando la pieza ya se distingue o está seleccionada.
@@ -837,19 +952,34 @@ pub fn build_opts(
     // objeto seleccionado se dibuja al final, para que nunca la tape otra.
     let seleccionada = etiquetas.iter().position(|e| e.seleccion);
     let mut elegida = seleccionada.map(|i| etiquetas.remove(i));
-    etiquetas.sort_by(|a, b| a.depth.partial_cmp(&b.depth).unwrap_or(std::cmp::Ordering::Equal));
+    etiquetas.sort_by(|a, b| {
+        a.depth
+            .partial_cmp(&b.depth)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     etiquetas.truncate(24);
     if let Some(e) = elegida.take() {
         etiquetas.push(e);
     }
-    Scene { prims, tri_count, line_count, etiquetas }
+    Scene {
+        prims,
+        tri_count,
+        line_count,
+        etiquetas,
+    }
 }
 
 /// Ordena de mas lejano a mas cercano (algoritmo del pintor).
 fn sort_far_first(list: &mut [Prim]) {
     list.sort_by(|a, b| {
-        let da = match a { Prim::Poly { depth, .. } => *depth, Prim::Line { depth, .. } => *depth };
-        let db = match b { Prim::Poly { depth, .. } => *depth, Prim::Line { depth, .. } => *depth };
+        let da = match a {
+            Prim::Poly { depth, .. } => *depth,
+            Prim::Line { depth, .. } => *depth,
+        };
+        let db = match b {
+            Prim::Poly { depth, .. } => *depth,
+            Prim::Line { depth, .. } => *depth,
+        };
         db.partial_cmp(&da).unwrap_or(std::cmp::Ordering::Equal)
     });
 }
@@ -877,8 +1007,6 @@ fn fog(depth: f32, distance: f32) -> f32 {
     1.0 - t
 }
 
-
-
 /// Acerca el primer y el último vértice de una polilínea hacia el interior, para que la tubería
 /// nazca y muera en la pared del pozo y no lo atraviese.
 fn recortar_extremos(pts: &mut [P3], r0: f64, r1: f64) {
@@ -901,7 +1029,6 @@ fn recortar_extremos(pts: &mut [P3], r0: f64, r1: f64) {
         pts[n - 1].z + (pts[n - 2].z - pts[n - 1].z) * t1,
     );
 }
-
 
 /// Recorta un triángulo contra el semiespacio `x <= xc` y devuelve los trozos que quedan
 /// más la arista de corte (si el plano lo atraviesa).
@@ -926,7 +1053,8 @@ fn cortar_tri(tri: [[f64; 3]; 3], xc: f32) -> (Vec<[[f64; 3]; 3]>, Option<([f64;
             poligono.push(a);
         }
         if da != db {
-            let t = (xc - a[0]) / (b[0] - a[0]).abs().max(1e-9) * if b[0] > a[0] { 1.0 } else { -1.0 };
+            let t =
+                (xc - a[0]) / (b[0] - a[0]).abs().max(1e-9) * if b[0] > a[0] { 1.0 } else { -1.0 };
             let t = t.clamp(0.0, 1.0);
             let p = [xc, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
             poligono.push(p);
@@ -978,7 +1106,11 @@ fn pieza_partes(n: &crate::model::Node, lod: u8) -> Vec<crate::parts::Parte> {
                 0
             };
             pt::pozo_partes(pt::PozoParams {
-                diametro: if n.family == "saneamiento.bombeo" { n.diametro().max(1.8) } else { n.diametro() } as f32,
+                diametro: if n.family == "saneamiento.bombeo" {
+                    n.diametro().max(1.8)
+                } else {
+                    n.diametro()
+                } as f32,
                 rim: (n.z_rim - n.z_invert) as f32,
                 invert: 0.0,
                 tipo,
@@ -988,7 +1120,10 @@ fn pieza_partes(n: &crate::model::Node, lod: u8) -> Vec<crate::parts::Parte> {
         "agua.valvula" => pt::valvula_partes(dn, &n.ty, lod),
         "agua.llave" => {
             if n.ty == "hidrante" {
-                vec![pt::Parte { nombre: "hidrante", mesh: pt::hidrante(dn) }]
+                vec![pt::Parte {
+                    nombre: "hidrante",
+                    mesh: pt::hidrante(dn),
+                }]
             } else {
                 pt::valvula_partes(dn, "compuerta", lod)
             }
@@ -1007,7 +1142,10 @@ fn pieza_partes(n: &crate::model::Node, lod: u8) -> Vec<crate::parts::Parte> {
                     "saneamiento.sumidero" => "sumidero",
                     _ => "pieza",
                 };
-                vec![pt::Parte { nombre, mesh: malla }]
+                vec![pt::Parte {
+                    nombre,
+                    mesh: malla,
+                }]
             }
         }
     }
@@ -1068,17 +1206,37 @@ fn pieza_local(n: &crate::model::Node, lod: u8) -> crate::parts::Mesh {
             let alto = n.num("altura").unwrap_or(3.0) as f32;
             let paso = n.num("paso").unwrap_or(0.30) as f32;
             let mut m = pt::barra([-0.18, 0.0, 0.0], [-0.18, 0.0, alto], 0.022, 5, pt::HIERRO);
-            m.extend(pt::barra([0.18, 0.0, 0.0], [0.18, 0.0, alto], 0.022, 5, pt::HIERRO));
+            m.extend(pt::barra(
+                [0.18, 0.0, 0.0],
+                [0.18, 0.0, alto],
+                0.022,
+                5,
+                pt::HIERRO,
+            ));
             let mut z = 0.3;
             while z < alto {
-                m.extend(pt::barra([-0.18, 0.0, z], [0.18, 0.0, z], 0.018, 5, pt::HIERRO));
+                m.extend(pt::barra(
+                    [-0.18, 0.0, z],
+                    [0.18, 0.0, z],
+                    0.018,
+                    5,
+                    pt::HIERRO,
+                ));
                 z += paso;
             }
             m
         }
         "agua.hidrante" => pt::hidrante(dn),
-        "agua.arqueta" | "saneamiento.caja" | "saneamiento.arenero" | "saneamiento.trampa_grasa" => {
-            let mut m = pt::caja(0.9, 0.9, ((n.z_rim - n.z_invert) as f32).max(0.5), pt::HORMIGON_OSCURO);
+        "agua.arqueta"
+        | "saneamiento.caja"
+        | "saneamiento.arenero"
+        | "saneamiento.trampa_grasa" => {
+            let mut m = pt::caja(
+                0.9,
+                0.9,
+                ((n.z_rim - n.z_invert) as f32).max(0.5),
+                pt::HORMIGON_OSCURO,
+            );
             m.extend(pt::caja(1.0, 1.0, 0.05, pt::HIERRO).mover([-0.5, -0.5, 0.0]));
             m
         }
@@ -1091,11 +1249,16 @@ fn pieza_local(n: &crate::model::Node, lod: u8) -> crate::parts::Mesh {
         "agua.tanque" => {
             if n.ty.contains("elevado") {
                 pt::tanque_elevado(
-                    n.num("volumen_util").map(|v| (v / 3.0).sqrt()).unwrap_or(6.0) as f32,
+                    n.num("volumen_util")
+                        .map(|v| (v / 3.0).sqrt())
+                        .unwrap_or(6.0) as f32,
                     ((n.z_rim - n.z_invert) as f32).max(6.0),
                 )
             } else {
-                let diam = n.num("volumen_util").map(|v| (v / 3.0).sqrt().clamp(3.0, 14.0)).unwrap_or(6.0);
+                let diam = n
+                    .num("volumen_util")
+                    .map(|v| (v / 3.0).sqrt().clamp(3.0, 14.0))
+                    .unwrap_or(6.0);
                 pt::tanque(diam as f32, ((n.z_rim - n.z_invert) as f32).clamp(2.0, 8.0))
             }
         }
@@ -1113,7 +1276,12 @@ fn pieza_local(n: &crate::model::Node, lod: u8) -> crate::parts::Mesh {
             tipo: 4,
             lod,
         }),
-        _ => pt::cilindro(n.diametro() as f32 * 0.5, ((n.z_rim - n.z_invert) as f32).max(0.5), 10, pt::HIERRO),
+        _ => pt::cilindro(
+            n.diametro() as f32 * 0.5,
+            ((n.z_rim - n.z_invert) as f32).max(0.5),
+            10,
+            pt::HIERRO,
+        ),
     }
 }
 
@@ -1144,7 +1312,15 @@ mod tests {
         let p = crate::demo::project();
         let c = demo_cam();
         let todo = build(&p, &c, Layers::default(), None);
-        let sin_terreno = build(&p, &c, Layers { terreno: false, ..Layers::default() }, None);
+        let sin_terreno = build(
+            &p,
+            &c,
+            Layers {
+                terreno: false,
+                ..Layers::default()
+            },
+            None,
+        );
         assert!(sin_terreno.prims.len() < todo.prims.len());
     }
 
@@ -1176,10 +1352,22 @@ mod tests {
                 z_rim: 10.0,
                 z_invert: 7.0,
                 attrs: BTreeMap::from([
-                    ("diametro_interior".to_string(), crate::families::Value::Num(1.2)),
-                    ("diametro_nominal".to_string(), crate::families::Value::Int(200)),
-                    ("volumen_util".to_string(), crate::families::Value::Num(300.0)),
-                    ("caudal_diseno".to_string(), crate::families::Value::Num(20.0)),
+                    (
+                        "diametro_interior".to_string(),
+                        crate::families::Value::Num(1.2),
+                    ),
+                    (
+                        "diametro_nominal".to_string(),
+                        crate::families::Value::Int(200),
+                    ),
+                    (
+                        "volumen_util".to_string(),
+                        crate::families::Value::Num(300.0),
+                    ),
+                    (
+                        "caudal_diseno".to_string(),
+                        crate::families::Value::Num(20.0),
+                    ),
                     ("altura".to_string(), crate::families::Value::Num(3.0)),
                 ]),
                 datos: BTreeMap::new(),
@@ -1221,7 +1409,10 @@ mod tests {
         assert!(arista.is_some(), "el plano atraviesa el triángulo");
         for tri in &trozos {
             for v in tri.iter() {
-                assert!(v[0] <= 1.0 + 1e-9, "no debe quedar nada al otro lado del plano");
+                assert!(
+                    v[0] <= 1.0 + 1e-9,
+                    "no debe quedar nada al otro lado del plano"
+                );
             }
         }
     }
@@ -1240,14 +1431,24 @@ mod tests {
         let mut cam = Camera::default();
         cam.viewport = [900.0, 600.0];
         cam.fit(&p);
-        let completo = build_opts(&p, None, &cam, Layers::default(), None, &Opciones::default());
+        let completo = build_opts(
+            &p,
+            None,
+            &cam,
+            Layers::default(),
+            None,
+            &Opciones::default(),
+        );
         let cortado = build_opts(
             &p,
             None,
             &cam,
             Layers::default(),
             None,
-            &Opciones { corte_x: Some(32.0), ..Opciones::default() },
+            &Opciones {
+                corte_x: Some(32.0),
+                ..Opciones::default()
+            },
         );
         assert!(
             cortado.tri_count < completo.tri_count,
@@ -1272,14 +1473,25 @@ mod tests {
             .unwrap();
         let code = n.code.clone();
         let id = n.id;
-        let normal = build_opts(&p, None, &cam, Layers::default(), Some(&code), &Opciones::default());
+        let normal = build_opts(
+            &p,
+            None,
+            &cam,
+            Layers::default(),
+            Some(&code),
+            &Opciones::default(),
+        );
         let explotado = build_opts(
             &p,
             None,
             &cam,
             Layers::default(),
             Some(&code),
-            &Opciones { foco: Some(id), explosion: 1.0, corte_x: None },
+            &Opciones {
+                foco: Some(id),
+                explosion: 1.0,
+                corte_x: None,
+            },
         );
         // El mismo número de triángulos, pero desplazados: la escena cambia.
         assert_eq!(normal.tri_count, explotado.tri_count);
@@ -1336,8 +1548,18 @@ mod tests {
         cam.viewport = [900.0, 600.0];
         cam.fit(&p);
         cam.distance = 12.0;
-        let s = build_opts(&p, None, &cam, Layers::default(), None, &Opciones::default());
-        assert!(s.tri_count > 0, "el render no dibujó las familias no hidráulicas");
+        let s = build_opts(
+            &p,
+            None,
+            &cam,
+            Layers::default(),
+            None,
+            &Opciones::default(),
+        );
+        assert!(
+            s.tri_count > 0,
+            "el render no dibujó las familias no hidráulicas"
+        );
     }
 
     /// Con la cámara cerca debe haber al menos una etiqueta; si dejan de generarse, esto falla.
@@ -1349,7 +1571,14 @@ mod tests {
         cam.fit(&p);
         cam.distance = 12.0;
         cam.target = [10.0, 36.0, 2500.0];
-        let s = build_opts(&p, None, &cam, Layers::default(), None, &Opciones::default());
+        let s = build_opts(
+            &p,
+            None,
+            &cam,
+            Layers::default(),
+            None,
+            &Opciones::default(),
+        );
         assert!(!s.etiquetas.is_empty(), "no se generó ninguna etiqueta");
         for e in &s.etiquetas {
             assert!(!e.texto.is_empty());
@@ -1368,7 +1597,13 @@ mod tests {
         cam.distance = 18.0;
         cam.target = [30.0, 36.0, 2501.0];
         cam.elevation = 20.0;
-        let solo_red = Layers { terreno: false, alcantarillado: true, agua: true, nodos: false, edificios: false };
+        let solo_red = Layers {
+            terreno: false,
+            alcantarillado: true,
+            agua: true,
+            nodos: false,
+            edificios: false,
+        };
 
         let contar_cortes = |s: &Scene| -> usize {
             s.prims
@@ -1389,9 +1624,16 @@ mod tests {
             &cam,
             solo_red,
             None,
-            &Opciones { corte_x: Some(30.0), ..Opciones::default() },
+            &Opciones {
+                corte_x: Some(30.0),
+                ..Opciones::default()
+            },
         );
-        assert_eq!(contar_cortes(&sin), 0, "sin corte no debe haber aristas de corte");
+        assert_eq!(
+            contar_cortes(&sin),
+            0,
+            "sin corte no debe haber aristas de corte"
+        );
         assert!(
             contar_cortes(&con) > 0,
             "el corte no seccionó ninguna tubería"

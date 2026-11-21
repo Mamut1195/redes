@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use clap::{CommandFactory, Parser, Subcommand};
-use redes_core::envelope::{Diagnostic, Envelope, ENGINE_VERSION, ENVELOPE_SCHEMA, Severity};
+use redes_core::envelope::{Diagnostic, ENGINE_VERSION, ENVELOPE_SCHEMA, Envelope, Severity};
 use redes_core::export;
 use redes_core::families::{self, caps};
 use redes_core::ingest;
@@ -27,7 +27,13 @@ use serde_json::json;
 )]
 struct Cli {
     /// Proyecto (`*.redes`). Si se omite: $REDES_PROJECT o búsqueda ascendente.
-    #[arg(short = 'p', long, global = true, env = "REDES_PROJECT", value_name = "ARCHIVO")]
+    #[arg(
+        short = 'p',
+        long,
+        global = true,
+        env = "REDES_PROJECT",
+        value_name = "ARCHIVO"
+    )]
     project: Option<PathBuf>,
 
     #[arg(long, global = true)]
@@ -273,14 +279,24 @@ fn run(cli: Cli, t0: Instant) -> i32 {
 
     match &cli.cmd {
         Cmd::Esquema { familia } => {
-            return emit(esquema(familia.as_deref()).within(elapsed(t0)), pretty, quiet);
+            return emit(
+                esquema(familia.as_deref()).within(elapsed(t0)),
+                pretty,
+                quiet,
+            );
         }
         Cmd::Capacidades => return emit(esquema(None).within(elapsed(t0)), pretty, quiet),
         Cmd::Proyecto { cmd } => match cmd {
-            ProyectoCmd::Nuevo { nombre, crs, salida } => {
+            ProyectoCmd::Nuevo {
+                nombre,
+                crs,
+                salida,
+            } => {
                 let mut p = Project::new(nombre, crs);
                 p.commit("proyecto.nuevo");
-                let path = salida.clone().unwrap_or_else(|| PathBuf::from(format!("{}.redes", slug(nombre))));
+                let path = salida
+                    .clone()
+                    .unwrap_or_else(|| PathBuf::from(format!("{}.redes", slug(nombre))));
                 if !dry {
                     if let Err(e) = redes_core::project_io::save(&p, &path) {
                         return emit(io_error("proyecto.nuevo", &e), pretty, quiet);
@@ -343,18 +359,26 @@ fn run(cli: Cli, t0: Instant) -> i32 {
 
     let destructive = false;
     let mut env = match cli.cmd {
-        Cmd::Proyecto { cmd: ProyectoCmd::Info } => project_info(&p, &path),
-        Cmd::Proyecto { cmd: ProyectoCmd::Aprobar } => {
+        Cmd::Proyecto {
+            cmd: ProyectoCmd::Info,
+        } => project_info(&p, &path),
+        Cmd::Proyecto {
+            cmd: ProyectoCmd::Aprobar,
+        } => {
             let (pnd, _, _) = p.revision_counts();
             if pnd > 0 {
                 Envelope::fail(
                     "proyecto.aprobar",
-                    vec![Diagnostic::new(
-                        "E_STATE_PENDING",
-                        Severity::Error,
-                        format!("Quedan {pnd} objetos sin revisar."),
-                    )
-                    .hint("Use `redes objeto lista --estado pendiente` y apruébelos uno a uno.")],
+                    vec![
+                        Diagnostic::new(
+                            "E_STATE_PENDING",
+                            Severity::Error,
+                            format!("Quedan {pnd} objetos sin revisar."),
+                        )
+                        .hint(
+                            "Use `redes objeto lista --estado pendiente` y apruébelos uno a uno.",
+                        ),
+                    ],
                 )
             } else if dry {
                 Envelope::ok("proyecto.aprobar").with_data(json!({ "dry_run": true }))
@@ -368,7 +392,14 @@ fn run(cli: Cli, t0: Instant) -> i32 {
         Cmd::Objeto { cmd } => objeto(&mut p, cmd, dry),
         Cmd::Exportar { cmd } => exportar(&p, cmd, dry),
         Cmd::Biblioteca { cmd } => biblioteca(&cmd),
-        Cmd::Vista { salida, azimut, elevacion, distancia, ancho, alto } => {
+        Cmd::Vista {
+            salida,
+            azimut,
+            elevacion,
+            distancia,
+            ancho,
+            alto,
+        } => {
             if dry {
                 let env = Envelope::ok("vista").with_data(json!({
                     "dry_run": true,
@@ -441,13 +472,13 @@ fn biblioteca_importar(
         Err(e) => return io_error("biblioteca.importar", &format!("E_GLB_INVALIDO: {e}")),
     };
 
-    let dir = carpeta.map(|c| c.to_path_buf()).unwrap_or_else(|| PathBuf::from("."));
-    let id = nombre
-        .map(|n| slug(n))
-        .unwrap_or_else(|| {
-            let base = glb.file_stem().and_then(|s| s.to_str()).unwrap_or("pieza");
-            slug(base)
-        });
+    let dir = carpeta
+        .map(|c| c.to_path_buf())
+        .unwrap_or_else(|| PathBuf::from("."));
+    let id = nombre.map(|n| slug(n)).unwrap_or_else(|| {
+        let base = glb.file_stem().and_then(|s| s.to_str()).unwrap_or("pieza");
+        slug(base)
+    });
     let destino_dir = dir.join("biblioteca");
     if let Err(e) = std::fs::create_dir_all(&destino_dir) {
         return io_error("biblioteca.importar", &e.to_string());
@@ -513,7 +544,10 @@ fn biblioteca_importar(
         env = env.with_diagnostics(vec![Diagnostic::new(
             "W_GLB_PESADO",
             Severity::Warning,
-            format!("{} triángulos: el visor 2D irá lento; conviene usar --gpu3d", info.triangulos),
+            format!(
+                "{} triángulos: el visor 2D irá lento; conviene usar --gpu3d",
+                info.triangulos
+            ),
         )]);
     }
     env
@@ -521,8 +555,24 @@ fn biblioteca_importar(
 
 fn biblioteca(cmd: &BibliotecaCmd) -> Envelope {
     match cmd {
-        BibliotecaCmd::Importar { glb, familia, subtipo, dn, escala, carpeta, nombre } => {
-            return biblioteca_importar(glb, familia, subtipo.as_deref(), *dn, *escala, carpeta.as_deref(), nombre.as_deref());
+        BibliotecaCmd::Importar {
+            glb,
+            familia,
+            subtipo,
+            dn,
+            escala,
+            carpeta,
+            nombre,
+        } => {
+            return biblioteca_importar(
+                glb,
+                familia,
+                subtipo.as_deref(),
+                *dn,
+                *escala,
+                carpeta.as_deref(),
+                nombre.as_deref(),
+            );
         }
         BibliotecaCmd::Lista { carpeta } => {
             let dir = carpeta.clone().unwrap_or_else(|| PathBuf::from("."));
@@ -623,14 +673,16 @@ fn biblioteca_revisar(glb: &PathBuf, familia: Option<&str>) -> Envelope {
                         .filter(|a| a.gravedad == redes_core::biblioteca::Gravedad::Error)
                         .map(|a| {
                             Diagnostic::new("E_GLB_INVALIDO", Severity::Error, a.texto.clone())
-                                .hint("Ajuste la escala o el origen en Blender y vuelva a exportar.")
+                                .hint(
+                                    "Ajuste la escala o el origen en Blender y vuelva a exportar.",
+                                )
                         })
                         .collect(),
                 );
             }
-    env
-    }
-    Err(e) => io_error("biblioteca.revisar", &format!("E_GLB_INVALIDO: {e}")),
+            env
+        }
+        Err(e) => io_error("biblioteca.revisar", &format!("E_GLB_INVALIDO: {e}")),
     }
 }
 
@@ -648,8 +700,14 @@ fn elapsed(t0: Instant) -> u64 {
 fn mutates(id: &str) -> bool {
     matches!(
         id,
-        "importar.plan" | "importar.dxf" | "importar.geojson" | "importar.terreno" | "objeto.aprobar"
-            | "objeto.observar" | "objeto.reabrir" | "proyecto.aprobar"
+        "importar.plan"
+            | "importar.dxf"
+            | "importar.geojson"
+            | "importar.terreno"
+            | "objeto.aprobar"
+            | "objeto.observar"
+            | "objeto.reabrir"
+            | "proyecto.aprobar"
     )
 }
 
@@ -657,8 +715,10 @@ fn io_error(command: &str, msg: &str) -> Envelope {
     let code = msg.split(':').next().unwrap_or("E_IO_NOT_FOUND");
     Envelope::fail(
         command,
-        vec![Diagnostic::new(code, Severity::Error, msg.to_string())
-            .hint("Verifique la ruta; use --dry-run para inspeccionar sin escribir.")],
+        vec![
+            Diagnostic::new(code, Severity::Error, msg.to_string())
+                .hint("Verifique la ruta; use --dry-run para inspeccionar sin escribir."),
+        ],
     )
 }
 
@@ -702,10 +762,11 @@ fn command_id(c: &Cmd) -> &'static str {
 }
 
 fn open_project(cli: &Cli) -> Result<(Project, PathBuf), Envelope> {
-    let path = cli
-        .project
-        .clone()
-        .or_else(|| std::env::current_dir().ok().and_then(|d| redes_core::project_io::find_upwards(&d)));
+    let path = cli.project.clone().or_else(|| {
+        std::env::current_dir()
+            .ok()
+            .and_then(|d| redes_core::project_io::find_upwards(&d))
+    });
     let Some(path) = path else {
         return Err(Envelope::fail(
             "proyecto.abrir",
@@ -808,9 +869,17 @@ const CODIGOS: &[(&str, &str, i32)] = &[
     ("E_STATE_NOT_FOUND", "el objeto no existe", 4),
     ("E_STATE_DUPLICATE_NAME", "código duplicado", 3),
     ("E_STATE_PENDING", "quedan objetos sin revisar", 3),
-    ("E_STATE_REFERENCED", "borrar dejaría referencias colgando", 3),
+    (
+        "E_STATE_REFERENCED",
+        "borrar dejaría referencias colgando",
+        3,
+    ),
     ("E_TOPO_ORPHAN_LINK", "arco con extremo inexistente", 3),
-    ("E_TOPO_SELF_LOOP", "arco con el mismo nodo en ambos extremos", 3),
+    (
+        "E_TOPO_SELF_LOOP",
+        "arco con el mismo nodo en ambos extremos",
+        3,
+    ),
     ("E_FMT_PARSE", "archivo ilegible", 7),
     ("E_FMT_UNSUPPORTED", "formato no soportado", 7),
     ("E_IO_NOT_FOUND", "archivo inexistente", 7),
@@ -850,7 +919,10 @@ fn importar(p: &mut Project, cmd: ImportarCmd, dry: bool) -> Envelope {
             }
             ("importar.plan", ingest::import_plan(p, &archivo))
         }
-        ImportarCmd::Dxf { archivo, tolerancia } => {
+        ImportarCmd::Dxf {
+            archivo,
+            tolerancia,
+        } => {
             if dry {
                 return dry_import(p, "importar.dxf", &archivo);
             }
@@ -866,7 +938,10 @@ fn importar(p: &mut Project, cmd: ImportarCmd, dry: bool) -> Envelope {
             if dry {
                 return dry_import(p, "importar.terreno", &archivo);
             }
-            ("importar.terreno", ingest::import_terreno(p, &archivo, epsg))
+            (
+                "importar.terreno",
+                ingest::import_terreno(p, &archivo, epsg),
+            )
         }
     };
     match result {
@@ -942,15 +1017,36 @@ fn objeto(p: &mut Project, cmd: ObjetoCmd, dry: bool) -> Envelope {
             }
             Envelope::ok("objeto.lista").with_data(json!({ "total": items.len(), "items": items }))
         }
-        ObjetoCmd::Aprobar { codigo } => {
-            cambiar_estado(p, &codigo, EstadoObjeto::Aprobado, None, dry, "objeto.aprobar")
-        }
-        ObjetoCmd::Reabrir { codigo } => {
-            cambiar_estado(p, &codigo, EstadoObjeto::Pendiente, None, dry, "objeto.reabrir")
-        }
+        ObjetoCmd::Aprobar { codigo } => cambiar_estado(
+            p,
+            &codigo,
+            EstadoObjeto::Aprobado,
+            None,
+            dry,
+            "objeto.aprobar",
+        ),
+        ObjetoCmd::Reabrir { codigo } => cambiar_estado(
+            p,
+            &codigo,
+            EstadoObjeto::Pendiente,
+            None,
+            dry,
+            "objeto.reabrir",
+        ),
         ObjetoCmd::Observar { codigo, nota } => {
-            let texto = if nota.trim().is_empty() { None } else { Some(nota.as_str()) };
-            cambiar_estado(p, &codigo, EstadoObjeto::Observado, texto, dry, "objeto.observar")
+            let texto = if nota.trim().is_empty() {
+                None
+            } else {
+                Some(nota.as_str())
+            };
+            cambiar_estado(
+                p,
+                &codigo,
+                EstadoObjeto::Observado,
+                texto,
+                dry,
+                "objeto.observar",
+            )
         }
     }
 }
@@ -963,12 +1059,21 @@ fn cambiar_estado(
     dry: bool,
     cmd: &str,
 ) -> Envelope {
-    let id = p.node_by_code(codigo).map(|n| n.id).or_else(|| p.link_by_code(codigo).map(|l| l.id));
+    let id = p
+        .node_by_code(codigo)
+        .map(|n| n.id)
+        .or_else(|| p.link_by_code(codigo).map(|l| l.id));
     let Some(id) = id else {
         return Envelope::fail(
             cmd,
-            vec![Diagnostic::new("E_STATE_NOT_FOUND", Severity::Error, format!("No existe el código {codigo}."))
-                .hint("Liste con `redes objeto lista`.")],
+            vec![
+                Diagnostic::new(
+                    "E_STATE_NOT_FOUND",
+                    Severity::Error,
+                    format!("No existe el código {codigo}."),
+                )
+                .hint("Liste con `redes objeto lista`."),
+            ],
         );
     };
     if dry {
@@ -993,7 +1098,10 @@ fn cambiar_estado(
 
 fn exportar(p: &Project, cmd: ExportarCmd, dry: bool) -> Envelope {
     match cmd {
-        ExportarCmd::Dxf { salida, solo_aprobados } => {
+        ExportarCmd::Dxf {
+            salida,
+            solo_aprobados,
+        } => {
             if dry {
                 return Envelope::ok("exportar.dxf").with_data(json!({
                     "dry_run": true,
@@ -1019,8 +1127,13 @@ fn exportar(p: &Project, cmd: ExportarCmd, dry: bool) -> Envelope {
                 Err(e) => io_error("exportar.dxf", &e),
             }
         }
-        ExportarCmd::Gltf { salida, sin_terreno } => {
-            let opts = redes_core::gltf::OpcionesGltf { con_terreno: !sin_terreno };
+        ExportarCmd::Gltf {
+            salida,
+            sin_terreno,
+        } => {
+            let opts = redes_core::gltf::OpcionesGltf {
+                con_terreno: !sin_terreno,
+            };
             let bytes = redes_core::gltf::exportar_glb(p, opts);
             if dry {
                 return Envelope::ok("exportar.gltf").with_data(json!({
@@ -1060,7 +1173,13 @@ fn exportar(p: &Project, cmd: ExportarCmd, dry: bool) -> Envelope {
 
 fn slug(s: &str) -> String {
     s.chars()
-        .map(|c| if c.is_alphanumeric() { c.to_ascii_lowercase() } else { '-' })
+        .map(|c| {
+            if c.is_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
         .collect::<String>()
         .trim_matches('-')
         .to_string()

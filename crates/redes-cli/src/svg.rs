@@ -53,5 +53,11 @@ pub fn render(scene: &Scene, viewport: [f32; 2]) -> String {
 
 fn rgba(c: [f32; 4]) -> String {
     let to = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
-    format!("#{:02x}{:02x}{:02x}{:02x}", to(c[0]), to(c[1]), to(c[2]), to(c[3]))
+    format!(
+        "#{:02x}{:02x}{:02x}{:02x}",
+        to(c[0]),
+        to(c[1]),
+        to(c[2]),
+        to(c[3])
+    )
 }

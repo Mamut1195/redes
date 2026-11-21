@@ -32,7 +32,8 @@ pub fn save(p: &Project, path: &Path) -> Result<(), String> {
     let tmp = path.with_extension("redes.tmp");
     {
         let mut f = std::fs::File::create(&tmp).map_err(|e| format!("E_IO_PERMISSION: {e}"))?;
-        f.write_all(json.as_bytes()).map_err(|e| format!("E_IO_PERMISSION: {e}"))?;
+        f.write_all(json.as_bytes())
+            .map_err(|e| format!("E_IO_PERMISSION: {e}"))?;
         f.sync_all().map_err(|e| format!("E_IO_PERMISSION: {e}"))?;
     }
     std::fs::rename(&tmp, path).map_err(|e| format!("E_IO_PERMISSION: {e}"))?;
@@ -136,7 +137,10 @@ fn validar_tin(p: &Project) -> Result<(), String> {
         return Err("E_TIN_INVALIDO: el terreno no tiene puntos".into());
     }
     if t.tris.len() > 4_000_000 {
-        return Err(format!("E_TIN_INVALIDO: {} triángulos, demasiados", t.tris.len()));
+        return Err(format!(
+            "E_TIN_INVALIDO: {} triángulos, demasiados",
+            t.tris.len()
+        ));
     }
     let n = t.points.len();
     for (i, tri) in t.tris.iter().enumerate() {
@@ -233,7 +237,8 @@ mod tests {
     }
 
     fn escribir_temporal(nombre: &str, valor: &serde_json::Value) -> std::path::PathBuf {
-        let ruta = std::env::temp_dir().join(format!("redes-{nombre}-{}.redes", std::process::id()));
+        let ruta =
+            std::env::temp_dir().join(format!("redes-{nombre}-{}.redes", std::process::id()));
         std::fs::write(&ruta, serde_json::to_string(valor).unwrap()).unwrap();
         ruta
     }
@@ -308,7 +313,10 @@ mod tests {
         };
         let id = p.add_node(n).expect("añade");
         assert!(
-            !p.nodes.iter().filter(|x| x.id != id).any(|x| x.id.slot == id.slot),
+            !p.nodes
+                .iter()
+                .filter(|x| x.id != id)
+                .any(|x| x.id.slot == id.slot),
             "el id nuevo colisiona"
         );
         let _ = std::fs::remove_file(&ruta);

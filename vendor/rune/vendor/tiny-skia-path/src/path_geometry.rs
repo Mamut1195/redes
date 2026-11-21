@@ -870,7 +870,13 @@ pub struct AutoConicToQuads {
 }
 
 impl AutoConicToQuads {
-    pub fn compute(pt0: Point, pt1: Point, pt2: Point, weight: f32, tolerance: f32) -> Option<Self> {
+    pub fn compute(
+        pt0: Point,
+        pt1: Point,
+        pt2: Point,
+        weight: f32,
+        tolerance: f32,
+    ) -> Option<Self> {
         let conic = Conic::new(pt0, pt1, pt2, weight);
         let pow2 = conic.compute_quad_pow2(tolerance)?;
         let mut points = [Point::zero(); 64];

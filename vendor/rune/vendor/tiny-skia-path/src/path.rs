@@ -194,10 +194,9 @@ impl core::fmt::Debug for Path {
                     "C {} {} {} {} {} {} ",
                     p0.x, p0.y, p1.x, p1.y, p2.x, p2.y
                 ))?,
-                PathSegment::ConicTo(p0, p1, w) => s.write_fmt(format_args!(
-                    "K {} {} {} {} {} ",
-                    p0.x, p0.y, p1.x, p1.y, w
-                ))?,
+                PathSegment::ConicTo(p0, p1, w) => {
+                    s.write_fmt(format_args!("K {} {} {} {} {} ", p0.x, p0.y, p1.x, p1.y, w))?
+                }
                 PathSegment::Close => s.write_fmt(format_args!("Z "))?,
             }
         }

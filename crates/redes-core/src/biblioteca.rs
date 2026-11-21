@@ -15,7 +15,10 @@ pub struct Bbox3 {
 
 impl Bbox3 {
     pub fn vacia() -> Bbox3 {
-        Bbox3 { min: [f64::INFINITY; 3], max: [f64::NEG_INFINITY; 3] }
+        Bbox3 {
+            min: [f64::INFINITY; 3],
+            max: [f64::NEG_INFINITY; 3],
+        }
     }
     pub fn add(&mut self, p: [f64; 3]) {
         for i in 0..3 {
@@ -24,7 +27,11 @@ impl Bbox3 {
         }
     }
     pub fn dimensiones(&self) -> [f64; 3] {
-        [self.max[0] - self.min[0], self.max[1] - self.min[1], self.max[2] - self.min[2]]
+        [
+            self.max[0] - self.min[0],
+            self.max[1] - self.min[1],
+            self.max[2] - self.min[2],
+        ]
     }
     pub fn centro(&self) -> [f64; 3] {
         [
@@ -63,7 +70,11 @@ pub struct Modelo {
 }
 
 /// Aplana un objeto `extras` de glTF en pares clave → texto.
-fn leer_extras(valor: &Value, prefijo: &str, destino: &mut std::collections::BTreeMap<String, String>) {
+fn leer_extras(
+    valor: &Value,
+    prefijo: &str,
+    destino: &mut std::collections::BTreeMap<String, String>,
+) {
     let Some(obj) = valor.as_object() else { return };
     for (k, v) in obj {
         let clave = format!("{prefijo}.{k}");
@@ -131,17 +142,29 @@ pub fn cantidades_glb(bytes: &[u8]) -> Result<Cantidades, String> {
         .and_then(|s| s.first())
         .and_then(|s| s.get("nodes"))
     {
-        Some(Value::Array(a)) => a.iter().filter_map(|v| v.as_u64()).map(|v| v as usize).collect(),
-        _ => (0..doc.get("nodes").and_then(|n| n.as_array()).map(|a| a.len()).unwrap_or(0)).collect(),
+        Some(Value::Array(a)) => a
+            .iter()
+            .filter_map(|v| v.as_u64())
+            .map(|v| v as usize)
+            .collect(),
+        _ => (0..doc
+            .get("nodes")
+            .and_then(|n| n.as_array())
+            .map(|a| a.len())
+            .unwrap_or(0))
+            .collect(),
     };
-    let mut pendientes: Vec<(usize, [f64; 16])> = raices.into_iter().map(|i| (i, identidad())).collect();
+    let mut pendientes: Vec<(usize, [f64; 16])> =
+        raices.into_iter().map(|i| (i, identidad())).collect();
     let mut visitados = 0;
     while let Some((indice, padre)) = pendientes.pop() {
         visitados += 1;
         if visitados > 10_000 {
             break;
         }
-        let Some(nodo) = doc.get("nodes").and_then(|n| n.get(indice)) else { continue };
+        let Some(nodo) = doc.get("nodes").and_then(|n| n.get(indice)) else {
+            continue;
+        };
         let mundo = multiplicar(padre, matriz_del_nodo(nodo));
         if let Some(malla_id) = nodo.get("mesh").and_then(|m| m.as_u64()) {
             if let Some(prims) = doc
@@ -154,7 +177,12 @@ pub fn cantidades_glb(bytes: &[u8]) -> Result<Cantidades, String> {
                     let material = prim
                         .get("material")
                         .and_then(|m| m.as_u64())
-                        .map(|m| materiales.get(m as usize).cloned().unwrap_or_else(|| format!("material_{m}")))
+                        .map(|m| {
+                            materiales
+                                .get(m as usize)
+                                .cloned()
+                                .unwrap_or_else(|| format!("material_{m}"))
+                        })
                         .unwrap_or_else(|| "modelo".to_string());
                     let Some(pos) = prim
                         .get("attributes")
@@ -164,7 +192,8 @@ pub fn cantidades_glb(bytes: &[u8]) -> Result<Cantidades, String> {
                     else {
                         continue;
                     };
-                    let puntos: Vec<[f64; 3]> = pos.iter().map(|q| transformar(&mundo, *q)).collect();
+                    let puntos: Vec<[f64; 3]> =
+                        pos.iter().map(|q| transformar(&mundo, *q)).collect();
                     let indices = prim
                         .get("indices")
                         .and_then(|v| v.as_u64())
@@ -218,9 +247,21 @@ pub fn cantidades_glb(bytes: &[u8]) -> Result<Cantidades, String> {
 
 fn arista(p: [f64; 3], q: [f64; 3]) -> (i64, i64, i64, i64, i64, i64) {
     let k = 10_000.0;
-    let a = ((p[0] * k).round() as i64, (p[1] * k).round() as i64, (p[2] * k).round() as i64);
-    let b = ((q[0] * k).round() as i64, (q[1] * k).round() as i64, (q[2] * k).round() as i64);
-    if a <= b { (a.0, a.1, a.2, b.0, b.1, b.2) } else { (b.0, b.1, b.2, a.0, a.1, a.2) }
+    let a = (
+        (p[0] * k).round() as i64,
+        (p[1] * k).round() as i64,
+        (p[2] * k).round() as i64,
+    );
+    let b = (
+        (q[0] * k).round() as i64,
+        (q[1] * k).round() as i64,
+        (q[2] * k).round() as i64,
+    );
+    if a <= b {
+        (a.0, a.1, a.2, b.0, b.1, b.2)
+    } else {
+        (b.0, b.1, b.2, a.0, a.1, a.2)
+    }
 }
 
 /// Grado de dureza de un aviso.
@@ -251,11 +292,19 @@ pub struct Expectativa {
 impl Expectativa {
     /// Valores por defecto para una pieza de red (válvula, pozo, cámara…).
     pub fn pieza() -> Expectativa {
-        Expectativa { max_m: 30.0, min_m: 0.05, max_triangulos: 120_000 }
+        Expectativa {
+            max_m: 30.0,
+            min_m: 0.05,
+            max_triangulos: 120_000,
+        }
     }
     /// Valores para una planta de tratamiento.
     pub fn planta() -> Expectativa {
-        Expectativa { max_m: 400.0, min_m: 2.0, max_triangulos: 400_000 }
+        Expectativa {
+            max_m: 400.0,
+            min_m: 2.0,
+            max_triangulos: 400_000,
+        }
     }
 }
 
@@ -274,7 +323,10 @@ pub fn leer_glb(bytes: &[u8]) -> Result<Modelo, String> {
     }
     let total = u32::from_le_bytes([bytes[8], bytes[9], bytes[10], bytes[11]]) as usize;
     if total > bytes.len() {
-        return Err(format!("E_GLB_TRUNCADO: declara {total} bytes y hay {}", bytes.len()));
+        return Err(format!(
+            "E_GLB_TRUNCADO: declara {total} bytes y hay {}",
+            bytes.len()
+        ));
     }
     let largo_json = u32::from_le_bytes([bytes[12], bytes[13], bytes[14], bytes[15]]) as usize;
     if 20 + largo_json > bytes.len() {
@@ -341,21 +393,31 @@ pub fn leer_glb(bytes: &[u8]) -> Result<Modelo, String> {
     }
 
     let escenas = doc.get("scenes").and_then(|s| s.as_array());
-    let nodos_raiz: Vec<usize> = match escenas.and_then(|s| s.first()).and_then(|s| s.get("nodes")) {
-        Some(Value::Array(a)) => a.iter().filter_map(|v| v.as_u64()).map(|v| v as usize).collect(),
-        _ => (0..doc.get("nodes").and_then(|n| n.as_array()).map(|a| a.len()).unwrap_or(0)).collect(),
+    let nodos_raiz: Vec<usize> = match escenas.and_then(|s| s.first()).and_then(|s| s.get("nodes"))
+    {
+        Some(Value::Array(a)) => a
+            .iter()
+            .filter_map(|v| v.as_u64())
+            .map(|v| v as usize)
+            .collect(),
+        _ => (0..doc
+            .get("nodes")
+            .and_then(|n| n.as_array())
+            .map(|a| a.len())
+            .unwrap_or(0))
+            .collect(),
     };
 
-    let mut pendientes: Vec<(usize, [f64; 16])> = nodos_raiz
-        .into_iter()
-        .map(|i| (i, identidad()))
-        .collect();
+    let mut pendientes: Vec<(usize, [f64; 16])> =
+        nodos_raiz.into_iter().map(|i| (i, identidad())).collect();
     let mut visitados = 0usize;
 
     while let Some((indice, padre)) = pendientes.pop() {
         visitados += 1;
         if visitados > 10_000 {
-            modelo.avisos.push("E_GLB_CICLO: demasiados nodos".to_string());
+            modelo
+                .avisos
+                .push("E_GLB_CICLO: demasiados nodos".to_string());
             break;
         }
         let Some(nodo) = doc.get("nodes").and_then(|n| n.get(indice)) else {
@@ -443,17 +505,18 @@ fn leer_malla(
             continue;
         };
         p.vertices = posiciones.len();
-        p.con_normales = atributos.map(|a| a.get("NORMAL").is_some()).unwrap_or(false);
-        p.con_colores = atributos.map(|a| a.get("COLOR_0").is_some()).unwrap_or(false);
-        p.material = prim
-            .get("material")
-            .and_then(|m| m.as_u64())
-            .map(|m| {
-                materiales
-                    .get(m as usize)
-                    .cloned()
-                    .unwrap_or_else(|| format!("material_{m}"))
-            });
+        p.con_normales = atributos
+            .map(|a| a.get("NORMAL").is_some())
+            .unwrap_or(false);
+        p.con_colores = atributos
+            .map(|a| a.get("COLOR_0").is_some())
+            .unwrap_or(false);
+        p.material = prim.get("material").and_then(|m| m.as_u64()).map(|m| {
+            materiales
+                .get(m as usize)
+                .cloned()
+                .unwrap_or_else(|| format!("material_{m}"))
+        });
 
         // Índices (si no hay, se toman los vértices en orden).
         let indices = prim
@@ -484,9 +547,24 @@ fn leer_vec3(doc: &Value, bin: &[u8], indice: usize) -> Option<Vec<[f64; 3]>> {
         if base + 12 > datos.len() {
             break;
         }
-        let x = f32::from_le_bytes([datos[base], datos[base + 1], datos[base + 2], datos[base + 3]]);
-        let y = f32::from_le_bytes([datos[base + 4], datos[base + 5], datos[base + 6], datos[base + 7]]);
-        let z = f32::from_le_bytes([datos[base + 8], datos[base + 9], datos[base + 10], datos[base + 11]]);
+        let x = f32::from_le_bytes([
+            datos[base],
+            datos[base + 1],
+            datos[base + 2],
+            datos[base + 3],
+        ]);
+        let y = f32::from_le_bytes([
+            datos[base + 4],
+            datos[base + 5],
+            datos[base + 6],
+            datos[base + 7],
+        ]);
+        let z = f32::from_le_bytes([
+            datos[base + 8],
+            datos[base + 9],
+            datos[base + 10],
+            datos[base + 11],
+        ]);
         if !x.is_finite() || !y.is_finite() || !z.is_finite() {
             return None;
         }
@@ -517,7 +595,12 @@ fn leer_escalares(doc: &Value, bin: &[u8], indice: usize) -> Option<Vec<u32>> {
                 if b + 4 > datos.len() {
                     break;
                 }
-                out.push(u32::from_le_bytes([datos[b], datos[b + 1], datos[b + 2], datos[b + 3]]));
+                out.push(u32::from_le_bytes([
+                    datos[b],
+                    datos[b + 1],
+                    datos[b + 2],
+                    datos[b + 3],
+                ]));
             }
         }
         5121 => out.extend(datos.iter().take(cuenta).map(|v| *v as u32)),
@@ -553,8 +636,13 @@ fn datos_del_accessor<'a>(
 
 fn datos_crudos<'a>(doc: &Value, bin: &'a [u8], indice: usize) -> Option<&'a [u8]> {
     let acc = doc.get("accessors")?.get(indice)?;
-    let vista = doc.get("bufferViews")?.get(acc.get("bufferView")?.as_u64()? as usize)?;
-    let offset_vista = vista.get("byteOffset").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+    let vista = doc
+        .get("bufferViews")?
+        .get(acc.get("bufferView")?.as_u64()? as usize)?;
+    let offset_vista = vista
+        .get("byteOffset")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as usize;
     let offset_acc = acc.get("byteOffset").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
     let largo = vista.get("byteLength")?.as_u64()? as usize;
     let inicio = offset_vista + offset_acc;
@@ -592,17 +680,36 @@ fn matriz_del_nodo(nodo: &Value) -> [f64; 16] {
     let t = nodo
         .get("translation")
         .and_then(|v| v.as_array())
-        .map(|a| [a[0].as_f64().unwrap_or(0.0), a[1].as_f64().unwrap_or(0.0), a[2].as_f64().unwrap_or(0.0)])
+        .map(|a| {
+            [
+                a[0].as_f64().unwrap_or(0.0),
+                a[1].as_f64().unwrap_or(0.0),
+                a[2].as_f64().unwrap_or(0.0),
+            ]
+        })
         .unwrap_or([0.0; 3]);
     let s = nodo
         .get("scale")
         .and_then(|v| v.as_array())
-        .map(|a| [a[0].as_f64().unwrap_or(1.0), a[1].as_f64().unwrap_or(1.0), a[2].as_f64().unwrap_or(1.0)])
+        .map(|a| {
+            [
+                a[0].as_f64().unwrap_or(1.0),
+                a[1].as_f64().unwrap_or(1.0),
+                a[2].as_f64().unwrap_or(1.0),
+            ]
+        })
         .unwrap_or([1.0; 3]);
     let q = nodo
         .get("rotation")
         .and_then(|v| v.as_array())
-        .map(|a| [a[0].as_f64().unwrap_or(0.0), a[1].as_f64().unwrap_or(0.0), a[2].as_f64().unwrap_or(0.0), a[3].as_f64().unwrap_or(1.0)])
+        .map(|a| {
+            [
+                a[0].as_f64().unwrap_or(0.0),
+                a[1].as_f64().unwrap_or(0.0),
+                a[2].as_f64().unwrap_or(0.0),
+                a[3].as_f64().unwrap_or(1.0),
+            ]
+        })
         .unwrap_or([0.0, 0.0, 0.0, 1.0]);
     let (x, y, z, w) = (q[0], q[1], q[2], q[3]);
     let r = [
@@ -620,10 +727,22 @@ fn matriz_del_nodo(nodo: &Value) -> [f64; 16] {
     // `r` está en filas, así que hay que transponer al empaquetar (si no, se aplica la
     // rotación inversa y el modelo sale del revés).
     [
-        r[0] * s[0], r[3] * s[0], r[6] * s[0], 0.0,
-        r[1] * s[1], r[4] * s[1], r[7] * s[1], 0.0,
-        r[2] * s[2], r[5] * s[2], r[8] * s[2], 0.0,
-        t[0], t[1], t[2], 1.0,
+        r[0] * s[0],
+        r[3] * s[0],
+        r[6] * s[0],
+        0.0,
+        r[1] * s[1],
+        r[4] * s[1],
+        r[7] * s[1],
+        0.0,
+        r[2] * s[2],
+        r[5] * s[2],
+        r[8] * s[2],
+        0.0,
+        t[0],
+        t[1],
+        t[2],
+        1.0,
     ]
 }
 
@@ -657,7 +776,10 @@ pub fn revisar(modelo: &Modelo, esperado: Expectativa) -> Vec<Aviso> {
     let menor = d[0].min(d[1]).min(d[2]);
 
     if !mayor.is_finite() || mayor <= 0.0 {
-        out.push(Aviso { gravedad: Gravedad::Error, texto: "el modelo no tiene volumen".into() });
+        out.push(Aviso {
+            gravedad: Gravedad::Error,
+            texto: "el modelo no tiene volumen".into(),
+        });
         return out;
     }
     if mayor > esperado.max_m {
@@ -698,15 +820,19 @@ pub fn revisar(modelo: &Modelo, esperado: Expectativa) -> Vec<Aviso> {
     if c[0].abs() > 0.5 || c[1].abs() > 0.5 {
         out.push(Aviso {
             gravedad: Gravedad::Info,
-            texto: format!("el centro en planta está en ({:.2}, {:.2}); se puede centrar al colocar", c[0], c[1]),
+            texto: format!(
+                "el centro en planta está en ({:.2}, {:.2}); se puede centrar al colocar",
+                c[0], c[1]
+            ),
         });
     }
     if let Some(q) = modelo.giro {
         // Giro de −90° en X: X≈-0.707, W≈0.707 (Y-arriba de glTF → Z-arriba de Blender).
-        if (q[0] + 0.7071).abs() < 0.02 && q[3].abs() > 0.7 {
+        if (q[0] + std::f64::consts::FRAC_1_SQRT_2).abs() < 0.02 && q[3].abs() > 0.7 {
             out.push(Aviso {
                 gravedad: Gravedad::Info,
-                texto: "el nodo raíz gira −90° en X: el modelo viene en Y-arriba (normal en glTF)".into(),
+                texto: "el nodo raíz gira −90° en X: el modelo viene en Y-arriba (normal en glTF)"
+                    .into(),
             });
         }
     }
@@ -758,10 +884,20 @@ pub fn triangulos_de_glb(bytes: &[u8]) -> Result<Vec<TrianguloLeido>, String> {
         .and_then(|s| s.first())
         .and_then(|s| s.get("nodes"))
     {
-        Some(Value::Array(a)) => a.iter().filter_map(|v| v.as_u64()).map(|v| v as usize).collect(),
-        _ => (0..doc.get("nodes").and_then(|n| n.as_array()).map(|a| a.len()).unwrap_or(0)).collect(),
+        Some(Value::Array(a)) => a
+            .iter()
+            .filter_map(|v| v.as_u64())
+            .map(|v| v as usize)
+            .collect(),
+        _ => (0..doc
+            .get("nodes")
+            .and_then(|n| n.as_array())
+            .map(|a| a.len())
+            .unwrap_or(0))
+            .collect(),
     };
-    let mut pendientes: Vec<(usize, [f64; 16])> = raices.into_iter().map(|i| (i, identidad())).collect();
+    let mut pendientes: Vec<(usize, [f64; 16])> =
+        raices.into_iter().map(|i| (i, identidad())).collect();
     let mut visitados = 0;
     while let Some((indice, padre)) = pendientes.pop() {
         visitados += 1;
@@ -814,9 +950,9 @@ pub fn triangulos_de_glb(bytes: &[u8]) -> Result<Vec<TrianguloLeido>, String> {
                         if a >= mundo_pos.len() || b >= mundo_pos.len() || c >= mundo_pos.len() {
                             continue;
                         }
-                        let color = colores.as_ref().and_then(|cs| {
-                            cs.get(a).or_else(|| cs.first()).copied()
-                        });
+                        let color = colores
+                            .as_ref()
+                            .and_then(|cs| cs.get(a).or_else(|| cs.first()).copied());
                         out.push(TrianguloLeido {
                             pos: [mundo_pos[a], mundo_pos[b], mundo_pos[c]],
                             color,
@@ -899,7 +1035,11 @@ pub fn normalizar_glb(
     }
     let centro = bbox.centro();
     let base = bbox.min[2];
-    let k = if escala.is_finite() && escala > 0.0 { escala } else { 1.0 };
+    let k = if escala.is_finite() && escala > 0.0 {
+        escala
+    } else {
+        1.0
+    };
 
     let mut por_familia: std::collections::BTreeMap<String, Vec<crate::gltf::Vertice>> =
         std::collections::BTreeMap::new();
@@ -917,7 +1057,11 @@ pub fn normalizar_glb(
         let color = t.color.unwrap_or(color_defecto);
         let destino = por_familia.entry("modelo".to_string()).or_default();
         for i in 0..3 {
-            destino.push(crate::gltf::Vertice { pos: p[i], normal: n, color });
+            destino.push(crate::gltf::Vertice {
+                pos: p[i],
+                normal: n,
+                color,
+            });
         }
     }
     let glb = crate::gltf::glb_desde_vertices(&por_familia);
@@ -935,9 +1079,21 @@ pub fn normalizar_glb(
 }
 
 fn normal_de_f32(tri: [[f32; 3]; 3]) -> [f32; 3] {
-    let u = [tri[1][0] - tri[0][0], tri[1][1] - tri[0][1], tri[1][2] - tri[0][2]];
-    let v = [tri[2][0] - tri[0][0], tri[2][1] - tri[0][1], tri[2][2] - tri[0][2]];
-    let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    let u = [
+        tri[1][0] - tri[0][0],
+        tri[1][1] - tri[0][1],
+        tri[1][2] - tri[0][2],
+    ];
+    let v = [
+        tri[2][0] - tri[0][0],
+        tri[2][1] - tri[0][1],
+        tri[2][2] - tri[0][2],
+    ];
+    let n = [
+        u[1] * v[2] - u[2] * v[1],
+        u[2] * v[0] - u[0] * v[2],
+        u[0] * v[1] - u[1] * v[0],
+    ];
     let l = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt().max(1e-9);
     [n[0] / l, n[1] / l, n[2] / l]
 }
@@ -961,8 +1117,18 @@ fn abrir_glb(bytes: &[u8]) -> Result<(Value, &[u8]), String> {
     let mut bin: &[u8] = &[];
     let offset = 20 + largo_json;
     if offset + 8 <= bytes.len() {
-        let largo = u32::from_le_bytes([bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3]]) as usize;
-        let tipo = u32::from_le_bytes([bytes[offset + 4], bytes[offset + 5], bytes[offset + 6], bytes[offset + 7]]);
+        let largo = u32::from_le_bytes([
+            bytes[offset],
+            bytes[offset + 1],
+            bytes[offset + 2],
+            bytes[offset + 3],
+        ]) as usize;
+        let tipo = u32::from_le_bytes([
+            bytes[offset + 4],
+            bytes[offset + 5],
+            bytes[offset + 6],
+            bytes[offset + 7],
+        ]);
         if tipo == 0x004E_4942 && offset + 8 + largo <= bytes.len() {
             bin = &bytes[offset + 8..offset + 8 + largo];
         }
@@ -1013,7 +1179,10 @@ pub struct Biblioteca {
 
 impl Default for Biblioteca {
     fn default() -> Self {
-        Biblioteca { schema: "redes.biblioteca/1".to_string(), piezas: Vec::new() }
+        Biblioteca {
+            schema: "redes.biblioteca/1".to_string(),
+            piezas: Vec::new(),
+        }
     }
 }
 
@@ -1024,7 +1193,8 @@ impl Biblioteca {
             return Ok(Biblioteca::default());
         }
         let texto = std::fs::read_to_string(ruta).map_err(|e| format!("E_IO_PERMISSION: {e}"))?;
-        let b: Biblioteca = serde_json::from_str(&texto).map_err(|e| format!("E_FMT_PARSE: {e}"))?;
+        let b: Biblioteca =
+            serde_json::from_str(&texto).map_err(|e| format!("E_FMT_PARSE: {e}"))?;
         if !b.schema.starts_with("redes.biblioteca/") {
             return Err(format!("E_BIB_SCHEMA: esquema desconocido {}", b.schema));
         }
@@ -1047,17 +1217,15 @@ impl Biblioteca {
 
     /// La entrada que corresponde a una familia y subtipo (y DN, si se indica).
     pub fn buscar(&self, familia: &str, subtipo: &str, dn_mm: Option<u32>) -> Option<&Entrada> {
-        self.piezas
-            .iter()
-            .find(|e| {
-                e.familia == familia
-                    && e.subtipo.as_deref().map(|s| s == subtipo).unwrap_or(true)
-                    && match (dn_mm, e.dn_mm) {
-                        (Some(a), Some(b)) => a == b,
-                        (Some(_), None) => true,
-                        _ => true,
-                    }
-            })
+        self.piezas.iter().find(|e| {
+            e.familia == familia
+                && e.subtipo.as_deref().map(|s| s == subtipo).unwrap_or(true)
+                && match (dn_mm, e.dn_mm) {
+                    (Some(a), Some(b)) => a == b,
+                    (Some(_), None) => true,
+                    _ => true,
+                }
+        })
     }
 }
 
@@ -1087,7 +1255,10 @@ mod tests {
         assert!(d[0] > 1.0 && d[0] < 500.0, "ancho fuera de rango: {d:?}");
         // El catálogo entero ocupa ~110 m: se valida con la expectativa de conjunto, no de pieza.
         let avisos = revisar(&m, Expectativa::planta());
-        let errores: Vec<_> = avisos.iter().filter(|a| a.gravedad == Gravedad::Error).collect();
+        let errores: Vec<_> = avisos
+            .iter()
+            .filter(|a| a.gravedad == Gravedad::Error)
+            .collect();
         assert!(errores.is_empty(), "errores inesperados: {errores:?}");
     }
 
@@ -1098,10 +1269,20 @@ mod tests {
         let antes = leer_glb(&glb).expect("legible");
         let (norm, info) = normalizar_glb(&glb, 1.0, [0.6, 0.6, 0.6]).expect("normaliza");
         let despues = leer_glb(&norm).expect("el normalizado se vuelve a leer");
-        assert_eq!(info.triangulos, antes.triangulos, "no se pierden triángulos");
+        assert_eq!(
+            info.triangulos, antes.triangulos,
+            "no se pierden triángulos"
+        );
         let c = despues.bbox.centro();
-        assert!(c[0].abs() < 0.01 && c[1].abs() < 0.01, "centro en planta: {c:?}");
-        assert!(despues.bbox.min[2].abs() < 0.01, "base en z=0: {:?}", despues.bbox.min);
+        assert!(
+            c[0].abs() < 0.01 && c[1].abs() < 0.01,
+            "centro en planta: {c:?}"
+        );
+        assert!(
+            despues.bbox.min[2].abs() < 0.01,
+            "base en z=0: {:?}",
+            despues.bbox.min
+        );
         assert!(info.base_previa.abs() > 0.001 || info.base_previa.abs() < 0.001);
     }
 
@@ -1145,28 +1326,65 @@ mod tests {
         // Cubo de 2 m de lado construido a mano (12 triángulos).
         let mut m = std::collections::BTreeMap::new();
         let mut verts = Vec::new();
-        let caras_tri = |a: [f32; 3], b: [f32; 3], c: [f32; 3], d: [f32; 3]| {
-            vec![[a, b, c], [a, c, d]]
-        };
+        let caras_tri =
+            |a: [f32; 3], b: [f32; 3], c: [f32; 3], d: [f32; 3]| vec![[a, b, c], [a, c, d]];
         let v = |x: f32, y: f32, z: f32| [x, y, z];
         let mut tris = Vec::new();
         // Cada cara del cubo [-1,1]^3.
-        tris.extend(caras_tri(v(-1.0, -1.0, 1.0), v(1.0, -1.0, 1.0), v(1.0, 1.0, 1.0), v(-1.0, 1.0, 1.0)));
-        tris.extend(caras_tri(v(-1.0, -1.0, -1.0), v(-1.0, 1.0, -1.0), v(1.0, 1.0, -1.0), v(1.0, -1.0, -1.0)));
-        tris.extend(caras_tri(v(-1.0, -1.0, -1.0), v(1.0, -1.0, -1.0), v(1.0, -1.0, 1.0), v(-1.0, -1.0, 1.0)));
-        tris.extend(caras_tri(v(1.0, 1.0, -1.0), v(-1.0, 1.0, -1.0), v(-1.0, 1.0, 1.0), v(1.0, 1.0, 1.0)));
-        tris.extend(caras_tri(v(1.0, -1.0, -1.0), v(1.0, 1.0, -1.0), v(1.0, 1.0, 1.0), v(1.0, -1.0, 1.0)));
-        tris.extend(caras_tri(v(-1.0, 1.0, -1.0), v(-1.0, -1.0, -1.0), v(-1.0, -1.0, 1.0), v(-1.0, 1.0, 1.0)));
+        tris.extend(caras_tri(
+            v(-1.0, -1.0, 1.0),
+            v(1.0, -1.0, 1.0),
+            v(1.0, 1.0, 1.0),
+            v(-1.0, 1.0, 1.0),
+        ));
+        tris.extend(caras_tri(
+            v(-1.0, -1.0, -1.0),
+            v(-1.0, 1.0, -1.0),
+            v(1.0, 1.0, -1.0),
+            v(1.0, -1.0, -1.0),
+        ));
+        tris.extend(caras_tri(
+            v(-1.0, -1.0, -1.0),
+            v(1.0, -1.0, -1.0),
+            v(1.0, -1.0, 1.0),
+            v(-1.0, -1.0, 1.0),
+        ));
+        tris.extend(caras_tri(
+            v(1.0, 1.0, -1.0),
+            v(-1.0, 1.0, -1.0),
+            v(-1.0, 1.0, 1.0),
+            v(1.0, 1.0, 1.0),
+        ));
+        tris.extend(caras_tri(
+            v(1.0, -1.0, -1.0),
+            v(1.0, 1.0, -1.0),
+            v(1.0, 1.0, 1.0),
+            v(1.0, -1.0, 1.0),
+        ));
+        tris.extend(caras_tri(
+            v(-1.0, 1.0, -1.0),
+            v(-1.0, -1.0, -1.0),
+            v(-1.0, -1.0, 1.0),
+            v(-1.0, 1.0, 1.0),
+        ));
         for t in tris {
             let n = normal_de_f32(t);
             for p in t {
-                verts.push(crate::gltf::Vertice { pos: p, normal: n, color: [0.6, 0.6, 0.6] });
+                verts.push(crate::gltf::Vertice {
+                    pos: p,
+                    normal: n,
+                    color: [0.6, 0.6, 0.6],
+                });
             }
         }
         m.insert("hormigon".to_string(), verts);
         let glb = crate::gltf::glb_desde_vertices(&m);
         let c = cantidades_glb(&glb).expect("cantidades");
-        assert!((c.volumen_m3.abs() - 8.0).abs() < 0.01, "volumen: {}", c.volumen_m3);
+        assert!(
+            (c.volumen_m3.abs() - 8.0).abs() < 0.01,
+            "volumen: {}",
+            c.volumen_m3
+        );
         assert!((c.area_m2 - 24.0).abs() < 0.05, "área: {}", c.area_m2);
         assert!(c.cerrada(), "aristas abiertas: {}", c.aristas_abiertas);
         assert!((c.peso_t(2.4) - 19.2).abs() < 0.05);
@@ -1183,7 +1401,10 @@ mod tests {
     #[test]
     fn detecta_un_modelo_gigante() {
         let mut m = Modelo::default();
-        m.bbox = Bbox3 { min: [0.0, 0.0, 0.0], max: [500.0, 20.0, 30.0] };
+        m.bbox = Bbox3 {
+            min: [0.0, 0.0, 0.0],
+            max: [500.0, 20.0, 30.0],
+        };
         m.triangulos = 100;
         let avisos = revisar(&m, Expectativa::pieza());
         assert!(avisos.iter().any(|a| a.gravedad == Gravedad::Error));

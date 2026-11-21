@@ -95,7 +95,11 @@ pub fn exit_for(d: &Diagnostic) -> i32 {
         exit::IO
     } else if c.starts_with("E_PROJ") || c.starts_with("E_STATE_NOT_FOUND") {
         exit::NOT_FOUND
-    } else if c.starts_with("E_STATE") || c.starts_with("E_GEO") || c.starts_with("E_TOPO") || c.starts_with("E_HYD") {
+    } else if c.starts_with("E_STATE")
+        || c.starts_with("E_GEO")
+        || c.starts_with("E_TOPO")
+        || c.starts_with("E_HYD")
+    {
         exit::STATE
     } else {
         exit::ERROR
@@ -217,7 +221,11 @@ impl Envelope {
     pub fn fail(command: &str, diagnostics: Vec<Diagnostic>) -> Envelope {
         let mut env = Envelope::ok(command);
         env.ok = false;
-        env.warnings = diagnostics.iter().filter(|d| d.severity == Severity::Warning).cloned().collect();
+        env.warnings = diagnostics
+            .iter()
+            .filter(|d| d.severity == Severity::Warning)
+            .cloned()
+            .collect();
         env.error = diagnostics
             .iter()
             .find(|d| d.is_error())
@@ -247,7 +255,11 @@ impl Envelope {
 
     /// Añade diagnósticos informativos (p. ej. el reporte de validación) sin fallar.
     pub fn with_diagnostics(mut self, d: Vec<Diagnostic>) -> Envelope {
-        self.warnings = d.iter().filter(|x| x.severity == Severity::Warning).cloned().collect();
+        self.warnings = d
+            .iter()
+            .filter(|x| x.severity == Severity::Warning)
+            .cloned()
+            .collect();
         self.diagnostics = d;
         if self.diagnostics.iter().any(|x| x.is_error()) {
             self.ok = false;
@@ -264,7 +276,11 @@ impl Envelope {
 
     pub fn with_artifact(mut self, kind: &str, path: &str) -> Envelope {
         let bytes = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
-        self.artifacts.push(Artifact { kind: kind.into(), path: path.into(), bytes });
+        self.artifacts.push(Artifact {
+            kind: kind.into(),
+            path: path.into(),
+            bytes,
+        });
         self
     }
 
@@ -305,7 +321,10 @@ mod tests {
         let ok = Envelope::ok("proyecto.info");
         assert!(ok.ok);
         assert_eq!(ok.exit_code(), 0);
-        assert_eq!(serde_json::to_value(&ok).unwrap()["schema"], ENVELOPE_SCHEMA);
+        assert_eq!(
+            serde_json::to_value(&ok).unwrap()["schema"],
+            ENVELOPE_SCHEMA
+        );
     }
 
     #[test]
@@ -321,8 +340,20 @@ mod tests {
     fn todas_las_claves_estan_presentes() {
         let v = serde_json::to_value(Envelope::ok("x")).unwrap();
         for k in [
-            "schema", "ok", "command", "request_id", "project", "data", "artifacts", "diagnostics",
-            "warnings", "explain", "pagination", "units", "meta", "error",
+            "schema",
+            "ok",
+            "command",
+            "request_id",
+            "project",
+            "data",
+            "artifacts",
+            "diagnostics",
+            "warnings",
+            "explain",
+            "pagination",
+            "units",
+            "meta",
+            "error",
         ] {
             assert!(v.get(k).is_some(), "falta la clave {k}");
         }

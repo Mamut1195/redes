@@ -116,7 +116,12 @@ pub struct Bbox {
 
 impl Default for Bbox {
     fn default() -> Self {
-        Bbox { xmin: f64::INFINITY, ymin: f64::INFINITY, xmax: f64::NEG_INFINITY, ymax: f64::NEG_INFINITY }
+        Bbox {
+            xmin: f64::INFINITY,
+            ymin: f64::INFINITY,
+            xmax: f64::NEG_INFINITY,
+            ymax: f64::NEG_INFINITY,
+        }
     }
 }
 
@@ -134,10 +139,18 @@ impl Bbox {
         p.x >= self.xmin && p.x <= self.xmax && p.y >= self.ymin && p.y <= self.ymax
     }
     pub fn width(&self) -> f64 {
-        if self.is_empty() { 0.0 } else { self.xmax - self.xmin }
+        if self.is_empty() {
+            0.0
+        } else {
+            self.xmax - self.xmin
+        }
     }
     pub fn height(&self) -> f64 {
-        if self.is_empty() { 0.0 } else { self.ymax - self.ymin }
+        if self.is_empty() {
+            0.0
+        } else {
+            self.ymax - self.ymin
+        }
     }
     pub fn center(&self) -> P2 {
         P2::new((self.xmin + self.xmax) * 0.5, (self.ymin + self.ymax) * 0.5)
@@ -155,11 +168,17 @@ pub struct SegmentGrid {
 
 impl SegmentGrid {
     pub fn new(cell: f64) -> SegmentGrid {
-        SegmentGrid { cell: cell.max(0.5), cells: Default::default() }
+        SegmentGrid {
+            cell: cell.max(0.5),
+            cells: Default::default(),
+        }
     }
 
     fn key(&self, p: P2) -> (i32, i32) {
-        ((p.x / self.cell).floor() as i32, (p.y / self.cell).floor() as i32)
+        (
+            (p.x / self.cell).floor() as i32,
+            (p.y / self.cell).floor() as i32,
+        )
     }
 
     pub fn insert(&mut self, id: u32, a: P2, b: P2) {
@@ -204,7 +223,12 @@ mod tests {
 
     #[test]
     fn area_de_un_cuadrado() {
-        let sq = [P2::new(0.0, 0.0), P2::new(2.0, 0.0), P2::new(2.0, 2.0), P2::new(0.0, 2.0)];
+        let sq = [
+            P2::new(0.0, 0.0),
+            P2::new(2.0, 0.0),
+            P2::new(2.0, 2.0),
+            P2::new(0.0, 2.0),
+        ];
         assert!((polygon_area(&sq).abs() - 4.0).abs() < 1e-12);
     }
 

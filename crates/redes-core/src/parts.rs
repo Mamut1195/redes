@@ -28,10 +28,16 @@ pub struct Material {
 
 impl Material {
     pub const fn new(r: f32, g: f32, b: f32) -> Material {
-        Material { color: [r, g, b], metal: false }
+        Material {
+            color: [r, g, b],
+            metal: false,
+        }
     }
     pub const fn metal(r: f32, g: f32, b: f32) -> Material {
-        Material { color: [r, g, b], metal: true }
+        Material {
+            color: [r, g, b],
+            metal: true,
+        }
     }
 }
 
@@ -129,7 +135,11 @@ impl Mesh {
 fn normal(a: [f32; 3], b: [f32; 3], c: [f32; 3]) -> [f32; 3] {
     let u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
     let v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-    let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    let n = [
+        u[1] * v[2] - u[2] * v[1],
+        u[2] * v[0] - u[0] * v[2],
+        u[0] * v[1] - u[1] * v[0],
+    ];
     let l = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt().max(1e-6);
     [n[0] / l, n[1] / l, n[2] / l]
 }
@@ -144,17 +154,42 @@ pub fn caja(ancho: f32, fondo: f32, alto: f32, m: Material) -> Mesh {
     let mut mesh = Mesh::default();
     // Caras laterales (dos triángulos cada una).
     let caras = [
-        (v(-1.0, -1.0, 0.0), v(1.0, -1.0, 0.0), v(1.0, -1.0, 1.0), v(-1.0, -1.0, 1.0)),
-        (v(1.0, -1.0, 0.0), v(1.0, 1.0, 0.0), v(1.0, 1.0, 1.0), v(1.0, -1.0, 1.0)),
-        (v(1.0, 1.0, 0.0), v(-1.0, 1.0, 0.0), v(-1.0, 1.0, 1.0), v(1.0, 1.0, 1.0)),
-        (v(-1.0, 1.0, 0.0), v(-1.0, -1.0, 0.0), v(-1.0, -1.0, 1.0), v(-1.0, 1.0, 1.0)),
+        (
+            v(-1.0, -1.0, 0.0),
+            v(1.0, -1.0, 0.0),
+            v(1.0, -1.0, 1.0),
+            v(-1.0, -1.0, 1.0),
+        ),
+        (
+            v(1.0, -1.0, 0.0),
+            v(1.0, 1.0, 0.0),
+            v(1.0, 1.0, 1.0),
+            v(1.0, -1.0, 1.0),
+        ),
+        (
+            v(1.0, 1.0, 0.0),
+            v(-1.0, 1.0, 0.0),
+            v(-1.0, 1.0, 1.0),
+            v(1.0, 1.0, 1.0),
+        ),
+        (
+            v(-1.0, 1.0, 0.0),
+            v(-1.0, -1.0, 0.0),
+            v(-1.0, -1.0, 1.0),
+            v(-1.0, 1.0, 1.0),
+        ),
     ];
     for (a, b, c, d) in caras {
         mesh.tri(a, b, c, m);
         mesh.tri(a, c, d, m);
     }
     // Tapa.
-    let (a, b, c, d) = (v(-1.0, -1.0, 1.0), v(1.0, -1.0, 1.0), v(1.0, 1.0, 1.0), v(-1.0, 1.0, 1.0));
+    let (a, b, c, d) = (
+        v(-1.0, -1.0, 1.0),
+        v(1.0, -1.0, 1.0),
+        v(1.0, 1.0, 1.0),
+        v(-1.0, 1.0, 1.0),
+    );
     mesh.tri(a, b, c, m);
     mesh.tri(a, c, d, m);
     mesh
@@ -261,11 +296,23 @@ pub fn barra(a: [f32; 3], b: [f32; 3], radio: f32, caras: usize, m: Material) ->
     let l = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt().max(1e-5);
     let u = [d[0] / l, d[1] / l, d[2] / l];
     // Base ortonormal alrededor de u.
-    let aux = if u[2].abs() < 0.9 { [0.0, 0.0, 1.0] } else { [1.0, 0.0, 0.0] };
-    let mut v = [u[1] * aux[2] - u[2] * aux[1], u[2] * aux[0] - u[0] * aux[2], u[0] * aux[1] - u[1] * aux[0]];
+    let aux = if u[2].abs() < 0.9 {
+        [0.0, 0.0, 1.0]
+    } else {
+        [1.0, 0.0, 0.0]
+    };
+    let mut v = [
+        u[1] * aux[2] - u[2] * aux[1],
+        u[2] * aux[0] - u[0] * aux[2],
+        u[0] * aux[1] - u[1] * aux[0],
+    ];
     let vl = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt().max(1e-5);
     v = [v[0] / vl, v[1] / vl, v[2] / vl];
-    let w = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    let w = [
+        u[1] * v[2] - u[2] * v[1],
+        u[2] * v[0] - u[0] * v[2],
+        u[0] * v[1] - u[1] * v[0],
+    ];
     let mut mesh = Mesh::default();
     for k in 0..n {
         let a0 = k as f32 / n as f32 * std::f32::consts::TAU;
@@ -296,11 +343,23 @@ pub fn barra_tapada(a: [f32; 3], b: [f32; 3], radio: f32, caras: usize, m: Mater
     let d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
     let l = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt().max(1e-5);
     let u = [d[0] / l, d[1] / l, d[2] / l];
-    let aux = if u[2].abs() < 0.9 { [0.0, 0.0, 1.0] } else { [1.0, 0.0, 0.0] };
-    let mut v = [u[1] * aux[2] - u[2] * aux[1], u[2] * aux[0] - u[0] * aux[2], u[0] * aux[1] - u[1] * aux[0]];
+    let aux = if u[2].abs() < 0.9 {
+        [0.0, 0.0, 1.0]
+    } else {
+        [1.0, 0.0, 0.0]
+    };
+    let mut v = [
+        u[1] * aux[2] - u[2] * aux[1],
+        u[2] * aux[0] - u[0] * aux[2],
+        u[0] * aux[1] - u[1] * aux[0],
+    ];
     let vl = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt().max(1e-5);
     v = [v[0] / vl, v[1] / vl, v[2] / vl];
-    let w = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    let w = [
+        u[1] * v[2] - u[2] * v[1],
+        u[2] * v[0] - u[0] * v[2],
+        u[0] * v[1] - u[1] * v[0],
+    ];
     for (centro, signo) in [(a, -1.0f32), (b, 1.0)] {
         for k in 0..n {
             let a0 = k as f32 / n as f32 * std::f32::consts::TAU;
@@ -394,11 +453,20 @@ pub fn pozo_partes(p: PozoParams) -> Vec<Parte> {
     // Solera.
     partes.push(Parte {
         nombre: "solera",
-        mesh: cilindro(r + 0.12, 0.16, if p.lod >= 2 { 16 } else { 8 }, HORMIGON_OSCURO),
+        mesh: cilindro(
+            r + 0.12,
+            0.16,
+            if p.lod >= 2 { 16 } else { 8 },
+            HORMIGON_OSCURO,
+        ),
     });
     let arranque = 0.16;
     // El cono es lo que hace reconocible un pozo: se dibuja en todos los niveles de detalle.
-    let alto_cono = if p.lod >= 2 { (h * 0.25).clamp(0.3, 0.7) } else { 0.35 };
+    let alto_cono = if p.lod >= 2 {
+        (h * 0.25).clamp(0.3, 0.7)
+    } else {
+        0.35
+    };
     let cuerpo = (h - arranque - alto_cono).max(0.2);
 
     // Fuste hueco: con pared, la sección muestra espesor y el pozo no parece un tambor macizo.
@@ -418,8 +486,14 @@ pub fn pozo_partes(p: PozoParams) -> Vec<Parte> {
     if alto_cono > 0.05 {
         partes.push(Parte {
             nombre: "cono",
-            mesh: tronco(r, 0.36, alto_cono, if p.lod >= 2 { 16 } else { 8 }, HORMIGON)
-                .mover([0.0, 0.0, arranque + cuerpo]),
+            mesh: tronco(
+                r,
+                0.36,
+                alto_cono,
+                if p.lod >= 2 { 16 } else { 8 },
+                HORMIGON,
+            )
+            .mover([0.0, 0.0, arranque + cuerpo]),
         });
     }
 
@@ -439,14 +513,23 @@ pub fn pozo_partes(p: PozoParams) -> Vec<Parte> {
         let mut esc = Mesh::default();
         let x = -(r - 0.12);
         for lado in [-0.16f32, 0.16] {
-            esc.extend(barra([x, lado, arranque + 0.3], [x, lado, z_marco - 0.1], 0.022, 5, HIERRO));
+            esc.extend(barra(
+                [x, lado, arranque + 0.3],
+                [x, lado, z_marco - 0.1],
+                0.022,
+                5,
+                HIERRO,
+            ));
         }
         let mut z = arranque + 0.45;
         while z < z_marco - 0.2 {
             esc.extend(barra([x, -0.16, z], [x, 0.16, z], 0.018, 5, HIERRO));
             z += 0.3;
         }
-        partes.push(Parte { nombre: "escalera", mesh: esc });
+        partes.push(Parte {
+            nombre: "escalera",
+            mesh: esc,
+        });
     }
 
     let mut extra = Mesh::default();
@@ -455,7 +538,11 @@ pub fn pozo_partes(p: PozoParams) -> Vec<Parte> {
         1 => {
             let r_caida = 0.10f32.max(p.diametro * 0.10);
             let h_caida = (h * 0.55).min(2.5);
-            extra.extend(tubo(r_caida + 0.02, r_caida, h_caida, 10, PVC).mover([r * 0.55, 0.0, arranque + 0.2]));
+            extra.extend(tubo(r_caida + 0.02, r_caida, h_caida, 10, PVC).mover([
+                r * 0.55,
+                0.0,
+                arranque + 0.2,
+            ]));
         }
         // Pozo de resalto: resalto en la solera.
         2 => {
@@ -472,7 +559,13 @@ pub fn pozo_partes(p: PozoParams) -> Vec<Parte> {
         4 => {
             for lado in [-0.28f32, 0.28] {
                 extra.extend(cilindro(0.13, 0.55, 10, PLASTICO).mover([lado, 0.0, arranque]));
-                extra.extend(barra([lado, 0.0, arranque + 0.55], [lado, 0.0, arranque + 0.9], 0.04, 6, HIERRO));
+                extra.extend(barra(
+                    [lado, 0.0, arranque + 0.55],
+                    [lado, 0.0, arranque + 0.9],
+                    0.04,
+                    6,
+                    HIERRO,
+                ));
             }
         }
         // Pozo con arenero: cubeta de sedimentación bajo la solera.
@@ -481,11 +574,14 @@ pub fn pozo_partes(p: PozoParams) -> Vec<Parte> {
         }
         // Pozo disipador: dado deflector en la solera.
         7 => {
-            extra.extend(prisma(
-                &[[-0.35, -0.25], [0.35, -0.25], [0.35, 0.25], [-0.35, 0.25]],
-                0.35,
-                HORMIGON_OSCURO,
-            ).mover([0.0, 0.0, arranque]));
+            extra.extend(
+                prisma(
+                    &[[-0.35, -0.25], [0.35, -0.25], [0.35, 0.25], [-0.35, 0.25]],
+                    0.35,
+                    HORMIGON_OSCURO,
+                )
+                .mover([0.0, 0.0, arranque]),
+            );
         }
         // Caja de revisión: tapa cuadrada.
         5 => {
@@ -494,7 +590,10 @@ pub fn pozo_partes(p: PozoParams) -> Vec<Parte> {
         _ => {}
     }
     if !extra.is_empty() {
-        partes.push(Parte { nombre: "accesorio", mesh: extra });
+        partes.push(Parte {
+            nombre: "accesorio",
+            mesh: extra,
+        });
     }
     partes
 }
@@ -519,50 +618,114 @@ pub fn valvula_partes(dn_mm: u32, tipo: &str, lod: u8) -> Vec<Parte> {
     // Cuerpo: eje horizontal a lo largo de Y (el tubo llega por los extremos).
     partes.push(Parte {
         nombre: "cuerpo",
-        mesh: barra_tapada([0.0, -largo * 0.5, 0.0], [0.0, largo * 0.5, 0.0], r, caras, HIERRO),
+        mesh: barra_tapada(
+            [0.0, -largo * 0.5, 0.0],
+            [0.0, largo * 0.5, 0.0],
+            r,
+            caras,
+            HIERRO,
+        ),
     });
     // Bridas: discos cortos en los extremos.
     let mut bridas = Mesh::default();
     for lado in [-1.0f32, 1.0] {
         let y = lado * largo * 0.5;
-        bridas.extend(barra_tapada([0.0, y - 0.02, 0.0], [0.0, y + 0.02, 0.0], r * 1.45, caras, HIERRO));
+        bridas.extend(barra_tapada(
+            [0.0, y - 0.02, 0.0],
+            [0.0, y + 0.02, 0.0],
+            r * 1.45,
+            caras,
+            HIERRO,
+        ));
     }
-    partes.push(Parte { nombre: "bridas", mesh: bridas });
+    partes.push(Parte {
+        nombre: "bridas",
+        mesh: bridas,
+    });
 
     let mut acc = Mesh::default();
     match tipo {
         "mariposa" => {
-            acc.extend(barra([0.0, 0.0, r * 0.9], [0.0, 0.0, r * 0.9 + 0.06], 0.05, 8, HIERRO));
-            acc.extend(barra([0.0, 0.0, r * 0.9 + 0.05], [r * 1.9, 0.0, r * 0.9 + 0.22], 0.018, 6, HIERRO));
+            acc.extend(barra(
+                [0.0, 0.0, r * 0.9],
+                [0.0, 0.0, r * 0.9 + 0.06],
+                0.05,
+                8,
+                HIERRO,
+            ));
+            acc.extend(barra(
+                [0.0, 0.0, r * 0.9 + 0.05],
+                [r * 1.9, 0.0, r * 0.9 + 0.22],
+                0.018,
+                6,
+                HIERRO,
+            ));
         }
         "retencion" => {
             for lado in [-1.0f32, 1.0] {
-                acc.extend(barra([lado * r * 1.1, 0.0, 0.0], [lado * r * 1.5, 0.0, 0.0], 0.03, 6, HIERRO));
+                acc.extend(barra(
+                    [lado * r * 1.1, 0.0, 0.0],
+                    [lado * r * 1.5, 0.0, 0.0],
+                    0.03,
+                    6,
+                    HIERRO,
+                ));
             }
         }
         "aire" | "purga" => {
-            acc.extend(barra([0.0, 0.0, 0.0], [0.0, 0.0, 0.18], r * 0.8, caras, HIERRO));
+            acc.extend(barra(
+                [0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.18],
+                r * 0.8,
+                caras,
+                HIERRO,
+            ));
             acc.extend(tronco(r * 0.8, 0.04, 0.12, caras, HIERRO).mover([0.0, 0.0, 0.18]));
             acc.extend(cilindro(0.03, 0.05, 8, LATON).mover([0.0, 0.0, 0.30]));
         }
         "reduccion_presion" | "reguladora" | "reguladora_caudal" | "sostenedora" => {
             acc.extend(cilindro(r * 1.15, 0.14, caras, HIERRO).mover([0.0, 0.0, r * 0.75]));
-            acc.extend(tronco(r * 1.15, r * 0.55, 0.10, caras, HIERRO).mover([0.0, 0.0, r * 0.75 + 0.14]));
-            acc.extend(barra([0.0, 0.0, r * 0.75 + 0.24], [0.0, 0.0, r * 0.75 + 0.36], 0.02, 6, LATON));
+            acc.extend(tronco(r * 1.15, r * 0.55, 0.10, caras, HIERRO).mover([
+                0.0,
+                0.0,
+                r * 0.75 + 0.14,
+            ]));
+            acc.extend(barra(
+                [0.0, 0.0, r * 0.75 + 0.24],
+                [0.0, 0.0, r * 0.75 + 0.36],
+                0.02,
+                6,
+                LATON,
+            ));
         }
         _ => {
             // Compuerta u otras: vástago, volante y radios.
             let alto = 0.34 + d * 0.8;
-            acc.extend(barra([0.0, 0.0, r * 0.55], [0.0, 0.0, r * 0.55 + alto], 0.025, 6, HIERRO));
+            acc.extend(barra(
+                [0.0, 0.0, r * 0.55],
+                [0.0, 0.0, r * 0.55 + alto],
+                0.025,
+                6,
+                HIERRO,
+            ));
             let z = r * 0.55 + alto;
             acc.extend(anillo(0.12, 0.09, 12, HIERRO).mover([0.0, 0.0, z]));
             for k in 0..3 {
                 let a = k as f32 / 3.0 * std::f32::consts::TAU;
-                acc.extend(barra([0.0, 0.0, z], [0.12 * a.cos(), 0.12 * a.sin(), z], 0.008, 4, HIERRO));
+                acc.extend(barra(
+                    [0.0, 0.0, z],
+                    [0.12 * a.cos(), 0.12 * a.sin(), z],
+                    0.008,
+                    4,
+                    HIERRO,
+                ));
             }
         }
     }
-    partes.push(Parte { nombre: "accionamiento", mesh: acc });
+    partes.push(Parte {
+        nombre: "accionamiento",
+        mesh: acc,
+    });
     partes
 }
 
@@ -578,7 +741,13 @@ pub fn accesorio(tipo: &str, dn_mm: u32, angulo_grados: f32, lod: u8) -> Mesh {
     match tipo {
         "codo" => {
             // Dos tramos que se encuentran con el ángulo pedido.
-            mesh.extend(barra_tapada([0.0, 0.0, 0.0], [largo, 0.0, 0.0], r, caras, PVC));
+            mesh.extend(barra_tapada(
+                [0.0, 0.0, 0.0],
+                [largo, 0.0, 0.0],
+                r,
+                caras,
+                PVC,
+            ));
             mesh.extend(barra_tapada(
                 [0.0, 0.0, 0.0],
                 [largo * ang.cos(), largo * ang.sin(), 0.0],
@@ -586,28 +755,92 @@ pub fn accesorio(tipo: &str, dn_mm: u32, angulo_grados: f32, lod: u8) -> Mesh {
                 caras,
                 PVC,
             ));
-            mesh.extend(caja(d * 1.25, d * 1.25, d * 1.25, PVC).mover([-d * 0.62, -d * 0.62, -d * 0.62]));
+            mesh.extend(caja(d * 1.25, d * 1.25, d * 1.25, PVC).mover([
+                -d * 0.62,
+                -d * 0.62,
+                -d * 0.62,
+            ]));
         }
         "tee" => {
-            mesh.extend(barra_tapada([-largo, 0.0, 0.0], [largo, 0.0, 0.0], r, caras, PVC));
-            mesh.extend(barra_tapada([0.0, 0.0, 0.0], [0.0, largo, 0.0], r, caras, PVC));
+            mesh.extend(barra_tapada(
+                [-largo, 0.0, 0.0],
+                [largo, 0.0, 0.0],
+                r,
+                caras,
+                PVC,
+            ));
+            mesh.extend(barra_tapada(
+                [0.0, 0.0, 0.0],
+                [0.0, largo, 0.0],
+                r,
+                caras,
+                PVC,
+            ));
         }
         "cruz" => {
-            mesh.extend(barra_tapada([-largo, 0.0, 0.0], [largo, 0.0, 0.0], r, caras, PVC));
-            mesh.extend(barra_tapada([0.0, -largo, 0.0], [0.0, largo, 0.0], r, caras, PVC));
+            mesh.extend(barra_tapada(
+                [-largo, 0.0, 0.0],
+                [largo, 0.0, 0.0],
+                r,
+                caras,
+                PVC,
+            ));
+            mesh.extend(barra_tapada(
+                [0.0, -largo, 0.0],
+                [0.0, largo, 0.0],
+                r,
+                caras,
+                PVC,
+            ));
         }
         "reduccion" => {
-            mesh.extend(barra_tapada([-largo, 0.0, 0.0], [0.0, 0.0, 0.0], r * 1.35, caras, PVC));
-            mesh.extend(barra_tapada([0.0, 0.0, 0.0], [largo, 0.0, 0.0], r * 0.8, caras, PVC));
+            mesh.extend(barra_tapada(
+                [-largo, 0.0, 0.0],
+                [0.0, 0.0, 0.0],
+                r * 1.35,
+                caras,
+                PVC,
+            ));
+            mesh.extend(barra_tapada(
+                [0.0, 0.0, 0.0],
+                [largo, 0.0, 0.0],
+                r * 0.8,
+                caras,
+                PVC,
+            ));
         }
         "union" => {
-            mesh.extend(barra_tapada([-largo, 0.0, 0.0], [largo, 0.0, 0.0], r, caras, PVC));
-            mesh.extend(barra_tapada([-0.03, 0.0, 0.0], [0.03, 0.0, 0.0], r * 1.3, caras, HIERRO));
+            mesh.extend(barra_tapada(
+                [-largo, 0.0, 0.0],
+                [largo, 0.0, 0.0],
+                r,
+                caras,
+                PVC,
+            ));
+            mesh.extend(barra_tapada(
+                [-0.03, 0.0, 0.0],
+                [0.03, 0.0, 0.0],
+                r * 1.3,
+                caras,
+                HIERRO,
+            ));
         }
         _ => {
             // Tapón: cuerpo corto y tapa.
-            mesh.extend(barra_tapada([0.0, 0.0, 0.0], [largo * 0.6, 0.0, 0.0], r, caras, PVC));
-            mesh.extend(barra_tapada([largo * 0.6, 0.0, 0.0], [largo * 0.68, 0.0, 0.0], r * 1.2, caras, HIERRO));
+            mesh.extend(barra_tapada(
+                [0.0, 0.0, 0.0],
+                [largo * 0.6, 0.0, 0.0],
+                r,
+                caras,
+                PVC,
+            ));
+            mesh.extend(barra_tapada(
+                [largo * 0.6, 0.0, 0.0],
+                [largo * 0.68, 0.0, 0.0],
+                r * 1.2,
+                caras,
+                HIERRO,
+            ));
         }
     }
     mesh
@@ -624,10 +857,22 @@ pub fn hidrante(dn_mm: u32) -> Mesh {
     mesh.extend(tronco(r, r * 0.55, 0.12, 12, HIERRO).mover([0.0, 0.0, 0.08 + alto]));
     // Bocas laterales.
     for lado in [-1.0f32, 1.0] {
-        mesh.extend(barra_tapada([lado * r * 0.95, 0.0, 0.08 + alto * 0.62], [lado * (r * 0.95 + 0.09), 0.0, 0.08 + alto * 0.62], 0.05, 8, LATON));
+        mesh.extend(barra_tapada(
+            [lado * r * 0.95, 0.0, 0.08 + alto * 0.62],
+            [lado * (r * 0.95 + 0.09), 0.0, 0.08 + alto * 0.62],
+            0.05,
+            8,
+            LATON,
+        ));
     }
     // Boca frontal.
-    mesh.extend(barra_tapada([0.0, r * 0.95, 0.08 + alto * 0.62], [0.0, r * 0.95 + 0.09, 0.08 + alto * 0.62], 0.055, 8, LATON));
+    mesh.extend(barra_tapada(
+        [0.0, r * 0.95, 0.08 + alto * 0.62],
+        [0.0, r * 0.95 + 0.09, 0.08 + alto * 0.62],
+        0.055,
+        8,
+        LATON,
+    ));
     mesh
 }
 
@@ -640,7 +885,13 @@ pub fn tanque(diametro: f32, altura: f32) -> Mesh {
     mesh.extend(tronco(r + 0.10, 0.12, (r * 0.45).min(1.6), 18, HIERRO).mover([0.0, 0.0, altura]));
     // Escalera exterior.
     for lado in [-0.14f32, 0.14] {
-        mesh.extend(barra([r + 0.1, lado, 0.2], [r + 0.1, lado, altura], 0.02, 4, HIERRO));
+        mesh.extend(barra(
+            [r + 0.1, lado, 0.2],
+            [r + 0.1, lado, altura],
+            0.02,
+            4,
+            HIERRO,
+        ));
     }
     mesh
 }
@@ -717,7 +968,13 @@ pub fn captacion() -> Mesh {
         let x = -0.9 + k as f32 * 0.36;
         m.extend(barra([x, -0.85, 0.2], [x, -0.85, 1.2], 0.03, 5, HIERRO));
     }
-    m.extend(barra_tapada([0.0, 0.8, 0.5], [0.0, 1.8, 0.4], 0.15, 10, PVC));
+    m.extend(barra_tapada(
+        [0.0, 0.8, 0.5],
+        [0.0, 1.8, 0.4],
+        0.15,
+        10,
+        PVC,
+    ));
     m
 }
 
@@ -737,12 +994,22 @@ pub fn cuerpo_receptor(ancho: f32, largo: f32) -> Mesh {
     m.extend(caja(l, w, 0.05, AGUA).mover([-l * 0.5, -w * 0.5, 0.0]));
     // Orillas en talud.
     m.extend(prisma(
-        &[[-l * 0.5, w * 0.5], [l * 0.5, w * 0.5], [l * 0.5, w * 0.9], [-l * 0.5, w * 0.9]],
+        &[
+            [-l * 0.5, w * 0.5],
+            [l * 0.5, w * 0.5],
+            [l * 0.5, w * 0.9],
+            [-l * 0.5, w * 0.9],
+        ],
         0.8,
         HORMIGON_OSCURO,
     ));
     m.extend(prisma(
-        &[[-l * 0.5, -w * 0.5], [l * 0.5, -w * 0.5], [l * 0.5, -w * 0.9], [-l * 0.5, -w * 0.9]],
+        &[
+            [-l * 0.5, -w * 0.5],
+            [l * 0.5, -w * 0.5],
+            [l * 0.5, -w * 0.9],
+            [-l * 0.5, -w * 0.9],
+        ],
         0.8,
         HORMIGON_OSCURO,
     ));
@@ -757,7 +1024,13 @@ pub fn cruce(luz: f32, dn_mm: u32) -> Mesh {
     for lado in [-0.5f32, 0.5] {
         m.extend(caja(0.4, 0.4, 2.5, HORMIGON).mover([lado * l * 0.5, -0.2, 0.0]));
     }
-    m.extend(barra_tapada([-l * 0.5, 0.0, 2.5], [l * 0.5, 0.0, 2.5], d * 0.6, 10, HIERRO));
+    m.extend(barra_tapada(
+        [-l * 0.5, 0.0, 2.5],
+        [l * 0.5, 0.0, 2.5],
+        d * 0.6,
+        10,
+        HIERRO,
+    ));
     m
 }
 
@@ -825,7 +1098,9 @@ pub fn canal(a: P3, b: P3, ancho: f32, alto: f32) -> Mesh {
 pub fn tuberia(a: P3, b: P3, d_ext: f32, lod: u8, m: Material) -> Mesh {
     let caras = if lod >= 2 { 12 } else { 6 };
     let direccion = [b.x - a.x, b.y - a.y, b.z - a.z];
-    let largo = (direccion[0] * direccion[0] + direccion[1] * direccion[1] + direccion[2] * direccion[2]).sqrt();
+    let largo =
+        (direccion[0] * direccion[0] + direccion[1] * direccion[1] + direccion[2] * direccion[2])
+            .sqrt();
     if largo < 0.05 {
         return Mesh::default();
     }
@@ -888,7 +1163,13 @@ mod tests {
 
     #[test]
     fn el_lod_reduce_triangulos() {
-        let base = PozoParams { diametro: 1.2, rim: 2512.0, invert: 2508.0, tipo: 0, lod: 2 };
+        let base = PozoParams {
+            diametro: 1.2,
+            rim: 2512.0,
+            invert: 2508.0,
+            tipo: 0,
+            lod: 2,
+        };
         let mut simple = base;
         simple.lod = 1;
         assert!(pozo(simple).len() < pozo(base).len());

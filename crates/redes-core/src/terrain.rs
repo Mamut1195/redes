@@ -49,7 +49,10 @@ struct TriIndex {
 impl TriIndex {
     fn build(terrain_points: &[SurfacePoint], tris: &[[u32; 3]], bbox: Bbox) -> TriIndex {
         let cell = ((bbox.width().max(bbox.height())) / 48.0).max(1.0);
-        let mut idx = TriIndex { cell, cells: Default::default() };
+        let mut idx = TriIndex {
+            cell,
+            cells: Default::default(),
+        };
         for (t, tri) in tris.iter().enumerate() {
             let mut bb = Bbox::default();
             for &i in tri {
@@ -69,7 +72,10 @@ impl TriIndex {
     }
 
     fn candidates(&self, p: P2) -> Vec<u32> {
-        let k = ((p.x / self.cell).floor() as i32, (p.y / self.cell).floor() as i32);
+        let k = (
+            (p.x / self.cell).floor() as i32,
+            (p.y / self.cell).floor() as i32,
+        );
         self.cells.get(&k).cloned().unwrap_or_default()
     }
 }
@@ -103,7 +109,15 @@ impl Terrain {
             }
         }
         let index = TriIndex::build(&points, &tris, bbox);
-        Terrain { name: name.to_string(), epsg, version: 1, points, tris, bbox, index }
+        Terrain {
+            name: name.to_string(),
+            epsg,
+            version: 1,
+            points,
+            tris,
+            bbox,
+            index,
+        }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -147,8 +161,10 @@ impl Terrain {
     /// Pendiente en tanto por uno (`dz/ds`, positiva cuesta arriba) y su dirección en radianes.
     pub fn slope_at(&self, p: P2, step: f64) -> Option<(f64, f64)> {
         let h = step.max(0.5);
-        let zx = (self.z_at(P2::new(p.x + h, p.y))? - self.z_at(P2::new(p.x - h, p.y))?) / (2.0 * h);
-        let zy = (self.z_at(P2::new(p.x, p.y + h))? - self.z_at(P2::new(p.x, p.y - h))?) / (2.0 * h);
+        let zx =
+            (self.z_at(P2::new(p.x + h, p.y))? - self.z_at(P2::new(p.x - h, p.y))?) / (2.0 * h);
+        let zy =
+            (self.z_at(P2::new(p.x, p.y + h))? - self.z_at(P2::new(p.x, p.y - h))?) / (2.0 * h);
         Some(((zx * zx + zy * zy).sqrt(), zy.atan2(zx)))
     }
 
@@ -172,7 +188,12 @@ impl Terrain {
         }
         let nx = cells.clamp(8, 400);
         let ny = nx;
-        let (x0, y0, x1, y1) = (self.bbox.xmin, self.bbox.ymin, self.bbox.xmax, self.bbox.ymax);
+        let (x0, y0, x1, y1) = (
+            self.bbox.xmin,
+            self.bbox.ymin,
+            self.bbox.xmax,
+            self.bbox.ymax,
+        );
         let dx = (x1 - x0) / nx as f64;
         let dy = (y1 - y0) / ny as f64;
         let mut grid = vec![f64::NAN; (nx + 1) * (ny + 1)];
@@ -203,7 +224,12 @@ impl Terrain {
                     let pc = P2::new(pa.x + dx, pa.y + dy);
                     let pd = P2::new(pa.x, pa.y + dy);
                     let mut pts: Vec<P2> = Vec::with_capacity(4);
-                    for (p, q, zp, zq) in [(pa, pb, za, zb), (pb, pc, zb, zc), (pc, pd, zc, zd), (pd, pa, zd, za)] {
+                    for (p, q, zp, zq) in [
+                        (pa, pb, za, zb),
+                        (pb, pc, zb, zc),
+                        (pc, pd, zc, zd),
+                        (pd, pa, zd, za),
+                    ] {
                         // `!=` en vez de un producto: un vértice exactamente en la cota también
                         // cuenta como cruce (si no, un plano alineado con la rejilla no genera
                         // ninguna curva).

@@ -15,7 +15,10 @@ pub const ORIGEN_E: f64 = 760_000.0;
 pub const ORIGEN_N: f64 = 9_796_000.0;
 
 fn cota(p: &Project, e: f64, n: f64, fallback: f64) -> f64 {
-    p.terrain.as_ref().and_then(|t| t.z_at(P2::new(e, n))).unwrap_or(fallback)
+    p.terrain
+        .as_ref()
+        .and_then(|t| t.z_at(P2::new(e, n)))
+        .unwrap_or(fallback)
 }
 
 /// Construye el proyecto de demostración.
@@ -44,7 +47,8 @@ pub fn project() -> Project {
         for i in 0..60 {
             let e = ORIGEN_E + i as f64 * 10.0;
             let n = ORIGEN_N + j as f64 * 10.0;
-            let z = 2514.0 - i as f64 * 10.0 / 600.0 * 8.0 + (i as f64 * 0.035).sin() * 1.2
+            let z = 2514.0 - i as f64 * 10.0 / 600.0 * 8.0
+                + (i as f64 * 0.035).sin() * 1.2
                 + (n - ORIGEN_N) / 400.0 * 3.0
                 + (i as f64 * 0.11).cos() * 0.5;
             pts.push(SurfacePoint::new(e, n, z));
@@ -62,13 +66,21 @@ pub fn project() -> Project {
         let mut datos = BTreeMap::new();
         datos.insert(
             "caudal_diseno".to_string(),
-            Dato { valor: 12.0 + i as f64 * 3.4, unidad: "L/s".into(), fuente: "SWMM".into() },
+            Dato {
+                valor: 12.0 + i as f64 * 3.4,
+                unidad: "L/s".into(),
+                fuente: "SWMM".into(),
+            },
         );
         let id = p
             .add_node(Node {
                 id: ElementId::new(0, 0),
                 family: "saneamiento.pozo".into(),
-                ty: if i == 2 { "caida_exterior".into() } else { "inspeccion".into() },
+                ty: if i == 2 {
+                    "caida_exterior".into()
+                } else {
+                    "inspeccion".into()
+                },
                 code: String::new(),
                 pos: P2::new(e, n),
                 z_terrain: z_t,
@@ -78,11 +90,18 @@ pub fn project() -> Project {
                     ("diametro_interior".to_string(), Value::Num(1.20)),
                     ("cota_tapa".to_string(), Value::Num(z_t)),
                     ("cota_clave".to_string(), Value::Num(z_t - depth)),
-                    ("altura_caida".to_string(), Value::Num(if i == 2 { 0.6 } else { 0.0 })),
+                    (
+                        "altura_caida".to_string(),
+                        Value::Num(if i == 2 { 0.6 } else { 0.0 }),
+                    ),
                     ("material".to_string(), Value::Text("hormigon".into())),
                 ]),
                 datos,
-                estado: if i < 3 { EstadoObjeto::Aprobado } else { EstadoObjeto::Pendiente },
+                estado: if i < 3 {
+                    EstadoObjeto::Aprobado
+                } else {
+                    EstadoObjeto::Pendiente
+                },
                 nota: None,
                 deleted: false,
             })
@@ -97,11 +116,19 @@ pub fn project() -> Project {
         let mut datos = BTreeMap::new();
         datos.insert(
             "volumen_excavacion".to_string(),
-            Dato { valor: 118.4, unidad: "m³".into(), fuente: "Civil 3D".into() },
+            Dato {
+                valor: 118.4,
+                unidad: "m³".into(),
+                fuente: "Civil 3D".into(),
+            },
         );
         datos.insert(
             "tirante".to_string(),
-            Dato { valor: 0.42, unidad: "m".into(), fuente: "SWMM".into() },
+            Dato {
+                valor: 0.42,
+                unidad: "m".into(),
+                fuente: "SWMM".into(),
+            },
         );
         p.add_link(Link {
             id: ElementId::new(0, 0),
@@ -110,15 +137,25 @@ pub fn project() -> Project {
             code: String::new(),
             from: w[0],
             to: w[1],
-            path: vec![P3::new(a_pos.x, a_pos.y, a_z), P3::new(b_pos.x, b_pos.y, b_z)],
+            path: vec![
+                P3::new(a_pos.x, a_pos.y, a_z),
+                P3::new(b_pos.x, b_pos.y, b_z),
+            ],
             d_mm: 250,
             attrs: BTreeMap::from([
                 ("material".to_string(), Value::Text("PVC".into())),
                 ("diametro_nominal".to_string(), Value::Int(250)),
-                ("pendiente".to_string(), Value::Num((a_z - b_z) / a_pos.dist(b_pos))),
+                (
+                    "pendiente".to_string(),
+                    Value::Num((a_z - b_z) / a_pos.dist(b_pos)),
+                ),
             ]),
             datos,
-            estado: if a_z > b_z + 0.2 { EstadoObjeto::Aprobado } else { EstadoObjeto::Pendiente },
+            estado: if a_z > b_z + 0.2 {
+                EstadoObjeto::Aprobado
+            } else {
+                EstadoObjeto::Pendiente
+            },
             nota: None,
             deleted: false,
         })
@@ -193,7 +230,10 @@ pub fn project() -> Project {
             attrs: BTreeMap::from([
                 ("tipo_descarga".to_string(), Value::Text("emisario".into())),
                 ("cota_entrega".to_string(), Value::Num(lz - 0.80)),
-                ("cuerpo_receptor".to_string(), Value::Text("quebrada La Esperanza".into())),
+                (
+                    "cuerpo_receptor".to_string(),
+                    Value::Text("quebrada La Esperanza".into()),
+                ),
             ]),
             datos: BTreeMap::new(),
             estado: EstadoObjeto::Pendiente,
@@ -232,7 +272,10 @@ pub fn project() -> Project {
             z_rim: tanque_z + 6.0,
             z_invert: tanque_z,
             attrs: BTreeMap::from([
-                ("tipo_tanque".to_string(), Value::Text("apoyado_cilindrico".into())),
+                (
+                    "tipo_tanque".to_string(),
+                    Value::Text("apoyado_cilindrico".into()),
+                ),
                 ("volumen_util".to_string(), Value::Num(600.0)),
                 ("cota_piso".to_string(), Value::Num(tanque_z)),
                 ("cota_nivel_max".to_string(), Value::Num(tanque_z + 5.0)),
@@ -313,7 +356,10 @@ pub fn project() -> Project {
         attrs: BTreeMap::from([
             ("tipo_valvula".to_string(), Value::Text("compuerta".into())),
             ("diametro_nominal".to_string(), Value::Int(160)),
-            ("estado_operacion".to_string(), Value::Text("abierta".into())),
+            (
+                "estado_operacion".to_string(),
+                Value::Text("abierta".into()),
+            ),
         ]),
         datos: BTreeMap::new(),
         estado: EstadoObjeto::Pendiente,
@@ -365,7 +411,11 @@ mod tests {
         let p = project();
         let con_datos = p.links.iter().filter(|l| !l.datos.is_empty()).count();
         assert!(con_datos > 0);
-        let d = p.links.iter().find_map(|l| l.datos.get("volumen_excavacion")).unwrap();
+        let d = p
+            .links
+            .iter()
+            .find_map(|l| l.datos.get("volumen_excavacion"))
+            .unwrap();
         assert_eq!(d.unidad, "m³");
         assert_eq!(d.fuente, "Civil 3D");
     }
