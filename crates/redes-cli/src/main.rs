@@ -122,6 +122,11 @@ enum ProyectoCmd {
         #[arg(long)]
         salida: Option<PathBuf>,
     },
+    /// Cadena completa: captación, conducción, planta, reservorio, distribución y alcantarillado.
+    Cadena {
+        #[arg(long)]
+        salida: Option<PathBuf>,
+    },
     /// Catálogo completo: una muestra de **todas** las familias del registro, en rejilla.
     ///
     /// Sirve como prueba de cobertura: si una familia no dibuja, se ve aquí.
@@ -316,9 +321,11 @@ fn run(cli: Cli, t0: Instant) -> i32 {
             }
             ProyectoCmd::Demo { salida }
             | ProyectoCmd::Ciudad { salida }
+            | ProyectoCmd::Cadena { salida }
             | ProyectoCmd::CatalogoTotal { salida }
             | ProyectoCmd::Catalogo { salida } => {
                 let nombre = match &cmd {
+                    ProyectoCmd::Cadena { .. } => "proyecto.cadena",
                     ProyectoCmd::Ciudad { .. } => "proyecto.ciudad",
                     ProyectoCmd::CatalogoTotal { .. } => "proyecto.catalogo_total",
                     ProyectoCmd::Catalogo { .. } => "proyecto.catalogo",
@@ -329,8 +336,11 @@ fn run(cli: Cli, t0: Instant) -> i32 {
                     cmd,
                     ProyectoCmd::Catalogo { .. } | ProyectoCmd::CatalogoTotal { .. }
                 );
+                let es_cadena = matches!(cmd, ProyectoCmd::Cadena { .. });
                 let total = matches!(cmd, ProyectoCmd::CatalogoTotal { .. });
-                let p = if es_ciudad {
+                let p = if es_cadena {
+                    redes_core::demo_cadena::cadena()
+                } else if es_ciudad {
                     redes_core::demo_city::ciudad()
                 } else if total {
                     redes_core::demo_catalog::catalogo_completo()
@@ -339,7 +349,9 @@ fn run(cli: Cli, t0: Instant) -> i32 {
                 } else {
                     redes_core::demo::project()
                 };
-                let por_defecto = if es_ciudad {
+                let por_defecto = if es_cadena {
+                    "cadena-completa.redes"
+                } else if es_ciudad {
                     "ciudad-san-bartolo.redes"
                 } else if total {
                     "catalogo-total.redes"
@@ -744,6 +756,7 @@ fn command_id(c: &Cmd) -> &'static str {
         Cmd::Proyecto { cmd } => match cmd {
             ProyectoCmd::Nuevo { .. } => "proyecto.nuevo",
             ProyectoCmd::Demo { .. } => "proyecto.demo",
+            ProyectoCmd::Cadena { .. } => "proyecto.cadena",
             ProyectoCmd::Ciudad { .. } => "proyecto.ciudad",
             ProyectoCmd::CatalogoTotal { .. } => "proyecto.catalogo_total",
             ProyectoCmd::Catalogo { .. } => "proyecto.catalogo",

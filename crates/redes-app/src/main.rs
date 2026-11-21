@@ -1178,6 +1178,31 @@ fn main() {
                 }) as fn(&mut State),
             ),
             (
+                "ptap",
+                (|s: &mut State| {
+                    // La planta de tratamiento: mezcla, floculación, sedimentación, filtración y
+                    // desinfección en fila, con las casetas y el lecho de secado.
+                    s.cam.target = [238.0, 158.0, 2516.0];
+                    s.cam.distance = 95.0;
+                    s.cam.azimuth = -62.0;
+                    s.cam.elevation = 26.0;
+                    s.fitted = true;
+                    s.rebuild();
+                }) as fn(&mut State),
+            ),
+            (
+                "ptar",
+                (|s: &mut State| {
+                    // La salida del alcantarillado: reja, desarenador, reactor, sedimentador y laguna.
+                    s.cam.target = [500.0, 74.0, 2499.0];
+                    s.cam.distance = 130.0;
+                    s.cam.azimuth = -70.0;
+                    s.cam.elevation = 22.0;
+                    s.fitted = true;
+                    s.rebuild();
+                }) as fn(&mut State),
+            ),
+            (
                 "planta",
                 (|s: &mut State| {
                     s.cam.azimuth = -90.0;
