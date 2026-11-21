@@ -923,7 +923,7 @@ pub fn build_opts(
             }
 
             // Etiqueta: solo cuando la pieza ya se distingue o está seleccionada.
-            if r_px > 9.0 || sel {
+            if false {
                 if let Some(c) = cam.project(top) {
                     etiquetas.push(Etiqueta {
                         pos: [c[0], c[1] - 10.0],
