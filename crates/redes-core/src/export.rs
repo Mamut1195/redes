@@ -85,6 +85,100 @@ pub fn export_dxf_filtered(
         n += 1;
     }
 
+    // Capa de datos: un TEXT por objeto con la información que el CAD no guarda en la geometría
+    // (familia, subtipo, código, atributos y datos). Es lo que permite que la ida y vuelta no
+    // pierda nada; el usuario puede apagar esta capa y seguir viendo el dibujo.
+    layers.insert("REDES_INFO".to_string(), "REDES_INFO".to_string());
+    for node in p.nodes.iter().filter(|x| {
+        !x.deleted && (!solo_aprobados || x.estado == crate::model::EstadoObjeto::Aprobado)
+    }) {
+        let attrs: Vec<String> = node
+            .attrs
+            .iter()
+            .map(|(k, v)| format!("{k}={}", valor_a_texto(v)))
+            .collect();
+        let datos: Vec<String> = node
+            .datos
+            .iter()
+            .map(|(k, d)| format!("{k}={};{};{}", d.valor, d.unidad, d.fuente))
+            .collect();
+        let carga = format!(
+            "REDES|1|N|{}|{}|{}|{}|{}|{}|{}|{}|{}",
+            node.family,
+            node.ty,
+            node.code,
+            node.estado.key(),
+            node.pos.x,
+            node.pos.y,
+            node.z_rim,
+            node.z_invert,
+            node.z_terrain
+        );
+        write!(
+            s,
+            "0\nTEXT\n8\nREDES_INFO\n10\n{:.4}\n20\n{:.4}\n30\n{:.4}\n1\n{}\n40\n0.0\n",
+            node.pos.x, node.pos.y, node.z_rim, carga
+        )
+        .ok();
+        if !attrs.is_empty() {
+            write!(
+                s,
+                "0\nTEXT\n8\nREDES_INFO\n10\n{:.4}\n20\n{:.4}\n30\n{:.4}\n1\nATTRS|{}|{}\n40\n0.0\n",
+                node.pos.x, node.pos.y, node.z_rim, node.code, attrs.join(";")
+            )
+            .ok();
+        }
+        if !datos.is_empty() {
+            write!(
+                s,
+                "0\nTEXT\n8\nREDES_INFO\n10\n{:.4}\n20\n{:.4}\n30\n{:.4}\n1\nDATOS|{}|{}\n40\n0.0\n",
+                node.pos.x, node.pos.y, node.z_rim, node.code, datos.join(";")
+            )
+            .ok();
+        }
+    }
+    for link in p.links.iter().filter(|x| {
+        !x.deleted && (!solo_aprobados || x.estado == crate::model::EstadoObjeto::Aprobado)
+    }) {
+        if link.path.len() < 2 {
+            continue;
+        }
+        let medio = &link.path[link.path.len() / 2];
+        let trazado: Vec<String> = link
+            .path
+            .iter()
+            .map(|v| format!("{:.4},{:.4},{:.4}", v.x, v.y, v.z))
+            .collect();
+        let carga = format!(
+            "REDES|1|L|{}|{}|{}|{}|{}|{}",
+            link.family,
+            link.ty,
+            link.code,
+            link.estado.key(),
+            link.d_mm,
+            trazado.join(";")
+        );
+        write!(
+            s,
+            "0\nTEXT\n8\nREDES_INFO\n10\n{:.4}\n20\n{:.4}\n30\n{:.4}\n1\n{}\n40\n0.0\n",
+            medio.x, medio.y, medio.z, carga
+        )
+        .ok();
+        let attrs: Vec<String> = link
+            .attrs
+            .iter()
+            .map(|(k, v)| format!("{k}={}", valor_a_texto(v)))
+            .collect();
+        if !attrs.is_empty() {
+            write!(
+                s,
+                "0\nTEXT\n8\nREDES_INFO\n10\n{:.4}\n20\n{:.4}\n30\n{:.4}\n1\nATTRS|{}|{}\n40\n0.0\n",
+                medio.x, medio.y, medio.z, link.code, attrs.join(";")
+            )
+            .ok();
+        }
+    }
+
     s.push_str("0\nENDSEC\n0\nEOF\n");
     if let Some(dir) = path.parent()
         && !dir.as_os_str().is_empty()
@@ -107,6 +201,16 @@ fn layer_name(family_key: &str) -> String {
         .unwrap_or_else(|| "REDES".into())
 }
 
+/// Valor de atributo como texto estable para el DXF (`numo`, `int`, `bool`, `texto`).
+fn valor_a_texto(v: &crate::families::Value) -> String {
+    match v {
+        crate::families::Value::Num(n) => format!("{n}"),
+        crate::families::Value::Int(i) => format!("{i}"),
+        crate::families::Value::Bool(b) => format!("{b}"),
+        crate::families::Value::Text(s) => s.replace(';', ",").replace('|', "/"),
+    }
+}
+
 /// Exporta a GeoJSON (puntos y líneas con sus datos importados).
 pub fn export_geojson(p: &Project, path: &Path) -> Result<usize, String> {
     let mut features = Vec::new();
@@ -120,6 +224,9 @@ pub fn export_geojson(p: &Project, path: &Path) -> Result<usize, String> {
             "estado": n.estado.key(),
             "nota": n.nota,
         });
+        for (k, v) in &n.attrs {
+            props[k] = serde_json::json!(valor_a_texto(v));
+        }
         for (k, d) in &n.datos {
             props[k] =
                 serde_json::json!({ "valor": d.valor, "unidad": d.unidad, "fuente": d.fuente });
@@ -143,6 +250,9 @@ pub fn export_geojson(p: &Project, path: &Path) -> Result<usize, String> {
             "estado": l.estado.key(),
             "nota": l.nota,
         });
+        for (k, v) in &l.attrs {
+            props[k] = serde_json::json!(valor_a_texto(v));
+        }
         for (k, d) in &l.datos {
             props[k] =
                 serde_json::json!({ "valor": d.valor, "unidad": d.unidad, "fuente": d.fuente });
@@ -190,6 +300,47 @@ pub fn revision_summary(p: &Project) -> (usize, usize, usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// La ida y vuelta por DXF no pierde familia, subtipo, código ni atributos (F8-01).
+    #[test]
+    fn el_dxf_vuelve_con_los_mismos_objetos() {
+        let original = crate::demo_catalog::catalogo_completo();
+        let ruta = std::env::temp_dir().join(format!("redes-rt-{}.dxf", std::process::id()));
+        let exportados = export_dxf(&original, &ruta).expect("exporta");
+        assert!(exportados > 0);
+
+        let mut destino = crate::model::Project::new("vuelta", "EPSG:32717");
+        crate::ingest::import_dxf(&mut destino, &ruta, 0.5).expect("importa");
+
+        assert_eq!(
+            destino.nodes.len(),
+            original.nodes.len(),
+            "nodos: {} vs {}",
+            destino.nodes.len(),
+            original.nodes.len()
+        );
+        assert_eq!(destino.links.len(), original.links.len(), "arcos");
+        for n in &original.nodes {
+            let otro = destino
+                .nodes
+                .iter()
+                .find(|x| x.code == n.code)
+                .unwrap_or_else(|| panic!("falta {}", n.code));
+            assert_eq!(otro.family, n.family, "familia de {}", n.code);
+            assert_eq!(otro.ty, n.ty, "subtipo de {}", n.code);
+            assert_eq!(
+                otro.attrs.len(),
+                n.attrs.len(),
+                "atributos de {}: {:?} vs {:?}",
+                n.code,
+                otro.attrs.keys().collect::<Vec<_>>(),
+                n.attrs.keys().collect::<Vec<_>>()
+            );
+            assert!((otro.pos.x - n.pos.x).abs() < 1e-3, "x de {}", n.code);
+            assert!((otro.z_rim - n.z_rim).abs() < 1e-3, "cota de {}", n.code);
+        }
+        let _ = std::fs::remove_file(&ruta);
+    }
 
     #[test]
     fn el_dxf_sale_con_entidades() {

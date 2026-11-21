@@ -332,6 +332,11 @@ pub fn import_dxf(p: &mut Project, path: &Path, tolerance: f64) -> Result<Import
         formato: "dxf".into(),
         ..Default::default()
     };
+
+    // Capa de datos de la ida y vuelta: si el DXF lo escribió Redes, manda lo que dice ahí.
+    if let Some(previo) = importar_de_capa_info(p, &pairs, &mut rep, tolerance) {
+        return Ok(previo);
+    }
     let mut points: Vec<(P2, f64, String)> = Vec::new();
     let mut circles: Vec<(P2, f64)> = Vec::new();
     let mut lines: Vec<(Vec<P3>, String, String)> = Vec::new();
@@ -603,6 +608,211 @@ fn nearest_node(
             rep.descartados.push(format!("nodo implícito: {e}"));
             None
         }
+    }
+}
+
+/// Reconstruye el proyecto desde la capa `REDES_INFO` que escribe [`crate::export::export_dxf`].
+///
+/// Devuelve `None` si el DXF no tiene esa capa (entonces se usa la heurística por capas, que es
+/// para archivos de otras aplicaciones).
+fn importar_de_capa_info(
+    p: &mut Project,
+    pairs: &[(String, String)],
+    rep: &mut ImportReport,
+    _tolerance: f64,
+) -> Option<ImportReport> {
+    // Un TEXT es: código 8 (capa), 10/20/30 (posición) y 1 (contenido).
+    let mut textos: Vec<String> = Vec::new();
+    let mut i = 0;
+    while i + 1 < pairs.len() {
+        if pairs[i].0 == "0" && pairs[i].1 == "TEXT" {
+            let mut j = i + 1;
+            let mut capa = String::new();
+            let mut contenido = String::new();
+            while j + 1 < pairs.len() && pairs[j].0 != "0" {
+                match pairs[j].0.as_str() {
+                    "8" => capa = pairs[j].1.clone(),
+                    "1" => contenido = pairs[j].1.clone(),
+                    _ => {}
+                }
+                j += 1;
+            }
+            if capa == "REDES_INFO" && !contenido.is_empty() {
+                textos.push(contenido);
+            }
+            i = j;
+            continue;
+        }
+        i += 1;
+    }
+    if textos.is_empty() {
+        return None;
+    }
+
+    let mut attrs: std::collections::BTreeMap<String, std::collections::BTreeMap<String, Value>> =
+        Default::default();
+    let mut datos: std::collections::BTreeMap<String, std::collections::BTreeMap<String, Dato>> =
+        Default::default();
+    for t in &textos {
+        if let Some(resto) = t.strip_prefix("ATTRS|") {
+            let mut it = resto.splitn(2, '|');
+            let (Some(code), Some(cuerpo)) = (it.next(), it.next()) else {
+                continue;
+            };
+            let mut m = std::collections::BTreeMap::new();
+            for par in cuerpo.split(';').filter(|s| !s.is_empty()) {
+                if let Some((k, v)) = par.split_once('=') {
+                    m.insert(k.to_string(), parse_valor(v));
+                }
+            }
+            attrs.insert(code.to_string(), m);
+        } else if let Some(resto) = t.strip_prefix("DATOS|") {
+            let mut it = resto.splitn(2, '|');
+            let (Some(code), Some(cuerpo)) = (it.next(), it.next()) else {
+                continue;
+            };
+            let mut m = std::collections::BTreeMap::new();
+            for trozo in cuerpo.split(';').filter(|s| !s.is_empty()) {
+                let partes: Vec<&str> = trozo.split('=').collect();
+                if partes.len() < 4 {
+                    continue;
+                }
+                let valor = partes[1].parse::<f64>().unwrap_or(f64::NAN);
+                if !valor.is_finite() {
+                    continue;
+                }
+                m.insert(
+                    partes[0].to_string(),
+                    Dato {
+                        valor,
+                        unidad: partes[2].to_string(),
+                        fuente: partes[3..].join("="),
+                    },
+                );
+            }
+            datos.insert(code.to_string(), m);
+        }
+    }
+
+    let mut ids: std::collections::BTreeMap<String, ElementId> = Default::default();
+    let mut nodos_creados = 0usize;
+    for t in &textos {
+        let Some(resto) = t.strip_prefix("REDES|1|") else {
+            continue;
+        };
+        let campos: Vec<&str> = resto.split('|').collect();
+        if campos.first() != Some(&"N") || campos.len() < 10 {
+            continue;
+        }
+        let (familia, subtipo) = (campos[1], campos[2]);
+        let code = campos[3].to_string();
+        let x = campos[5].parse::<f64>().ok();
+        let y = campos[6].parse::<f64>().ok();
+        let (Some(x), Some(y)) = (x, y) else { continue };
+        let z_rim = campos[7].parse::<f64>().unwrap_or(0.0);
+        let z_inv = campos[8].parse::<f64>().unwrap_or(z_rim - 1.0);
+        let z_ter = campos[9].parse::<f64>().unwrap_or(z_rim);
+        let node = Node {
+            id: ElementId::new(0, 0),
+            family: familia.to_string(),
+            ty: subtipo.to_string(),
+            code: code.clone(),
+            pos: P2::new(x, y),
+            z_terrain: z_ter,
+            z_rim,
+            z_invert: z_inv,
+            attrs: attrs.get(&code).cloned().unwrap_or_default(),
+            datos: datos.get(&code).cloned().unwrap_or_default(),
+            estado: EstadoObjeto::Pendiente,
+            nota: None,
+            modelo: None,
+            deleted: false,
+        };
+        match p.add_node(node) {
+            Ok(id) => {
+                ids.insert(code, id);
+                nodos_creados += 1;
+            }
+            Err(e) => rep.descartados.push(format!("nodo {code}: {e}")),
+        }
+    }
+
+    let mut arcos_creados = 0usize;
+    for t in &textos {
+        let Some(resto) = t.strip_prefix("REDES|1|") else {
+            continue;
+        };
+        let campos: Vec<&str> = resto.split('|').collect();
+        if campos.first() != Some(&"L") || campos.len() < 7 {
+            continue;
+        }
+        let (familia, subtipo) = (campos[1], campos[2]);
+        let code = campos[3].to_string();
+        let dn = campos[5].parse::<u32>().unwrap_or(200);
+        let trazado: Vec<P3> = campos[6]
+            .split(';')
+            .filter_map(|v| {
+                let c: Vec<f64> = v.split(',').filter_map(|n| n.parse().ok()).collect();
+                (c.len() == 3).then(|| P3::new(c[0], c[1], c[2]))
+            })
+            .collect();
+        if trazado.len() < 2 {
+            continue;
+        }
+        // Extremos: el nodo más cercano a cada punta del trazado.
+        let mas_cercano = |q: P3| -> Option<ElementId> {
+            p.nodes
+                .iter()
+                .filter(|n| !n.deleted)
+                .map(|n| (n.id, n.pos.dist(q.p2())))
+                .min_by(|a, b| a.1.total_cmp(&b.1))
+                .map(|(id, _)| id)
+        };
+        let (Some(desde), Some(hasta)) = (
+            mas_cercano(trazado[0]),
+            mas_cercano(*trazado.last().unwrap()),
+        ) else {
+            continue;
+        };
+        let link = Link {
+            id: ElementId::new(0, 0),
+            family: familia.to_string(),
+            ty: subtipo.to_string(),
+            code: code.clone(),
+            from: desde,
+            to: hasta,
+            path: trazado,
+            d_mm: dn,
+            attrs: attrs.get(&code).cloned().unwrap_or_default(),
+            datos: datos.get(&code).cloned().unwrap_or_default(),
+            estado: EstadoObjeto::Pendiente,
+            nota: None,
+            deleted: false,
+        };
+        match p.add_link(link) {
+            Ok(_) => arcos_creados += 1,
+            Err(e) => rep.descartados.push(format!("arco {code}: {e}")),
+        }
+    }
+
+    if nodos_creados == 0 && arcos_creados == 0 {
+        return None;
+    }
+    rep.nodos = nodos_creados;
+    rep.arcos = arcos_creados;
+    p.commit("importar dxf");
+    Some(rep.clone())
+}
+
+/// Interpreta el texto de un atributo exportado: número, entero, booleano o texto.
+fn parse_valor(v: &str) -> Value {
+    if let Ok(n) = v.parse::<f64>() {
+        return Value::Num(n);
+    }
+    match v {
+        "true" => Value::Bool(true),
+        "false" => Value::Bool(false),
+        otro => Value::Text(otro.to_string()),
     }
 }
 
