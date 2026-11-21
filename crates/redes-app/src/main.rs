@@ -234,6 +234,7 @@ impl State {
             self.sel.as_deref(),
             &self.opts,
         );
+        self.anadir_proxies();
         // Manifiesto de la biblioteca: se resuelve una vez por proyecto.
         if self.bib.is_none() && self.project.biblioteca.is_some() {
             let dir = self
@@ -372,6 +373,73 @@ impl State {
             self.aviso = Some("Corte activo: Shift + rueda lo desplaza".into());
         }
         self.rebuild();
+    }
+
+    /// Sin pase 3D, dibuja una silueta decimada del modelo (proxy) en lugar de nada.
+    ///
+    /// El pase 3D dibuja la malla real; aquí basta con que el objeto se reconozca cuando la GPU
+    /// está apagada. Los triángulos entran como polígonos del pintor, con su profundidad.
+    fn anadir_proxies(&mut self) {
+        if self.gpu3d {
+            return;
+        }
+        let Some((carpeta, bib)) = self.bib.clone() else {
+            return;
+        };
+        let objetos: Vec<(f64, f64, f64, String)> = self
+            .project
+            .nodes
+            .iter()
+            .filter(|n| !n.deleted)
+            .filter_map(|n| n.modelo.clone().map(|m| (n.pos.x, n.pos.y, n.z_rim, m)))
+            .collect();
+        if objetos.is_empty() {
+            return;
+        }
+        let (ox, oy) = (self.project.origin.x, self.project.origin.y);
+        let zr = self.cam.target[2];
+        let k = self.cam.z_scale;
+        let mut extra: Vec<Prim> = Vec::new();
+        for (x, y, z, modelo) in objetos {
+            let Some(pieza) = bib.piezas.iter().find(|p| p.id == modelo).cloned() else {
+                continue;
+            };
+            let Some(malla) = self.modelos.malla(&carpeta, &pieza) else {
+                continue;
+            };
+            let dec = modelos::proxy(&malla, 0.05);
+            for tri in dec.chunks_exact(3) {
+                let mut pts: Vec<[f32; 2]> = Vec::with_capacity(3);
+                let mut prof = 0.0f64;
+                let mut ok = true;
+                for v in tri {
+                    let q = [
+                        x - ox + v.pos[0] as f64,
+                        y - oy + v.pos[1] as f64,
+                        (z + v.pos[2] as f64 - zr) * k + zr,
+                    ];
+                    match self.cam.project(q) {
+                        Some(s) => {
+                            pts.push(s);
+                            prof += self.cam.depth(q);
+                        }
+                        None => ok = false,
+                    }
+                }
+                if !ok {
+                    continue;
+                }
+                let c = tri[0].color;
+                extra.push(Prim::Poly {
+                    pts,
+                    fill: [c[0], c[1], c[2], 0.92],
+                    depth: (prof / 3.0) as f32,
+                });
+            }
+        }
+        if !extra.is_empty() {
+            self.scene.prims.extend(extra);
+        }
     }
 
     /// Asigna un modelo de la biblioteca al objeto seleccionado y le pasa sus medidas.
