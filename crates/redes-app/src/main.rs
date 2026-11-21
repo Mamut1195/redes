@@ -295,14 +295,40 @@ impl State {
         };
         let (pos, rim, inv, diam) = (n.pos, n.z_rim, n.z_invert, n.diametro());
         let id = n.id;
+        let modelo_id = n.modelo.clone();
         let alto = (rim - inv).max(0.4);
         let tam = diam.max(alto);
-        self.cam.target = [
+
+        // Si el objeto tiene modelo, se encuadra el modelo, no la pieza paramétrica: una tapa
+        // modelada de 3 m no cabe con el encuadre de un pozo de 1,2 m.
+        let mut centro = [
             pos.x - self.project.origin.x,
             pos.y - self.project.origin.y,
             rim,
         ];
-        self.cam.distance = (tam * 3.4).clamp(2.5, 60.0);
+        let mut tamano = tam;
+        if let (Some(modelo_id), Some((carpeta, bib))) = (modelo_id, self.bib.clone())
+            && let Some(pieza) = bib.piezas.iter().find(|x| x.id == modelo_id).cloned()
+            && let Some(malla) = self.modelos.malla(&carpeta, &pieza)
+        {
+            let (mut min, mut max) = ([f32::MAX; 3], [f32::MIN; 3]);
+            for v in malla.iter() {
+                for k in 0..3 {
+                    min[k] = min[k].min(v.pos[k]);
+                    max[k] = max[k].max(v.pos[k]);
+                }
+            }
+            if min[0] < max[0] {
+                centro = [
+                    (pos.x - self.project.origin.x) + ((min[0] + max[0]) * 0.5) as f64,
+                    (pos.y - self.project.origin.y) + ((min[1] + max[1]) * 0.5) as f64,
+                    rim + ((min[2] + max[2]) * 0.5) as f64,
+                ];
+                tamano = ((max[0] - min[0]).hypot(max[1] - min[1])).max(max[2]) as f64;
+            }
+        }
+        self.cam.target = centro;
+        self.cam.distance = (tamano * 3.4).clamp(2.5, 400.0);
         self.cam.azimuth = -48.0;
         self.cam.elevation = 16.0;
         self.cam.z_scale = 1.0;
