@@ -103,7 +103,13 @@ Objetivo: que lo que el CAD devuelve no pierda familia, código, atributos ni da
 
 ---
 
-## F10 — Acabado visual (que “se vea como en la realidad”)
+## F10 — Acabado visual — **F10-01 y F10-04 hechos**
+
+> Tapa y marco legibles: marco con canto de 7 cm, tapa a ras de la calle con grabado y bisagra, y
+> escalera que muere en el arranque del cono (ya no lo atraviesa). Interruptor de **rayos X**
+> (`--rayos-x` y botón) que dibuja solera, fuste y escalera translúcidos. Quedan poché en la
+> sección, carriles de etiquetas y separación de materiales por tono.
+ (que “se vea como en la realidad”)
 
 | ID | Ticket | Alcance | Aceptación | Días |
 |---|---|---|---|---|

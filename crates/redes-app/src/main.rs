@@ -172,6 +172,10 @@ impl State {
             bib: None,
             aviso_modelos: None,
         };
+        // Modo rayos X por línea de comandos (útil para capturas y para los agentes).
+        if rune::extra_args().iter().any(|a| a == "--rayos-x") {
+            estado.opts.rayos_x = true;
+        }
         estado.rebuild();
         estado
     }
@@ -341,6 +345,17 @@ impl State {
             self.opts.corte_x = Some(x);
             self.aviso = Some("Corte activo: Shift + rueda lo desplaza".into());
         }
+        self.rebuild();
+    }
+
+    /// Activa o desactiva los rayos X: lo enterrado se dibuja translúcido.
+    fn alternar_rayos_x(&mut self) {
+        self.opts.rayos_x = !self.opts.rayos_x;
+        self.aviso = Some(if self.opts.rayos_x {
+            "Rayos X: lo enterrado se ve translúcido".into()
+        } else {
+            "Rayos X desactivado".into()
+        });
         self.rebuild();
     }
 
@@ -1053,6 +1068,15 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
             })
             .key("btn-corte")
             .on_press(|s: &mut State| s.alternar_corte()),
+        )
+        .child(
+            button(if s.opts.rayos_x {
+                "Rayos X *"
+            } else {
+                "Rayos X"
+            })
+            .key("btn-rayos-x")
+            .on_press(|s: &mut State| s.alternar_rayos_x()),
         )
         .child(
             button(if s.opts.explosion > 0.0 {

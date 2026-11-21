@@ -539,32 +539,52 @@ pub fn pozo_partes(p: PozoParams) -> Vec<Parte> {
         });
     }
 
-    // Marco y tapa.
+    // Marco y tapa: el marco tiene canto (se ve en el corte) y la tapa lleva bisagra, que es lo
+    // que hace que un pozo se reconozca a 40 px.
     let z_marco = arranque + cuerpo + alto_cono;
+    let r_tapa = if p.lod >= 2 { 0.34f32 } else { 0.30 };
     partes.push(Parte {
         nombre: "marco",
-        mesh: anillo(0.38, 0.30, 16, HIERRO).mover([0.0, 0.0, z_marco + 0.01]),
+        mesh: tubo(r_tapa + 0.10, r_tapa + 0.02, 0.07, 16, HIERRO).mover([
+            0.0,
+            0.0,
+            z_marco - 0.07,
+        ]),
     });
+    // La cara superior de la tapa queda a ras de la cota de tapa (la calle), no por encima.
+    let mut tapa = cilindro(r_tapa, 0.055, 16, HIERRO).mover([0.0, 0.0, z_marco - 0.0275]);
+    if p.lod >= 2 {
+        // Dibujo grabado (rebajado) y bisagra del lado +X, ambos dentro del espesor de la tapa.
+        tapa.extend(cilindro(r_tapa * 0.55, 0.012, 12, HORMIGON_OSCURO).mover([
+            0.0,
+            0.0,
+            z_marco - 0.05,
+        ]));
+        tapa.extend(caja(0.10, 0.05, 0.035, HIERRO).mover([r_tapa * 0.85, 0.0, z_marco - 0.05]));
+    }
     partes.push(Parte {
         nombre: "tapa",
-        mesh: cilindro(0.30, 0.045, 16, HIERRO).mover([0.0, 0.0, z_marco + 0.005]),
+        mesh: tapa,
     });
 
     // Escalera de acceso (dos largueros y peldaños) en el lado -X.
     if p.lod >= 2 {
         let mut esc = Mesh::default();
         let x = -(r - 0.12);
+        // La escalera muere en el arranque del cono: antes subía hasta el marco y atravesaba el
+        // cono (18 cm de intersección que se veían en el corte).
+        let techo_escalera = (arranque + cuerpo - 0.10).max(arranque + 0.3);
         for lado in [-0.16f32, 0.16] {
             esc.extend(barra(
                 [x, lado, arranque + 0.3],
-                [x, lado, z_marco - 0.1],
+                [x, lado, techo_escalera],
                 0.022,
                 5,
                 HIERRO,
             ));
         }
         let mut z = arranque + 0.45;
-        while z < z_marco - 0.2 {
+        while z < techo_escalera - 0.05 {
             esc.extend(barra([x, -0.16, z], [x, 0.16, z], 0.018, 5, HIERRO));
             z += 0.3;
         }

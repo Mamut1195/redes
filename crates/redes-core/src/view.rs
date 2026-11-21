@@ -296,6 +296,8 @@ pub struct Opciones {
     pub explosion: f32,
     /// Objeto enfocado (explosión y etiqueta destacada).
     pub foco: Option<crate::model::ElementId>,
+    /// Rayos X: lo enterrado (solera, fuste, escalera) se dibuja translúcido.
+    pub rayos_x: bool,
 }
 
 /// Etiqueta en pantalla que la app dibuja como texto.
@@ -927,13 +929,17 @@ pub fn build_opts(
                         } else {
                             (base[0], base[1], base[2])
                         };
+                        // Rayos X: solera, fuste y escalera son lo enterrado; se aclaran para
+                        // ver lo que queda por debajo de la rasante.
+                        let enterrada = matches!(parte.nombre, "solera" | "fuste" | "escalera");
+                        let alfa = if opts.rayos_x && enterrada { 0.35 } else { 1.0 };
                         net.push(Prim::Poly {
                             pts: expand(&pts, 0.3),
                             fill: [
                                 cr * f + 0.050 * (1.0 - f),
                                 cg * f + 0.055 * (1.0 - f),
                                 cb * f + 0.066 * (1.0 - f),
-                                1.0,
+                                alfa,
                             ],
                             depth,
                         });
@@ -1519,6 +1525,7 @@ mod tests {
                 foco: Some(id),
                 explosion: 1.0,
                 corte_x: None,
+                rayos_x: false,
             },
         );
         // El mismo número de triángulos, pero desplazados: la escena cambia.
