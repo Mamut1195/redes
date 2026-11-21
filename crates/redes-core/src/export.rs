@@ -26,6 +26,38 @@ pub fn export_dxf_filtered(
     // Cabecera mínima.
     s.push_str("0\nSECTION\n2\nHEADER\n0\nENDSEC\n");
     s.push_str("0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n70\n0\n0\nENDTAB\n0\nENDSEC\n");
+    // Bloques: cada familia con su bloque, para que en CAD haya objetos y no geometría suelta.
+    let familias: std::collections::BTreeSet<String> = p
+        .nodes
+        .iter()
+        .filter(|n| !n.deleted)
+        .map(|n| layer_name(&n.family))
+        .collect();
+    s.push_str("0\nSECTION\n2\nBLOCKS\n");
+    for nombre in &familias {
+        write!(
+            s,
+            "0\nBLOCK\n8\n{nombre}\n2\n{nombre}\n70\n0\n10\n0.0\n20\n0.0\n30\n0.0\n3\n{nombre}\n"
+        )
+        .ok();
+        // Unidad: círculo de radio 1 y eje vertical de altura 1 (la escala la pone el INSERT).
+        write!(
+            s,
+            "0\nCIRCLE\n8\n{nombre}\n10\n0.0\n20\n0.0\n30\n0.0\n40\n1.0\n\
+0\nLINE\n8\n{nombre}\n10\n0.0\n20\n0.0\n30\n0.0\n11\n0.0\n21\n0.0\n31\n1.0\n"
+        )
+        .ok();
+        for (etiqueta, alto) in [("CODIGO", 0.0), ("SUBTIPO", 0.0)] {
+            write!(
+                s,
+                "0\nATTDEF\n8\n{nombre}\n3\n{etiqueta}\n2\n{etiqueta}\n70\n0\n10\n1.2\n20\n{alto}\n30\n0.0\n40\n0.25\n1\n\n"
+            )
+            .ok();
+        }
+        s.push_str("0\nENDBLK\n8\n0\n");
+    }
+    s.push_str("0\nENDSEC\n");
+
     s.push_str("0\nSECTION\n2\nENTITIES\n");
 
     let mut layers: BTreeMap<String, String> = BTreeMap::new();
@@ -36,6 +68,35 @@ pub fn export_dxf_filtered(
     }) {
         let layer = layer_name(&node.family);
         layers.insert(layer.clone(), layer.clone());
+        // Bloque con atributos: el objeto del CAD, con código y subtipo legibles.
+        write!(
+            s,
+            "0\nINSERT\n8\n{}\n2\n{}\n10\n{:.4}\n20\n{:.4}\n30\n{:.4}\n41\n{:.3}\n42\n{:.3}\n43\n{:.3}\n66\n1\n",
+            layer,
+            layer,
+            node.pos.x,
+            node.pos.y,
+            node.z_rim,
+            node.diametro(),
+            node.diametro(),
+            node.altura().max(0.1)
+        )
+        .ok();
+        for (etiqueta, valor) in [("CODIGO", &node.code), ("SUBTIPO", &node.ty)] {
+            write!(
+                s,
+                "0\nATTRIB\n8\n{}\n10\n{:.4}\n20\n{:.4}\n30\n{:.4}\n40\n0.25\n1\n{}\n2\n{}\n70\n0\n",
+                layer,
+                node.pos.x + 1.2,
+                node.pos.y,
+                node.z_rim,
+                valor,
+                etiqueta
+            )
+            .ok();
+        }
+        write!(s, "0\nSEQEND\n8\n{}\n", layer).ok();
+
         // Punto con cota.
         write!(
             s,
