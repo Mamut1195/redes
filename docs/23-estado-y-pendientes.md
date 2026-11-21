@@ -20,21 +20,21 @@ Documento de traspaso: qué está hecho, qué falta y por dónde seguir. Las cif
 
 | # | Tarea | Dónde | Notas |
 |---|---|---|---|
-| 1 | **F6-05 proxy decimado** | `modelos.rs` | Hoy, sin `--gpu3d` se dibuja la paramétrica y se avisa; el proxy permitiría ver una silueta del modelo |
+| 1 | **F6-05, segunda mitad**: usar el proxy al dibujar | `view.rs` / `main.rs` | `modelos::proxy` ya decima y está probado; falta que el pintor dibuje esa silueta cuando no hay `--gpu3d` |
 | 2 | **«Vertedero» y «pozo profundo»** | `docs/22-decisiones.md` | Decisión de dominio del usuario; afecta a mapeos de la skill, no al motor |
 | 3 | Avisos de clippy de estilo | varios | Correctness en cero; quedan ~9 de estilo propios y los de `vendor/` |
 
 ## Cómo retomar
 
 ```powershell
-cargo test --workspace                       # 124 pruebas
+cargo test --workspace                       # 125 pruebas
 powershell -File scripts/mutar.ps1           # 5 mutaciones
 powershell -File scripts/empaquetar.ps1      # zip portable
 gh run list --limit 3                        # CI
 ```
 
-Para el proxy (1): `modelos.rs` ya decodifica la malla completa; un decimado por cuadrícula de
-vértices daría la silueta sin tocar el `.glb`.
+Para el proxy (1): `modelos::proxy(malla, paso)` devuelve la malla decimada; el punto de enganche es
+el pase del pintor donde hoy se cae a la pieza paramétrica.
 
 ## Deuda conocida
 
