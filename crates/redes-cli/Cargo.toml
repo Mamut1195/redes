@@ -1,0 +1,16 @@
+[package]
+name = "redes-cli"
+description = "CLI de Redes: expone todas las capacidades del motor como JSON para agentes IA."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "redes"
+path = "src/main.rs"
+
+[dependencies]
+redes-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+clap = { version = "4", features = ["derive", "env"] }

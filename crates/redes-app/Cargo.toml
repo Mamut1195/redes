@@ -1,0 +1,20 @@
+[package]
+name = "redes-app"
+description = "App de escritorio de Redes (Rune): planta, perfil longitudinal, inspector y validación."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "redes-app"
+path = "src/main.rs"
+
+[dependencies]
+redes-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# `tooling` deja que la app publicada se verifique headless (--snap/--tree/--script):
+# es la misma superficie que usan las pruebas y los agentes.
+rune = { path = "../../vendor/rune/crates/rune", features = ["tooling"] }
+# Misma versión que usa Rune: el pase 3D comparte su dispositivo y su target.
+wgpu = { version = "~30.0.1", default-features = false }

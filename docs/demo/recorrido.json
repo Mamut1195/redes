@@ -1,0 +1,13 @@
+[
+  {"t": 0.8, "type": "drag", "x": 640, "y": 420, "dx": -190, "dy": 26, "dur": 1.1},
+  {"t": 2.2, "type": "wheel", "x": 640, "y": 420, "dy": -320},
+  {"t": 2.6, "type": "wheel", "x": 640, "y": 420, "dy": -320},
+  {"t": 3.3, "type": "click", "key": "btn-observar"},
+  {"t": 4.0, "type": "click", "key": "btn-guardar"},
+  {"t": 4.8, "type": "click", "key": "btn-planta"},
+  {"t": 5.6, "type": "click", "key": "btn-encuadrar"},
+  {"t": 6.4, "type": "click", "key": "btn-iso"},
+  {"t": 7.2, "type": "drag", "x": 640, "y": 420, "dx": 240, "dy": -54, "dur": 1.1},
+  {"t": 8.6, "type": "click", "key": "btn-aprobar"},
+  {"t": 9.3, "type": "click", "key": "btn-guardar"}
+]

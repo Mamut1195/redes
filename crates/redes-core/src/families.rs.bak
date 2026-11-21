@@ -1,0 +1,1105 @@
+//! Catálogo de **familias de objetos** (el "registro" del dominio).
+//!
+//! Una familia declara: geometría, rol topológico, capacidades, atributos con unidad y subtipos.
+//! Añadir una familia nueva es añadir una entrada a [`families`] — no se toca el motor, ni la
+//! UI, ni el validador, que leen este mismo esquema.
+//!
+//! Decisión (ADR-M1): el esquema es **dato**, no código. Los campos "calientes" del dominio
+//! (cota clave, diámetro, pendiente) además existen tipados en `model`; el resto de atributos
+//! viaja por el esquema. Así el compilador protege lo que se calcula y el registro protege lo
+//! que se declara.
+//!
+//! El registro se construye una vez, en el primer acceso ([`std::sync::LazyLock`]).
+
+use std::sync::LazyLock;
+
+use serde::{Deserialize, Serialize};
+
+/// Unidad de presentación de un atributo. Internamente todo es SI (m, m³/s, m³…).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Unit {
+    None,
+    M,
+    Mm,
+    M2,
+    M3,
+    M3s,
+    Lps,
+    Mps,
+    Percent,
+    Mperm,
+    Pa,
+    Mca,
+    Deg,
+}
+
+impl Unit {
+    pub fn symbol(self) -> &'static str {
+        match self {
+            Unit::None => "",
+            Unit::M => "m",
+            Unit::Mm => "mm",
+            Unit::M2 => "m²",
+            Unit::M3 => "m³",
+            Unit::M3s => "m³/s",
+            Unit::Lps => "L/s",
+            Unit::Mps => "m/s",
+            Unit::Percent => "%",
+            Unit::Mperm => "m/m",
+            Unit::Pa => "Pa",
+            Unit::Mca => "mca",
+            Unit::Deg => "°",
+        }
+    }
+    pub fn key(self) -> &'static str {
+        match self {
+            Unit::None => "none",
+            Unit::M => "m",
+            Unit::Mm => "mm",
+            Unit::M2 => "m2",
+            Unit::M3 => "m3",
+            Unit::M3s => "m3s",
+            Unit::Lps => "lps",
+            Unit::Mps => "mps",
+            Unit::Percent => "percent",
+            Unit::Mperm => "mperm",
+            Unit::Pa => "pa",
+            Unit::Mca => "mca",
+            Unit::Deg => "deg",
+        }
+    }
+}
+
+/// Tipo de dato del atributo.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AttrType {
+    Num,
+    Int,
+    Bool,
+    Text,
+    Enum(&'static [&'static str]),
+}
+
+impl AttrType {
+    pub fn key(self) -> &'static str {
+        match self {
+            AttrType::Num => "num",
+            AttrType::Int => "int",
+            AttrType::Bool => "bool",
+            AttrType::Text => "text",
+            AttrType::Enum(_) => "enum",
+        }
+    }
+    pub fn options(self) -> &'static [&'static str] {
+        match self {
+            AttrType::Enum(o) => o,
+            _ => &[],
+        }
+    }
+}
+
+/// Valor de un atributo, tanto el default del esquema como el valor de una instancia.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Value {
+    Num(f64),
+    Int(i64),
+    Bool(bool),
+    Text(String),
+}
+
+impl Value {
+    pub fn as_f64(&self) -> Option<f64> {
+        match self {
+            Value::Num(n) => Some(*n),
+            Value::Int(i) => Some(*i as f64),
+            _ => None,
+        }
+    }
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            Value::Text(s) => Some(s),
+            _ => None,
+        }
+    }
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            Value::Bool(b) => Some(*b),
+            _ => None,
+        }
+    }
+    pub fn type_key(&self) -> &'static str {
+        match self {
+            Value::Num(_) => "num",
+            Value::Int(_) => "int",
+            Value::Bool(_) => "bool",
+            Value::Text(_) => "text",
+        }
+    }
+}
+
+/// Restricción declarativa; la evalúa el motor de validación, no la UI.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Constraint {
+    Min(f64),
+    Max(f64),
+    Positive,
+    NonNegative,
+    OneOf(&'static [&'static str]),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Group {
+    General,
+    Geometrico,
+    Hidraulico,
+    Estructural,
+    Material,
+    Operacion,
+}
+
+impl Group {
+    pub fn key(self) -> &'static str {
+        match self {
+            Group::General => "general",
+            Group::Geometrico => "geometrico",
+            Group::Hidraulico => "hidraulico",
+            Group::Estructural => "estructural",
+            Group::Material => "material",
+            Group::Operacion => "operacion",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Access {
+    Editable,
+    ReadOnly,
+    Derived,
+}
+
+impl Access {
+    pub fn key(self) -> &'static str {
+        match self {
+            Access::Editable => "editable",
+            Access::ReadOnly => "readonly",
+            Access::Derived => "derived",
+        }
+    }
+}
+
+/// Un atributo declarado por una familia.
+#[derive(Clone, Debug)]
+pub struct AttrDef {
+    pub key: &'static str,
+    pub label: &'static str,
+    pub unit: Unit,
+    pub ty: AttrType,
+    pub default: Option<Value>,
+    pub required: bool,
+    pub constraints: Vec<Constraint>,
+    pub group: Group,
+    pub access: Access,
+}
+
+impl AttrDef {
+    pub fn num(mut self, v: f64) -> Self {
+        self.default = Some(Value::Num(v));
+        self
+    }
+    pub fn int(mut self, v: i64) -> Self {
+        self.default = Some(Value::Int(v));
+        self
+    }
+    pub fn text(mut self, v: &str) -> Self {
+        self.default = Some(Value::Text(v.to_string()));
+        self
+    }
+    pub fn bounds(mut self, lo: f64, hi: f64) -> Self {
+        self.constraints = vec![Constraint::Min(lo), Constraint::Max(hi)];
+        self
+    }
+    pub fn positive(mut self) -> Self {
+        self.constraints = vec![Constraint::Positive];
+        self
+    }
+    pub fn derived(mut self) -> Self {
+        self.access = Access::Derived;
+        self
+    }
+}
+
+/// Constructor de atributo.
+pub fn attr(
+    key: &'static str,
+    label: &'static str,
+    unit: Unit,
+    ty: AttrType,
+    required: bool,
+    group: Group,
+) -> AttrDef {
+    AttrDef {
+        key,
+        label,
+        unit,
+        ty,
+        default: None,
+        required,
+        constraints: Vec::new(),
+        group,
+        access: Access::Editable,
+    }
+}
+
+/// Rol topológico de la familia en el grafo.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TopoRole {
+    Node,
+    Link,
+    Device,
+    Support,
+}
+
+impl TopoRole {
+    pub fn key(self) -> &'static str {
+        match self {
+            TopoRole::Node => "node",
+            TopoRole::Link => "link",
+            TopoRole::Device => "device",
+            TopoRole::Support => "support",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GeomKind {
+    Point,
+    Polyline,
+    Polygon,
+}
+
+impl GeomKind {
+    pub fn key(self) -> &'static str {
+        match self {
+            GeomKind::Point => "point",
+            GeomKind::Polyline => "polyline",
+            GeomKind::Polygon => "polygon",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Category {
+    Agua,
+    Saneamiento,
+    Topografia,
+    Comun,
+}
+
+impl Category {
+    pub fn key(self) -> &'static str {
+        match self {
+            Category::Agua => "agua",
+            Category::Saneamiento => "saneamiento",
+            Category::Topografia => "topografia",
+            Category::Comun => "comun",
+        }
+    }
+}
+
+/// Un subtipo de catálogo: atributos obligatorios y presets propios (MOD-02).
+#[derive(Clone, Debug)]
+pub struct TypeDef {
+    pub key: &'static str,
+    pub label: &'static str,
+    pub required: Vec<&'static str>,
+    pub presets: Vec<(&'static str, Value)>,
+}
+
+pub fn subtype(key: &'static str, label: &'static str, required: &[&'static str]) -> TypeDef {
+    TypeDef { key, label, required: required.to_vec(), presets: Vec::new() }
+}
+
+/// Capacidades declaradas (bits; sin dependencia de `bitflags`).
+pub mod caps {
+    pub const HYDRAULIC_EDGE: u32 = 1 << 0;
+    pub const HYDRAULIC_NODE: u32 = 1 << 1;
+    pub const EXCAVATABLE: u32 = 1 << 2;
+    pub const STRUCTURAL: u32 = 1 << 3;
+    pub const ATTACHABLE: u32 = 1 << 4;
+    pub const REPORTABLE: u32 = 1 << 5;
+    pub const CONSUMES_FLOW: u32 = 1 << 6;
+    pub const SOURCE: u32 = 1 << 7;
+
+    pub fn names(caps: u32) -> Vec<&'static str> {
+        let mut v = Vec::new();
+        for (bit, name) in [
+            (HYDRAULIC_EDGE, "hydraulic_edge"),
+            (HYDRAULIC_NODE, "hydraulic_node"),
+            (EXCAVATABLE, "excavatable"),
+            (STRUCTURAL, "structural"),
+            (ATTACHABLE, "attachable"),
+            (REPORTABLE, "reportable"),
+            (CONSUMES_FLOW, "consumes_flow"),
+            (SOURCE, "source"),
+        ] {
+            if caps & bit != 0 {
+                v.push(name);
+            }
+        }
+        v
+    }
+}
+
+/// Definición completa de una familia.
+#[derive(Clone, Debug)]
+pub struct FamilyDef {
+    /// Identidad persistida, `dominio.familia`.
+    pub key: &'static str,
+    /// Prefijo de código legible (`PZ`, `CL`…).
+    pub code_prefix: &'static str,
+    pub label: &'static str,
+    pub category: Category,
+    pub topo: TopoRole,
+    pub geom: GeomKind,
+    pub caps: u32,
+    pub attrs: Vec<AttrDef>,
+    pub types: Vec<TypeDef>,
+}
+
+impl FamilyDef {
+    pub fn attr(&self, key: &str) -> Option<&AttrDef> {
+        self.attrs.iter().find(|a| a.key == key)
+    }
+    pub fn ty(&self, key: &str) -> Option<&TypeDef> {
+        self.types.iter().find(|t| t.key == key)
+    }
+    pub fn can(&self, cap: u32) -> bool {
+        self.caps & cap != 0
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Atributos reutilizados
+
+fn dn() -> AttrDef {
+    attr("diametro_nominal", "Diámetro nominal", Unit::Mm, AttrType::Int, true, Group::Hidraulico)
+        .int(200)
+        .bounds(50.0, 3000.0)
+}
+
+fn material() -> AttrDef {
+    attr("material", "Material", Unit::None, AttrType::Text, true, Group::Material).text("PVC")
+}
+
+fn cota_clave() -> AttrDef {
+    attr("cota_clave", "Cota clave (invert)", Unit::M, AttrType::Num, true, Group::Geometrico)
+}
+
+fn cota_terreno() -> AttrDef {
+    attr("cota_terreno", "Cota de terreno", Unit::M, AttrType::Num, false, Group::Geometrico).derived()
+}
+
+fn profundidad() -> AttrDef {
+    attr("profundidad", "Profundidad de excavación", Unit::M, AttrType::Num, false, Group::Geometrico)
+        .derived()
+}
+
+fn estado() -> AttrDef {
+    attr("estado", "Estado", Unit::None, AttrType::Text, false, Group::Operacion).text("proyecto")
+}
+
+// ---------------------------------------------------------------------------------------------
+// El registro
+
+/// Todas las familias del producto, en orden estable.
+pub static FAMILIES: LazyLock<Vec<FamilyDef>> = LazyLock::new(build);
+
+/// Acceso al registro.
+pub fn families() -> &'static [FamilyDef] {
+    &FAMILIES
+}
+
+/// Busca una familia por su clave persistida.
+pub fn family(key: &str) -> Option<&'static FamilyDef> {
+    FAMILIES.iter().find(|f| f.key == key)
+}
+
+/// Familias de una categoría.
+pub fn by_category(c: Category) -> impl Iterator<Item = &'static FamilyDef> {
+    FAMILIES.iter().filter(move |f| f.category == c)
+}
+
+fn build() -> Vec<FamilyDef> {
+    vec![
+        FamilyDef {
+            key: "saneamiento.pozo",
+            code_prefix: "PZ",
+            label: "Pozo",
+            category: Category::Saneamiento,
+            topo: TopoRole::Node,
+            geom: GeomKind::Point,
+            caps: caps::HYDRAULIC_NODE | caps::EXCAVATABLE | caps::STRUCTURAL | caps::REPORTABLE,
+            attrs: vec![
+                attr("diametro_interior", "Diámetro interior", Unit::M, AttrType::Num, true, Group::Estructural)
+                    .num(1.20)
+                    .bounds(0.6, 6.0),
+                attr("espesor_pared", "Espesor de pared", Unit::M, AttrType::Num, false, Group::Estructural).num(0.15),
+                attr("material", "Material", Unit::None, AttrType::Text, false, Group::Material).text("hormigon"),
+                attr("cota_tapa", "Cota de tapa", Unit::M, AttrType::Num, false, Group::Geometrico),
+                cota_terreno(),
+                cota_clave(),
+                profundidad(),
+                attr("altura_caida", "Altura de caída", Unit::M, AttrType::Num, false, Group::Hidraulico).num(0.0),
+                attr("altura_resalto", "Altura de resalto", Unit::M, AttrType::Num, false, Group::Hidraulico),
+                attr("area_infiltracion", "Área de infiltración", Unit::M2, AttrType::Num, false, Group::Hidraulico),
+                attr("volumen_util", "Volumen útil", Unit::M3, AttrType::Num, false, Group::Hidraulico),
+                estado(),
+                attr("anio", "Año de instalación", Unit::None, AttrType::Int, false, Group::Operacion),
+            ],
+            types: vec![
+                subtype("inspeccion", "Pozo de inspección", &["diametro_interior"]),
+                subtype("caida", "Pozo de caída", &["diametro_interior", "altura_caida"]),
+                subtype("resalto", "Pozo de resalto", &["diametro_interior", "altura_resalto"]),
+                subtype("ciego", "Pozo ciego (infiltración)", &["diametro_interior", "area_infiltracion"]),
+                subtype("bombeo", "Cámara de bombeo", &["diametro_interior", "volumen_util"]),
+                subtype("limpieza", "Caja de revisión", &["diametro_interior"]),
+                subtype("ventilacion", "Pozo de ventilación", &["diametro_interior"]),
+            ],
+        },
+        FamilyDef {
+            key: "saneamiento.tuberia",
+            code_prefix: "CL",
+            label: "Tubería",
+            category: Category::Saneamiento,
+            topo: TopoRole::Link,
+            geom: GeomKind::Polyline,
+            caps: caps::HYDRAULIC_EDGE | caps::EXCAVATABLE | caps::REPORTABLE,
+            attrs: vec![
+                dn(),
+                attr("diametro_exterior", "Diámetro exterior", Unit::M, AttrType::Num, false, Group::Hidraulico).derived(),
+                attr("espesor_pared", "Espesor de pared", Unit::M, AttrType::Num, false, Group::Material).num(0.008),
+                material(),
+                attr("clase_tuberia", "Clase / rigidez", Unit::None, AttrType::Text, false, Group::Material),
+                attr("rugosidad_n", "Coef. de Manning (n)", Unit::None, AttrType::Num, false, Group::Hidraulico)
+                    .num(0.013)
+                    .bounds(0.008, 0.05),
+                attr("coef_hazen", "Coef. C (Hazen-Williams)", Unit::None, AttrType::Num, false, Group::Hidraulico)
+                    .num(140.0)
+                    .bounds(60.0, 160.0),
+                attr("rugosidad_abs", "Rugosidad absoluta k", Unit::Mm, AttrType::Num, false, Group::Hidraulico)
+                    .num(0.0015)
+                    .positive(),
+                attr("pendiente", "Pendiente", Unit::Mperm, AttrType::Num, false, Group::Geometrico).bounds(-0.5, 0.5),
+                cota_clave(),
+                cota_terreno(),
+                profundidad(),
+                attr("longitud", "Longitud", Unit::M, AttrType::Num, false, Group::Geometrico).derived(),
+                attr("caudal_diseno", "Caudal de diseño", Unit::Lps, AttrType::Num, false, Group::Hidraulico).derived(),
+                attr("tirante", "Tirante normal", Unit::M, AttrType::Num, false, Group::Hidraulico).derived(),
+                attr("velocidad", "Velocidad", Unit::Mps, AttrType::Num, false, Group::Hidraulico).derived(),
+                estado(),
+                attr("propietario", "Propietario", Unit::None, AttrType::Text, false, Group::Operacion),
+                attr("anio", "Año de instalación", Unit::None, AttrType::Int, false, Group::Operacion),
+            ],
+            types: vec![
+                subtype("colector", "Colector", &["diametro_nominal", "pendiente"]),
+                subtype("interceptor", "Interceptor", &["diametro_nominal", "pendiente"]),
+                subtype("emisario", "Emisario", &["diametro_nominal", "pendiente"]),
+                subtype("conduccion", "Conducción (agua potable)", &["diametro_nominal"]),
+                subtype("aduccion", "Aducción", &["diametro_nominal"]),
+                subtype("distribucion", "Red de distribución", &["diametro_nominal"]),
+                subtype("impulsion", "Impulsión", &["diametro_nominal"]),
+                subtype("rebose", "Rebose / desagüe", &["diametro_nominal"]),
+            ],
+        },
+        FamilyDef {
+            key: "agua.tuberia",
+            code_prefix: "TB",
+            label: "Tubería de agua potable",
+            category: Category::Agua,
+            topo: TopoRole::Link,
+            geom: GeomKind::Polyline,
+            caps: caps::HYDRAULIC_EDGE | caps::EXCAVATABLE | caps::REPORTABLE,
+            attrs: vec![
+                dn(),
+                attr("diametro_exterior", "Diámetro exterior", Unit::M, AttrType::Num, false, Group::Hidraulico).derived(),
+                attr("espesor_pared", "Espesor de pared", Unit::M, AttrType::Num, false, Group::Material).num(0.008),
+                material(),
+                attr("clase_tuberia", "Clase / presión nominal", Unit::None, AttrType::Text, false, Group::Material),
+                attr("presion_nominal", "Presión nominal", Unit::Mca, AttrType::Num, false, Group::Hidraulico).num(100.0),
+                attr("coef_hazen", "Coef. C (Hazen-Williams)", Unit::None, AttrType::Num, false, Group::Hidraulico)
+                    .num(140.0)
+                    .bounds(60.0, 160.0),
+                attr("rugosidad_abs", "Rugosidad absoluta k", Unit::Mm, AttrType::Num, false, Group::Hidraulico)
+                    .num(0.0015)
+                    .positive(),
+                cota_clave(),
+                cota_terreno(),
+                profundidad(),
+                attr("longitud", "Longitud", Unit::M, AttrType::Num, false, Group::Geometrico).derived(),
+                attr("caudal_diseno", "Caudal de diseño", Unit::Lps, AttrType::Num, false, Group::Hidraulico).derived(),
+                attr("presion_servicio", "Presión de servicio", Unit::Mca, AttrType::Num, false, Group::Hidraulico).derived(),
+                attr("perdida_carga", "Pérdida de carga", Unit::M, AttrType::Num, false, Group::Hidraulico).derived(),
+                estado(),
+                attr("propietario", "Propietario", Unit::None, AttrType::Text, false, Group::Operacion),
+            ],
+            types: vec![
+                subtype("conduccion", "Conducción", &["diametro_nominal"]),
+                subtype("aduccion", "Aducción", &["diametro_nominal"]),
+                subtype("distribucion", "Red de distribución", &["diametro_nominal"]),
+                subtype("impulsion", "Impulsión", &["diametro_nominal"]),
+            ],
+        },
+        FamilyDef {
+            key: "saneamiento.descarga",
+            code_prefix: "DS",
+            label: "Descarga / vertedero",
+            category: Category::Saneamiento,
+            topo: TopoRole::Node,
+            geom: GeomKind::Point,
+            caps: caps::HYDRAULIC_NODE | caps::EXCAVATABLE | caps::STRUCTURAL | caps::REPORTABLE,
+            attrs: vec![
+                attr("tipo_descarga", "Tipo", Unit::None, AttrType::Enum(&["emisario", "alivio", "rebose", "disipador"]), true, Group::General),
+                attr("cota_entrega", "Cota de entrega", Unit::M, AttrType::Num, true, Group::Geometrico),
+                attr("cuerpo_receptor", "Cuerpo receptor", Unit::None, AttrType::Text, false, Group::General),
+                attr("caudal_max", "Caudal máximo", Unit::Lps, AttrType::Num, false, Group::Hidraulico),
+                estado(),
+            ],
+            types: vec![
+                subtype("emisario_final", "Emisario final", &["cota_entrega"]),
+                subtype("alivio", "Alivio", &["cota_entrega"]),
+                subtype("rebose_tanque", "Rebose de tanque", &["cota_entrega"]),
+                subtype("disipador", "Disipador de energía", &["cota_entrega"]),
+            ],
+        },
+        FamilyDef {
+            key: "agua.valvula",
+            code_prefix: "VL",
+            label: "Válvula",
+            category: Category::Agua,
+            topo: TopoRole::Device,
+            geom: GeomKind::Point,
+            caps: caps::HYDRAULIC_EDGE | caps::ATTACHABLE | caps::REPORTABLE,
+            attrs: vec![
+                attr("tipo_valvula", "Tipo", Unit::None, AttrType::Enum(&["compuerta", "mariposa", "retencion", "aire", "purga", "reduccion_presion", "reguladora", "alivio", "flotador", "pie"]), true, Group::General),
+                dn(),
+                material(),
+                attr("presion_nominal", "Presión nominal", Unit::Mca, AttrType::Num, false, Group::Hidraulico).num(100.0),
+                attr("perdida_local_k", "Coef. de pérdida local K", Unit::None, AttrType::Num, false, Group::Hidraulico).num(0.2),
+                attr("estado_operacion", "Estado de operación", Unit::None, AttrType::Enum(&["abierta", "cerrada", "parcial"]), false, Group::Operacion),
+                estado(),
+            ],
+            types: vec![
+                subtype("compuerta", "Válvula de compuerta", &["diametro_nominal"]),
+                subtype("mariposa", "Válvula de mariposa", &["diametro_nominal"]),
+                subtype("retencion", "Válvula de retención", &["diametro_nominal"]),
+                subtype("aire", "Válvula de aire", &["diametro_nominal"]),
+                subtype("purga", "Válvula de purga", &["diametro_nominal"]),
+                subtype("reduccion_presion", "Reductora de presión", &["diametro_nominal"]),
+                subtype("reguladora", "Reguladora de caudal", &["diametro_nominal"]),
+                subtype("alivio", "Válvula de alivio", &["diametro_nominal"]),
+            ],
+        },
+        FamilyDef {
+            key: "agua.llave",
+            code_prefix: "LL",
+            label: "Llave",
+            category: Category::Agua,
+            topo: TopoRole::Device,
+            geom: GeomKind::Point,
+            caps: caps::ATTACHABLE | caps::REPORTABLE | caps::CONSUMES_FLOW,
+            attrs: vec![
+                attr("tipo_llave", "Tipo", Unit::None, AttrType::Enum(&["corporacion", "banqueta", "hidrante", "tapon"]), true, Group::General),
+                dn(),
+                attr("caudal_consumo", "Caudal de consumo", Unit::Lps, AttrType::Num, false, Group::Hidraulico),
+                attr("presion_servicio", "Presión de servicio", Unit::Mca, AttrType::Num, false, Group::Hidraulico),
+                estado(),
+            ],
+            types: vec![
+                subtype("corporacion", "Llave de corporación", &["diametro_nominal"]),
+                subtype("banqueta", "Llave de banqueta", &["diametro_nominal"]),
+                subtype("hidrante", "Hidrante", &["diametro_nominal"]),
+                subtype("tapon", "Tapón terminal", &["diametro_nominal"]),
+            ],
+        },
+        FamilyDef {
+            key: "agua.tanque",
+            code_prefix: "TQ",
+            label: "Tanque / reservorio",
+            category: Category::Agua,
+            topo: TopoRole::Node,
+            geom: GeomKind::Polygon,
+            caps: caps::HYDRAULIC_NODE | caps::STRUCTURAL | caps::SOURCE | caps::REPORTABLE,
+            attrs: vec![
+                attr("tipo_tanque", "Tipo", Unit::None, AttrType::Enum(&["apoyado", "elevado", "enterrado", "cisterna", "contacto"]), true, Group::General),
+                attr("volumen_util", "Volumen útil", Unit::M3, AttrType::Num, true, Group::Hidraulico).positive(),
+                attr("cota_piso", "Cota de piso", Unit::M, AttrType::Num, true, Group::Geometrico),
+                attr("cota_nivel_max", "Cota de nivel máximo", Unit::M, AttrType::Num, true, Group::Hidraulico),
+                attr("cota_nivel_min", "Cota de nivel mínimo", Unit::M, AttrType::Num, false, Group::Hidraulico),
+                attr("material", "Material", Unit::None, AttrType::Text, false, Group::Material),
+                estado(),
+            ],
+            types: vec![
+                subtype("apoyado", "Tanque apoyado", &["volumen_util", "cota_piso"]),
+                subtype("elevado", "Tanque elevado", &["volumen_util", "cota_piso"]),
+                subtype("cisterna", "Cisterna", &["volumen_util", "cota_piso"]),
+            ],
+        },
+        FamilyDef {
+            key: "agua.medidor",
+            code_prefix: "MD",
+            label: "Medidor",
+            category: Category::Agua,
+            topo: TopoRole::Device,
+            geom: GeomKind::Point,
+            caps: caps::ATTACHABLE | caps::REPORTABLE | caps::CONSUMES_FLOW,
+            attrs: vec![
+                dn(),
+                attr("tipo_medidor", "Tipo", Unit::None, AttrType::Enum(&["domiciliario", "macromedidor", "electromagnetico", "ultrasonico"]), true, Group::General),
+                attr("caudal_nominal", "Caudal nominal", Unit::Lps, AttrType::Num, false, Group::Hidraulico),
+                estado(),
+            ],
+            types: vec![
+                subtype("domiciliario", "Medidor domiciliario", &["diametro_nominal"]),
+                subtype("macromedidor", "Macromedidor", &["diametro_nominal"]),
+            ],
+        },
+        FamilyDef {
+            key: "saneamiento.acometida",
+            code_prefix: "AC",
+            label: "Acometida",
+            category: Category::Saneamiento,
+            topo: TopoRole::Link,
+            geom: GeomKind::Polyline,
+            caps: caps::HYDRAULIC_EDGE | caps::EXCAVATABLE | caps::CONSUMES_FLOW | caps::REPORTABLE,
+            attrs: vec![
+                dn(),
+                material(),
+                attr("tipo_acometida", "Tipo", Unit::None, AttrType::Enum(&["agua_potable", "alcantarillado", "pluvial"]), true, Group::General),
+                attr("usuario", "Usuario / predio", Unit::None, AttrType::Text, false, Group::General),
+                attr("caudal_aporte", "Caudal de aporte", Unit::Lps, AttrType::Num, false, Group::Hidraulico),
+                estado(),
+            ],
+            types: vec![
+                subtype("agua_potable", "Acometida de agua potable", &["diametro_nominal"]),
+                subtype("alcantarillado", "Acometida de alcantarillado", &["diametro_nominal"]),
+            ],
+        },
+        FamilyDef {
+            key: "saneamiento.camara",
+            code_prefix: "CM",
+            label: "Cámara",
+            category: Category::Saneamiento,
+            topo: TopoRole::Node,
+            geom: GeomKind::Point,
+            caps: caps::HYDRAULIC_NODE | caps::EXCAVATABLE | caps::STRUCTURAL | caps::REPORTABLE,
+            attrs: vec![
+                attr("tipo_camara", "Tipo", Unit::None, AttrType::Enum(&["desarenadora", "reunion", "carga", "quiebre", "valvulas", "medicion"]), true, Group::General),
+                attr("diametro_interior", "Diámetro interior", Unit::M, AttrType::Num, true, Group::Estructural).num(1.50),
+                cota_clave(),
+                estado(),
+            ],
+            types: vec![
+                subtype("reunion", "Cámara de reunión", &["diametro_interior", "cota_clave"]),
+                subtype("carga", "Cámara de carga", &["diametro_interior", "cota_clave"]),
+                subtype("valvulas", "Cámara de válvulas", &["diametro_interior", "cota_clave"]),
+            ],
+        },
+        FamilyDef {
+            key: "saneamiento.sumidero",
+            code_prefix: "SM",
+            label: "Sumidero",
+            category: Category::Saneamiento,
+            topo: TopoRole::Node,
+            geom: GeomKind::Point,
+            caps: caps::HYDRAULIC_NODE | caps::EXCAVATABLE | caps::STRUCTURAL | caps::REPORTABLE,
+            attrs: vec![
+                attr("tipo_rejilla", "Tipo de rejilla", Unit::None, AttrType::Text, false, Group::General),
+                attr("cota_rasante", "Cota de rasante", Unit::M, AttrType::Num, true, Group::Geometrico),
+                attr("caudal_captacion", "Caudal de captación", Unit::Lps, AttrType::Num, false, Group::Hidraulico),
+                estado(),
+            ],
+            types: vec![
+                subtype("calzada", "Sumidero de calzada", &["cota_rasante"]),
+                subtype("cuneta", "Sumidero de cuneta", &["cota_rasante"]),
+            ],
+        },
+        FamilyDef {
+            key: "saneamiento.canal",
+            code_prefix: "CN",
+            label: "Canal",
+            category: Category::Saneamiento,
+            topo: TopoRole::Link,
+            geom: GeomKind::Polyline,
+            caps: caps::HYDRAULIC_EDGE | caps::EXCAVATABLE | caps::REPORTABLE,
+            attrs: vec![
+                attr("seccion", "Sección", Unit::None, AttrType::Enum(&["rectangular", "trapezoidal", "triangular", "circular"]), true, Group::Hidraulico),
+                attr("ancho_plantilla", "Ancho de plantilla", Unit::M, AttrType::Num, true, Group::Hidraulico),
+                attr("talud", "Talud H:V", Unit::None, AttrType::Num, false, Group::Hidraulico),
+                attr("rugosidad_n", "Coef. de Manning (n)", Unit::None, AttrType::Num, false, Group::Hidraulico).num(0.014),
+                attr("pendiente", "Pendiente", Unit::Mperm, AttrType::Num, false, Group::Geometrico),
+                estado(),
+            ],
+            types: vec![
+                subtype("rectangular", "Canal rectangular", &["ancho_plantilla"]),
+                subtype("trapezoidal", "Canal trapezoidal", &["ancho_plantilla"]),
+            ],
+        },
+        FamilyDef {
+            key: "saneamiento.sifon",
+            code_prefix: "SF",
+            label: "Sifón",
+            category: Category::Saneamiento,
+            topo: TopoRole::Link,
+            geom: GeomKind::Polyline,
+            caps: caps::HYDRAULIC_EDGE | caps::EXCAVATABLE | caps::REPORTABLE,
+            attrs: vec![
+                dn(),
+                attr("tipo_sifon", "Tipo", Unit::None, AttrType::Enum(&["invertido", "normal", "cruce"]), true, Group::General),
+                attr("desnivel", "Desnivel", Unit::M, AttrType::Num, false, Group::Hidraulico),
+                estado(),
+            ],
+            types: vec![
+                subtype("invertido", "Sifón invertido", &["diametro_nominal"]),
+                subtype("cruce", "Sifón de cruce", &["diametro_nominal"]),
+            ],
+        },
+        FamilyDef {
+            key: "agua.captacion",
+            code_prefix: "CP",
+            label: "Captación",
+            category: Category::Agua,
+            topo: TopoRole::Node,
+            geom: GeomKind::Point,
+            caps: caps::HYDRAULIC_NODE | caps::SOURCE | caps::STRUCTURAL | caps::REPORTABLE,
+            attrs: vec![
+                attr("tipo_captacion", "Tipo", Unit::None, AttrType::Enum(&["manantial", "pozo_profundo", "galeria", "toma_rio"]), true, Group::General),
+                attr("caudal_concesionado", "Caudal concesionado", Unit::Lps, AttrType::Num, true, Group::Hidraulico).positive(),
+                attr("cota", "Cota", Unit::M, AttrType::Num, true, Group::Geometrico),
+                estado(),
+            ],
+            types: vec![
+                subtype("manantial", "Manantial", &["caudal_concesionado"]),
+                subtype("pozo_profundo", "Pozo profundo", &["caudal_concesionado"]),
+            ],
+        },
+        FamilyDef {
+            key: "agua.planta",
+            code_prefix: "PT",
+            label: "Planta de tratamiento",
+            category: Category::Agua,
+            topo: TopoRole::Node,
+            geom: GeomKind::Polygon,
+            caps: caps::HYDRAULIC_NODE | caps::STRUCTURAL | caps::SOURCE | caps::REPORTABLE,
+            attrs: vec![
+                attr("tipo_planta", "Tipo", Unit::None, AttrType::Enum(&["ptap", "ptar", "laguna", "desalinizadora"]), true, Group::General),
+                attr("caudal_diseno", "Caudal de diseño", Unit::Lps, AttrType::Num, true, Group::Hidraulico),
+                estado(),
+            ],
+            types: vec![
+                subtype("ptap", "PTAP", &["caudal_diseno"]),
+                subtype("ptar", "PTAR", &["caudal_diseno"]),
+            ],
+        },
+        FamilyDef {
+            key: "saneamiento.bombeo",
+            code_prefix: "EB",
+            label: "Estación de bombeo",
+            category: Category::Saneamiento,
+            topo: TopoRole::Node,
+            geom: GeomKind::Point,
+            caps: caps::HYDRAULIC_NODE | caps::STRUCTURAL | caps::EXCAVATABLE | caps::REPORTABLE | caps::SOURCE,
+            attrs: vec![
+                attr("caudal_bombeo", "Caudal de bombeo", Unit::Lps, AttrType::Num, true, Group::Hidraulico),
+                attr("altura_manometrica", "Altura manométrica", Unit::M, AttrType::Num, false, Group::Hidraulico),
+                attr("potencia_instalada", "Potencia instalada", Unit::None, AttrType::Num, false, Group::Estructural),
+                attr("numero_bombas", "N.º de bombas", Unit::None, AttrType::Int, false, Group::Estructural).int(2),
+                estado(),
+            ],
+            types: vec![subtype("camara_humeda", "Cámara húmeda", &["caudal_bombeo"])],
+        },
+        FamilyDef {
+            key: "comun.accesorio",
+            code_prefix: "AX",
+            label: "Accesorio de tubería",
+            category: Category::Comun,
+            topo: TopoRole::Device,
+            geom: GeomKind::Polyline,
+            caps: caps::HYDRAULIC_EDGE | caps::REPORTABLE,
+            attrs: vec![
+                dn(),
+                material(),
+                attr("tipo_accesorio", "Tipo", Unit::None, AttrType::Enum(&["codo", "tee", "reduccion", "union", "tapon", "cruz", "valvula_aire"]), true, Group::General),
+                attr("angulo", "Ángulo", Unit::Deg, AttrType::Num, false, Group::General).num(90.0),
+                attr("perdida_local_k", "Coef. de pérdida local K", Unit::None, AttrType::Num, false, Group::Hidraulico),
+                estado(),
+            ],
+            types: vec![
+                subtype("codo", "Codo", &["diametro_nominal", "angulo"]),
+                subtype("tee", "Tee", &["diametro_nominal"]),
+                subtype("reduccion", "Reducción", &["diametro_nominal"]),
+                subtype("union", "Unión", &["diametro_nominal"]),
+                subtype("tapon", "Tapón", &["diametro_nominal"]),
+            ],
+        },
+        FamilyDef {
+            key: "comun.tapa",
+            code_prefix: "TP",
+            label: "Tapa y marco",
+            category: Category::Comun,
+            topo: TopoRole::Support,
+            geom: GeomKind::Point,
+            caps: caps::REPORTABLE,
+            attrs: vec![
+                attr("diametro_tapa", "Diámetro de tapa", Unit::Mm, AttrType::Int, true, Group::General).int(600),
+                attr("clase_carga", "Clase de carga", Unit::None, AttrType::Enum(&["A15", "B125", "C250", "D400", "E600", "F900"]), true, Group::General),
+                attr("material", "Material", Unit::None, AttrType::Text, false, Group::Material).text("fundicion"),
+                attr("tipo_cierre", "Cierre", Unit::None, AttrType::Enum(&["hermetico", "normal", "articulado"]), false, Group::General),
+            ],
+            types: vec![
+                subtype("calzada", "Tapa de calzada (D400)", &["diametro_tapa", "clase_carga"]),
+                subtype("vereda", "Tapa de vereda (B125)", &["diametro_tapa", "clase_carga"]),
+                subtype("hermetica", "Tapa hermética", &["diametro_tapa"]),
+            ],
+        },
+        FamilyDef {
+            key: "comun.escalera",
+            code_prefix: "ES",
+            label: "Escalera de pozo",
+            category: Category::Comun,
+            topo: TopoRole::Support,
+            geom: GeomKind::Point,
+            caps: caps::REPORTABLE,
+            attrs: vec![
+                attr("altura", "Altura", Unit::M, AttrType::Num, true, Group::General).num(3.0),
+                attr("paso", "Separación entre peldaños", Unit::M, AttrType::Num, false, Group::General).num(0.30),
+                attr("material", "Material", Unit::None, AttrType::Text, false, Group::Material).text("acero_inox"),
+            ],
+            types: vec![subtype("recta", "Escalera recta", &["altura"]), subtype("curva", "Escalera curva", &["altura"])],
+        },
+        FamilyDef {
+            key: "agua.hidrante",
+            code_prefix: "HI",
+            label: "Hidrante",
+            category: Category::Agua,
+            topo: TopoRole::Device,
+            geom: GeomKind::Point,
+            caps: caps::ATTACHABLE | caps::REPORTABLE | caps::CONSUMES_FLOW,
+            attrs: vec![
+                dn(),
+                attr("tipo_hidrante", "Tipo", Unit::None, AttrType::Enum(&["contra_incendios", "dos_bocas", "tres_bocas"]), true, Group::General),
+                attr("caudal_nominal", "Caudal nominal", Unit::Lps, AttrType::Num, false, Group::Hidraulico),
+                attr("presion_servicio", "Presión de servicio", Unit::Mca, AttrType::Num, false, Group::Hidraulico),
+                estado(),
+            ],
+            types: vec![
+                subtype("dos_bocas", "Hidrante de dos bocas", &["diametro_nominal"]),
+                subtype("tres_bocas", "Hidrante de tres bocas", &["diametro_nominal"]),
+            ],
+        },
+        FamilyDef {
+            key: "agua.arqueta",
+            code_prefix: "AQ",
+            label: "Arqueta de medición",
+            category: Category::Agua,
+            topo: TopoRole::Node,
+            geom: GeomKind::Point,
+            caps: caps::HYDRAULIC_NODE | caps::EXCAVATABLE | caps::STRUCTURAL | caps::REPORTABLE,
+            attrs: vec![
+                attr("ancho", "Ancho interior", Unit::M, AttrType::Num, true, Group::Estructural).num(0.6),
+                attr("largo", "Largo interior", Unit::M, AttrType::Num, true, Group::Estructural).num(0.6),
+                attr("profundidad", "Profundidad", Unit::M, AttrType::Num, false, Group::Geometrico).num(0.8),
+                estado(),
+            ],
+            types: vec![subtype("medicion", "Arqueta de medición", &["ancho", "largo"])],
+        },
+        FamilyDef {
+            key: "saneamiento.caja",
+            code_prefix: "CJ",
+            label: "Caja de revisión",
+            category: Category::Saneamiento,
+            topo: TopoRole::Node,
+            geom: GeomKind::Point,
+            caps: caps::HYDRAULIC_NODE | caps::EXCAVATABLE | caps::STRUCTURAL | caps::REPORTABLE,
+            attrs: vec![
+                attr("ancho", "Ancho interior", Unit::M, AttrType::Num, true, Group::Estructural).num(0.6),
+                attr("largo", "Largo interior", Unit::M, AttrType::Num, true, Group::Estructural).num(0.6),
+                cota_clave(),
+                estado(),
+            ],
+            types: vec![
+                subtype("domiciliaria", "Caja domiciliaria", &["ancho", "largo"]),
+                subtype("inspeccion", "Caja de inspección", &["ancho", "largo"]),
+            ],
+        },
+        FamilyDef {
+            key: "saneamiento.arenero",
+            code_prefix: "AR",
+            label: "Arenero",
+            category: Category::Saneamiento,
+            topo: TopoRole::Node,
+            geom: GeomKind::Point,
+            caps: caps::HYDRAULIC_NODE | caps::EXCAVATABLE | caps::STRUCTURAL | caps::REPORTABLE,
+            attrs: vec![
+                attr("ancho", "Ancho interior", Unit::M, AttrType::Num, true, Group::Estructural).num(0.8),
+                attr("largo", "Largo interior", Unit::M, AttrType::Num, true, Group::Estructural).num(1.2),
+                attr("profundidad_util", "Profundidad útil", Unit::M, AttrType::Num, false, Group::Hidraulico).num(0.5),
+                estado(),
+            ],
+            types: vec![subtype("calzada", "Arenero de calzada", &["ancho", "largo"])],
+        },
+        FamilyDef {
+            key: "saneamiento.trampa_grasa",
+            code_prefix: "TG",
+            label: "Trampa de grasa",
+            category: Category::Saneamiento,
+            topo: TopoRole::Node,
+            geom: GeomKind::Point,
+            caps: caps::HYDRAULIC_NODE | caps::EXCAVATABLE | caps::STRUCTURAL | caps::REPORTABLE,
+            attrs: vec![
+                attr("ancho", "Ancho interior", Unit::M, AttrType::Num, true, Group::Estructural).num(1.0),
+                attr("largo", "Largo interior", Unit::M, AttrType::Num, true, Group::Estructural).num(1.5),
+                attr("volumen_util", "Volumen útil", Unit::M3, AttrType::Num, false, Group::Hidraulico),
+                estado(),
+            ],
+            types: vec![subtype("restaurante", "Trampa para restaurante", &["ancho", "largo"])],
+        },
+        FamilyDef {
+            key: "comun.cuerpo_receptor",
+            code_prefix: "RC",
+            label: "Cuerpo receptor",
+            category: Category::Comun,
+            topo: TopoRole::Support,
+            geom: GeomKind::Point,
+            caps: caps::REPORTABLE,
+            attrs: vec![
+                attr("tipo_receptor", "Tipo", Unit::None, AttrType::Enum(&["rio", "quebrada", "lago", "mar", "canal", "terreno"]), true, Group::General),
+                attr("nombre", "Nombre", Unit::None, AttrType::Text, false, Group::General),
+                attr("cota_media", "Cota media del agua", Unit::M, AttrType::Num, false, Group::Geometrico),
+            ],
+            types: vec![subtype("quebrada", "Quebrada", &["tipo_receptor"]), subtype("rio", "Río", &["tipo_receptor"])],
+        },
+        FamilyDef {
+            key: "agua.dado_anclaje",
+            code_prefix: "DA",
+            label: "Dado de anclaje",
+            category: Category::Agua,
+            topo: TopoRole::Support,
+            geom: GeomKind::Point,
+            caps: caps::STRUCTURAL | caps::REPORTABLE,
+            attrs: vec![
+                dn(),
+                attr("volumen_hormigon", "Volumen de hormigón", Unit::M3, AttrType::Num, false, Group::Estructural),
+                attr("tipo_anclaje", "Tipo", Unit::None, AttrType::Enum(&["codo", "tee", "terminal", "reduccion"]), false, Group::General),
+            ],
+            types: vec![subtype("codo", "Dado para codo", &["diametro_nominal"])],
+        },
+        FamilyDef {
+            key: "agua.acometida",
+            code_prefix: "AM",
+            label: "Acometida de agua potable",
+            category: Category::Agua,
+            topo: TopoRole::Link,
+            geom: GeomKind::Polyline,
+            caps: caps::HYDRAULIC_EDGE | caps::EXCAVATABLE | caps::CONSUMES_FLOW | caps::REPORTABLE,
+            attrs: vec![
+                dn(),
+                material(),
+                attr("usuario", "Usuario / predio", Unit::None, AttrType::Text, false, Group::General),
+                attr("caudal_contratado", "Caudal contratado", Unit::Lps, AttrType::Num, false, Group::Hidraulico),
+                estado(),
+            ],
+            types: vec![subtype("domiciliaria", "Acometida domiciliaria", &["diametro_nominal"])],
+        },
+        FamilyDef {
+            key: "comun.cruce",
+            code_prefix: "CR",
+            label: "Cruce",
+            category: Category::Comun,
+            topo: TopoRole::Support,
+            geom: GeomKind::Point,
+            caps: caps::REPORTABLE,
+            attrs: vec![
+                attr("tipo_cruce", "Tipo", Unit::None, AttrType::Enum(&["rio", "via", "otra_red", "aereo", "subfluvial"]), true, Group::General),
+                attr("longitud_cruce", "Longitud del cruce", Unit::M, AttrType::Num, false, Group::Geometrico),
+                attr("requiere_encamisado", "Requiere encamisado", Unit::None, AttrType::Bool, false, Group::Estructural),
+            ],
+            types: vec![
+                subtype("via", "Cruce de vía", &["tipo_cruce"]),
+                subtype("otra_red", "Cruce con otra red", &["tipo_cruce"]),
+            ],
+        },
+        FamilyDef {
+            key: "comun.hito",
+            code_prefix: "HT",
+            label: "Hito / BM",
+            category: Category::Topografia,
+            topo: TopoRole::Support,
+            geom: GeomKind::Point,
+            caps: caps::REPORTABLE,
+            attrs: vec![
+                attr("cota", "Cota", Unit::M, AttrType::Num, true, Group::Geometrico),
+                attr("tipo_hito", "Tipo", Unit::None, AttrType::Enum(&["bm", "punto_control", "sondeo"]), false, Group::General),
+                attr("descripcion", "Descripción", Unit::None, AttrType::Text, false, Group::General),
+            ],
+            types: vec![
+                subtype("bm", "Benchmark", &["cota"]),
+                subtype("punto_control", "Punto de control", &["cota"]),
+            ],
+        },
+    ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn claves_y_prefijos_unicos() {
+        let mut keys = HashSet::new();
+        let mut prefixes = HashSet::new();
+        for f in families() {
+            assert!(keys.insert(f.key), "clave duplicada: {}", f.key);
+            assert!(prefixes.insert(f.code_prefix), "prefijo duplicado: {}", f.code_prefix);
+            assert!(!f.types.is_empty(), "{} no declara subtipos", f.key);
+        }
+    }
+
+    #[test]
+    fn todo_subtipo_declara_atributos_existentes() {
+        for f in families() {
+            for ty in &f.types {
+                for req in &ty.required {
+                    assert!(f.attr(req).is_some(), "{}/{} pide atributo inexistente {req}", f.key, ty.key);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn los_defaults_respetan_su_tipo() {
+        for f in families() {
+            for a in &f.attrs {
+                if let Some(v) = &a.default {
+                    match a.ty {
+                        AttrType::Num => assert!(v.as_f64().is_some(), "{}.{} default no numérico", f.key, a.key),
+                        AttrType::Int => assert!(matches!(v, Value::Int(_)), "{}.{} default no entero", f.key, a.key),
+                        AttrType::Bool => assert!(v.as_bool().is_some(), "{}.{} default no bool", f.key, a.key),
+                        AttrType::Text | AttrType::Enum(_) => assert!(v.as_str().is_some(), "{}.{} default no texto", f.key, a.key),
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn hay_familias_para_las_dos_redes() {
+        assert!(by_category(Category::Agua).count() >= 5);
+        assert!(by_category(Category::Saneamiento).count() >= 6);
+        assert!(family("saneamiento.pozo").is_some());
+        assert!(family("agua.valvula").is_some());
+        assert!(family("agua.llave").is_some());
+    }
+}

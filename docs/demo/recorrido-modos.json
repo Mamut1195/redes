@@ -1,0 +1,12 @@
+[
+  {"t": 0.6, "type": "drag", "x": 640, "y": 430, "dx": -80, "dy": 12, "dur": 0.9},
+  {"t": 1.6, "type": "click", "key": "btn-corte"},
+  {"t": 2.9, "type": "drag", "x": 640, "y": 430, "dx": 55, "dy": -6, "dur": 0.8},
+  {"t": 3.8, "type": "click", "key": "btn-corte"},
+  {"t": 4.5, "type": "click", "key": "btn-explosion"},
+  {"t": 5.8, "type": "drag", "x": 640, "y": 430, "dx": -60, "dy": 8, "dur": 0.8},
+  {"t": 6.6, "type": "click", "key": "btn-dia-mas"},
+  {"t": 7.2, "type": "click", "key": "btn-dia-mas"},
+  {"t": 7.9, "type": "click", "key": "btn-deshacer"},
+  {"t": 8.6, "type": "click", "key": "btn-salir"}
+]

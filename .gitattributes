@@ -1,0 +1,18 @@
+# Normaliza finales de línea en texto y marca los binarios.
+* text=auto eol=lf
+
+*.rs    text
+*.toml  text
+*.md    text
+*.json  text
+*.ps1   text
+*.bat   text eol=crlf
+*.wgsl  text
+
+*.png   binary
+*.jpg   binary
+*.gif   binary
+*.mp4   binary
+*.glb   binary
+*.dxf   text
+*.inp   text

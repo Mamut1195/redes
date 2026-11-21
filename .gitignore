@@ -1,0 +1,30 @@
+# Rust
+target/
+**/target/
+
+# Salidas de trabajo (generadas por la CLI y las grabaciones)
+out/
+
+# Proyectos de ejemplo que se regeneran con `redes proyecto ...`
+*.redes.tmp
+*.glb.tmp
+
+# Spikes: pruebas de framework, no producto (incluyen sus propios target/)
+spike/
+
+# Historial del checkout de Rune: se versiona el árbol de trabajo, no su .git (74 MB)
+vendor/rune/.git-upstream/
+
+# Sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editores
+.vscode/
+.idea/
+*.swp
+
+# Secretos y locales
+.env
+.env.*
