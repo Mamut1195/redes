@@ -427,3 +427,117 @@ mod tests {
         assert_eq!(d.fuente, "Civil 3D");
     }
 }
+
+/// Proyecto **plantilla**: lo mínimo para empezar a dibujar sin partir de cero.
+///
+/// Terreno plano de 80 × 60 m, tres pozos de inspección en línea y dos colectores con diámetro y
+/// material declarados. No trae datos importados: es un lienzo, no un ejemplo resuelto.
+pub fn plantilla() -> Project {
+    let mut p = Project::new("Proyecto nuevo", "EPSG:32717");
+    p.origin = P2::new(758_000.0, 9_797_000.0);
+    p.estado = EstadoProyecto::EnRevision;
+
+    // Terreno plano con una pendiente suave hacia el este.
+    let mut pts = Vec::new();
+    let mut y = 0.0;
+    while y <= 60.0 {
+        let mut x = 0.0;
+        while x <= 80.0 {
+            pts.push(SurfacePoint::new(
+                p.origin.x + x,
+                p.origin.y + y,
+                2500.0 - 0.02 * x,
+            ));
+            x += 5.0;
+        }
+        y += 5.0;
+    }
+    p.terrain = Some(crate::terrain::Terrain::build("plataforma", 32717, pts));
+
+    let mut ids = Vec::new();
+    for (i, (x, y)) in [(20.0, 30.0), (45.0, 30.0), (70.0, 30.0)]
+        .iter()
+        .enumerate()
+    {
+        let z = 2500.0 - 0.02 * x;
+        let id = p
+            .add_node(Node {
+                id: ElementId::new(0, 0),
+                family: "saneamiento.pozo".into(),
+                ty: "inspeccion".into(),
+                code: String::new(),
+                pos: P2::new(p.origin.x + x, p.origin.y + y),
+                z_terrain: z,
+                z_rim: z,
+                z_invert: z - 2.0 - 0.15 * i as f64,
+                attrs: BTreeMap::from([
+                    ("diametro_interior".to_string(), Value::Num(1.2)),
+                    ("cota_tapa".to_string(), Value::Num(z)),
+                    (
+                        "cota_clave".to_string(),
+                        Value::Num(z - 2.0 - 0.15 * i as f64),
+                    ),
+                ]),
+                datos: BTreeMap::new(),
+                estado: EstadoObjeto::Pendiente,
+                nota: None,
+                modelo: None,
+                deleted: false,
+            })
+            .expect("pozo de plantilla");
+        ids.push((
+            id,
+            [p.origin.x + x, p.origin.y + y, z - 2.0 - 0.15 * i as f64],
+        ));
+    }
+
+    for (i, par) in ids.windows(2).enumerate() {
+        let (a, b) = (&par[0], &par[1]);
+        p.add_link(Link {
+            id: ElementId::new(0, 0),
+            family: "saneamiento.tuberia".into(),
+            ty: "colector_sanitario".into(),
+            code: String::new(),
+            from: a.0,
+            to: b.0,
+            path: vec![
+                P3::new(a.1[0], a.1[1], a.1[2]),
+                P3::new(
+                    (a.1[0] + b.1[0]) * 0.5,
+                    (a.1[1] + b.1[1]) * 0.5,
+                    (a.1[2] + b.1[2]) * 0.5,
+                ),
+                P3::new(b.1[0], b.1[1], b.1[2]),
+            ],
+            d_mm: if i == 0 { 200 } else { 250 },
+            attrs: BTreeMap::from([
+                (
+                    "diametro_nominal".to_string(),
+                    Value::Int(if i == 0 { 200 } else { 250 }),
+                ),
+                ("material".to_string(), Value::Text("PVC".into())),
+            ]),
+            datos: BTreeMap::new(),
+            estado: EstadoObjeto::Pendiente,
+            nota: None,
+            deleted: false,
+        })
+        .expect("colector de plantilla");
+    }
+    p.commit("proyecto.plantilla");
+    p
+}
+
+#[cfg(test)]
+mod tests_plantilla {
+    #[test]
+    fn la_plantilla_trae_terreno_y_red() {
+        let p = super::plantilla();
+        assert!(p.terrain.is_some(), "terreno");
+        assert_eq!(p.nodes.len(), 3, "tres pozos");
+        assert_eq!(p.links.len(), 2, "dos colectores");
+        assert!(p.nodes.iter().all(|n| n.code.starts_with("PZ-")));
+        // El código del arco lo asigna el registro con el prefijo de su familia.
+        assert!(p.links.iter().all(|l| !l.code.is_empty()));
+    }
+}

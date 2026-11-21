@@ -103,12 +103,13 @@ Objetivo: que lo que el CAD devuelve no pierda familia, código, atributos ni da
 
 ---
 
-## F10 — Acabado visual — **F10-01 y F10-04 hechos**
+## F10 — Acabado visual — **cerrada (F10-01…F10-06)**
 
 > Tapa y marco legibles: marco con canto de 7 cm, tapa a ras de la calle con grabado y bisagra, y
 > escalera que muere en el arranque del cono (ya no lo atraviesa). Interruptor de **rayos X**
-> (`--rayos-x` y botón) que dibuja solera, fuste y escalera translúcidos. Quedan poché en la
-> sección, carriles de etiquetas y separación de materiales por tono.
+> (`--rayos-x` y botón) que dibuja solera, fuste y escalera translúcidos. Poché en la sección (trama
+> de rayitas sobre la cara de corte), etiquetas en 7 carriles con línea guía y sin solapes, y
+> paleta con más contraste entre hormigón, hierro y PVC.
  (que “se vea como en la realidad”)
 
 | ID | Ticket | Alcance | Aceptación | Días |
@@ -123,6 +124,14 @@ Objetivo: que lo que el CAD devuelve no pierda familia, código, atributos ni da
 **Total F10: 7 días.**
 
 ---
+
+## F11 — Producto — **F11-03 (paquete), F11-04 (plantilla) y F11-05 (licencias) hechos**
+
+> `scripts/empaquetar.ps1` construye un zip portable de 10,9 MB con los dos binarios, las demos,
+> los documentos, lanzadores `.bat` y `VERSION.txt`; probado ejecutando `redes --version` y
+> `proyecto info` desde el paquete. `redes proyecto plantilla` genera un lienzo con terreno y tres
+> pozos. `biblioteca importar --licencia --autor` guarda la procedencia y `biblioteca lista` avisa
+> de las piezas que no la declaran. **F11-02** (firma de la revisión) sigue pendiente de decisión.
 
 ## F11 — Producto y decisiones abiertas
 

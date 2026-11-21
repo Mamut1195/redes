@@ -41,10 +41,10 @@ impl Material {
     }
 }
 
-pub const HORMIGON: Material = Material::new(0.62, 0.60, 0.56);
+pub const HORMIGON: Material = Material::new(0.66, 0.63, 0.57);
 pub const HORMIGON_OSCURO: Material = Material::new(0.42, 0.41, 0.39);
-pub const HIERRO: Material = Material::metal(0.47, 0.48, 0.51);
-pub const PVC: Material = Material::new(0.72, 0.70, 0.62);
+pub const HIERRO: Material = Material::metal(0.42, 0.45, 0.52);
+pub const PVC: Material = Material::new(0.80, 0.77, 0.64);
 pub const AGUA: Material = Material::new(0.25, 0.48, 0.78);
 pub const PLASTICO: Material = Material::new(0.30, 0.36, 0.42);
 pub const LATON: Material = Material::metal(0.68, 0.58, 0.34);

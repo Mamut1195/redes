@@ -136,6 +136,11 @@ enum ProyectoCmd {
         #[arg(long)]
         salida: Option<PathBuf>,
     },
+    /// Plantilla: terreno y tres pozos con sus colectores, para empezar a dibujar.
+    Plantilla {
+        #[arg(long)]
+        salida: Option<PathBuf>,
+    },
     /// Cadena completa: captación, conducción, planta, reservorio, distribución y alcantarillado.
     Cadena {
         #[arg(long)]
@@ -246,6 +251,12 @@ enum BibliotecaCmd {
         /// Identificador de la pieza; por defecto, a partir del archivo.
         #[arg(long)]
         nombre: Option<String>,
+        /// Licencia del modelo (MIT, CC-BY-4.0, propietaria…).
+        #[arg(long)]
+        licencia: Option<String>,
+        /// Autor o estudio que modeló la pieza.
+        #[arg(long)]
+        autor: Option<String>,
     },
     /// Mide un .glb: volumen, área, materiales y datos declarados en Blender.
     Cantidades {
@@ -357,11 +368,14 @@ fn run(cli: Cli, t0: Instant) -> i32 {
                 return emit(env, pretty, quiet);
             }
             ProyectoCmd::Demo { salida }
+            | ProyectoCmd::Plantilla { salida }
             | ProyectoCmd::Ciudad { salida }
             | ProyectoCmd::Cadena { salida }
             | ProyectoCmd::CatalogoTotal { salida }
             | ProyectoCmd::Catalogo { salida } => {
                 let nombre = match &cmd {
+                    ProyectoCmd::Plantilla { .. } => "proyecto.plantilla",
+                    ProyectoCmd::Plantilla { .. } => "proyecto.plantilla",
                     ProyectoCmd::Cadena { .. } => "proyecto.cadena",
                     ProyectoCmd::Ciudad { .. } => "proyecto.ciudad",
                     ProyectoCmd::CatalogoTotal { .. } => "proyecto.catalogo_total",
@@ -373,9 +387,12 @@ fn run(cli: Cli, t0: Instant) -> i32 {
                     cmd,
                     ProyectoCmd::Catalogo { .. } | ProyectoCmd::CatalogoTotal { .. }
                 );
+                let es_plantilla = matches!(cmd, ProyectoCmd::Plantilla { .. });
                 let es_cadena = matches!(cmd, ProyectoCmd::Cadena { .. });
                 let total = matches!(cmd, ProyectoCmd::CatalogoTotal { .. });
-                let p = if es_cadena {
+                let p = if es_plantilla {
+                    redes_core::demo::plantilla()
+                } else if es_cadena {
                     redes_core::demo_cadena::cadena()
                 } else if es_ciudad {
                     redes_core::demo_city::ciudad()
@@ -386,7 +403,9 @@ fn run(cli: Cli, t0: Instant) -> i32 {
                 } else {
                     redes_core::demo::project()
                 };
-                let por_defecto = if es_cadena {
+                let por_defecto = if es_plantilla {
+                    "proyecto-nuevo.redes"
+                } else if es_cadena {
                     "cadena-completa.redes"
                 } else if es_ciudad {
                     "ciudad-san-bartolo.redes"
@@ -646,6 +665,7 @@ fn run(cli: Cli, t0: Instant) -> i32 {
 
 /// Revisa un `.glb` de la biblioteca de modelos (no necesita proyecto).
 /// Importa un `.glb` a la biblioteca del proyecto.
+#[allow(clippy::too_many_arguments)]
 fn biblioteca_importar(
     glb: &PathBuf,
     familia: &str,
@@ -654,6 +674,8 @@ fn biblioteca_importar(
     escala: f64,
     carpeta: Option<&std::path::Path>,
     nombre: Option<&str>,
+    licencia: Option<&str>,
+    autor: Option<&str>,
 ) -> Envelope {
     let bytes = match std::fs::read(glb) {
         Ok(b) => b,
@@ -705,8 +727,8 @@ fn biblioteca_importar(
         area_m2: medidas.as_ref().map(|c| round(c.area_m2, 3)),
         cerrada: medidas.as_ref().map(|c| c.cerrada()),
         extras,
-        licencia: None,
-        autor: None,
+        licencia: licencia.map(|s| s.to_string()),
+        autor: autor.map(|s| s.to_string()),
     };
     bib.insertar(entrada.clone());
     if let Err(e) = bib.guardar(&ruta_manifiesto) {
@@ -756,6 +778,8 @@ fn biblioteca(cmd: &BibliotecaCmd) -> Envelope {
             escala,
             carpeta,
             nombre,
+            licencia,
+            autor,
         } => biblioteca_importar(
             glb,
             familia,
@@ -764,6 +788,8 @@ fn biblioteca(cmd: &BibliotecaCmd) -> Envelope {
             *escala,
             carpeta.as_deref(),
             nombre.as_deref(),
+            licencia.as_deref(),
+            autor.as_deref(),
         ),
         // `aplicar` necesita el proyecto abierto: se resuelve en el flujo principal.
         BibliotecaCmd::Aplicar { .. } => Envelope::fail(
@@ -778,10 +804,23 @@ fn biblioteca(cmd: &BibliotecaCmd) -> Envelope {
             let dir = carpeta.clone().unwrap_or_else(|| PathBuf::from("."));
             let ruta = dir.join("biblioteca.json");
             match redes_core::biblioteca::Biblioteca::cargar(&ruta) {
-                Ok(b) => Envelope::ok("biblioteca.lista").with_data(json!({
-                    "manifiesto": ruta.display().to_string(),
-                    "piezas": b.piezas,
-                })),
+                Ok(b) => {
+                    let sin_licencia = b
+                        .piezas
+                        .iter()
+                        .filter(|x| x.licencia.as_deref().unwrap_or("").trim().is_empty())
+                        .count();
+                    Envelope::ok("biblioteca.lista").with_data(json!({
+                        "manifiesto": ruta.display().to_string(),
+                        "piezas": b.piezas,
+                        "sin_licencia": sin_licencia,
+                        "aviso_licencias": if sin_licencia > 0 {
+                            format!("{sin_licencia} piezas no declaran licencia: anótela al importar con --licencia")
+                        } else {
+                            String::new()
+                        },
+                    }))
+                }
                 Err(e) => io_error("biblioteca.lista", &e),
             }
         }
@@ -925,6 +964,7 @@ fn command_id(c: &Cmd) -> &'static str {
         Cmd::Proyecto { cmd } => match cmd {
             ProyectoCmd::Nuevo { .. } => "proyecto.nuevo",
             ProyectoCmd::Demo { .. } => "proyecto.demo",
+            ProyectoCmd::Plantilla { .. } => "proyecto.plantilla",
             ProyectoCmd::Cadena { .. } => "proyecto.cadena",
             ProyectoCmd::Ciudad { .. } => "proyecto.ciudad",
             ProyectoCmd::CatalogoTotal { .. } => "proyecto.catalogo_total",
