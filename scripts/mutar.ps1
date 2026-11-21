@@ -104,3 +104,6 @@ if ($sobrevivieron.Count -gt 0) {
     exit 1
 }
 Write-Host "Todas las mutaciones fueron detectadas." -ForegroundColor Green
+# El último `cargo test` de una mutación termina con 101 (fallo esperado). Sin este `exit 0`, el
+# proceso hereda ese código y el job se marca en rojo aunque todo haya ido bien.
+exit 0
