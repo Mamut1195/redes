@@ -121,13 +121,17 @@ struct State {
     gpu3d: bool,
     /// Geometría compartida con el compositor GPU.
     geom: Arc<Mutex<gpu3d::Geometria>>,
+    /// Rectángulo del lienzo en puntos (x, y, ancho, alto): el pase 3D se limita a él.
+    canvas_rect: [f32; 4],
 }
 
 impl State {
     fn new() -> State {
         let (project, path) = load_project();
         let mut cam = Camera::default();
-        cam.viewport = [940.0, 620.0];
+        // Coherente con `canvas_rect` inicial: si no, el primer frame (y cualquier `--snap`)
+        // sale con el aspecto de la ventana y el modelo estirado.
+        cam.viewport = [742.0, 714.0];
         cam.fit(&project);
         let display = project.terrain.as_ref().map(|t| {
             let diag = (t.bbox.width().powi(2) + t.bbox.height().powi(2)).sqrt();
@@ -144,7 +148,7 @@ impl State {
             layers: Layers::default(),
             sel: None,
             cursor: [0.0, 0.0],
-            viewport: [940.0, 620.0],
+            viewport: [742.0, 714.0],
             fitted: false,
             path,
             dirty: false,
@@ -154,6 +158,9 @@ impl State {
             aviso: None,
             gpu3d: gpu3d::activo(),
             geom: Arc::new(Mutex::new(gpu3d::Geometria::default())),
+            // Estimación para el primer frame (el layout aún no ha corrido): 1280×800 con los
+            // paneles de 214 y 292 pt. `on_layout` la sustituye por el rectángulo real.
+            canvas_rect: [230.0, 51.0, 742.0, 714.0],
         };
         estado.rebuild();
         estado
@@ -513,9 +520,15 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
         .w_full()
         .h_full()
         .on_layout(|s: &mut State, r: [f32; 4]| {
+            let cambia = (s.viewport[0] - r[2]).abs() > 0.5 || (s.viewport[1] - r[3]).abs() > 0.5;
             s.viewport = [r[2], r[3]];
+            s.canvas_rect = r;
             if !s.fitted && r[2] > 20.0 {
                 s.fit();
+            } else if cambia && r[2] > 20.0 {
+                // La matriz vista-proyección usa el aspecto del lienzo: al redimensionar hay que
+                // reconstruir, o el pase 3D queda estirado hasta el siguiente cambio.
+                s.rebuild();
             }
         })
         .on_pointer_move_local(|s: &mut State, e, _tx| {

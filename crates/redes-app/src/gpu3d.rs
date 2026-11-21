@@ -102,6 +102,7 @@ impl Geometria {
         self.bytes.clear();
         self.bytes.reserve(malla.tris.len() * 3 * 36);
         // La app dibuja con z exagerada: se aplica aquí, una sola vez por reconstrucción.
+        let mut contador: u32 = 0;
         let mut empujar = |pos: [f32; 3], normal: [f32; 3], color: [f32; 3]| {
             let z = (pos[2] - zr) * k + zr;
             for v in [
@@ -116,9 +117,12 @@ impl Geometria {
             }
             for k in 0..3 {
                 empujar(t.pos[k], t.normal, t.color);
+                contador += 1;
             }
         }
-        self.vertices = (malla.tris.len() * 3) as u32;
+        // Lo que se declara es lo que se escribió: antes se contaba la malla entera aunque las
+        // capas filtraran triángulos, y el pase leía vértices del frame anterior.
+        self.vertices = contador;
         self.generacion = self.generacion.wrapping_add(1);
     }
 }
@@ -281,6 +285,36 @@ impl Compositor3d {
             uniforme,
             capacidad,
         });
+        // Recursos nuevos = búfer vacío: hay que volver a subir la geometría.
+        self.ultima_generacion = 0;
+    }
+
+    /// Crecen el búfer si la geometría no cabe (hasta un tope prudente).
+    fn crecer(&mut self, device: &wgpu::Device, bytes: usize) {
+        const TOPE: u64 = 512 * 1024 * 1024;
+        let Some(r) = self.recursos.as_mut() else {
+            return;
+        };
+        if bytes as u64 <= r.capacidad {
+            return;
+        }
+        let paso = 4 * 1024 * 1024;
+        let nueva = (((bytes as u64 + paso - 1) / paso) * paso).min(TOPE);
+        r.vertices = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("redes-3d-vertices"),
+            size: nueva,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        r.capacidad = nueva;
+        self.ultima_generacion = 0;
+        if bytes as u64 > TOPE {
+            eprintln!(
+                "redes: la escena tiene {} MB de vértices y el tope es {} MB; se recorta",
+                bytes / (1024 * 1024),
+                TOPE / (1024 * 1024)
+            );
+        }
     }
 }
 
@@ -298,6 +332,7 @@ impl Compositor<crate::State> for Compositor3d {
             return;
         }
         self.asegurar(device, size, formato);
+        self.crecer(device, bytes.len());
         let Some(r) = &self.recursos else {
             f.draw_ui();
             return;
@@ -308,6 +343,23 @@ impl Compositor<crate::State> for Compositor3d {
             queue.write_buffer(&r.vertices, 0, &bytes[..n as usize]);
             self.ultima_generacion = generacion;
         }
+
+        // El pase se limita al rectángulo del lienzo (en píxeles de dispositivo), no a la ventana:
+        // si no, el modelo se estira y se dibuja debajo de los paneles.
+        let escala = f.rt.env.scale.max(0.1);
+        let rect = f.rt.state.canvas_rect;
+        let (vx, vy, vw, vh) = (
+            (rect[0] * escala).round().max(0.0) as u32,
+            (rect[1] * escala).round().max(0.0) as u32,
+            ((rect[2] * escala).round()).max(1.0) as u32,
+            ((rect[3] * escala).round()).max(1.0) as u32,
+        );
+        let (vx, vy) = (
+            vx.min(size.0.saturating_sub(1)),
+            vy.min(size.1.saturating_sub(1)),
+        );
+        let vw = vw.min(size.0.saturating_sub(vx)).max(1);
+        let vh = vh.min(size.1.saturating_sub(vy)).max(1);
         let mut uniforme = [0f32; 20];
         uniforme[..16].copy_from_slice(&vp);
         uniforme[16..19].copy_from_slice(&[0.45, 0.52, 0.72]);
@@ -342,10 +394,13 @@ impl Compositor<crate::State> for Compositor3d {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+        pase.set_viewport(vx as f32, vy as f32, vw as f32, vh as f32, 0.0, 1.0);
+        pase.set_scissor_rect(vx, vy, vw, vh);
         pase.set_pipeline(&r.pipeline);
         pase.set_bind_group(0, &r.bind, &[]);
         pase.set_vertex_buffer(0, r.vertices.slice(..));
-        pase.draw(0..vertices, 0..1);
+        let dibujables = vertices.min((r.capacidad / 36) as u32);
+        pase.draw(0..dibujables, 0..1);
         drop(pase);
 
         // La interfaz se dibuja encima, reabriendo el pase sin limpiar el color.
@@ -390,4 +445,41 @@ pub fn activo() -> bool {
         .map(|v| v == "1")
         .unwrap_or(false);
     por_flag || por_entorno
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Geometria;
+    use redes_core::view::Layers;
+
+    /// Lo que el pase declara dibujar es exactamente lo que hay en el búfer, y apagar una capa
+    /// reduce el conteo (antes se declaraba la malla entera y se leía basura del frame anterior).
+    #[test]
+    fn los_vertices_declarados_son_los_escritos() {
+        let p = redes_core::demo_city::ciudad();
+        let mut cam = redes_core::view::Camera::default();
+        cam.viewport = [900.0, 600.0];
+        cam.fit(&p);
+
+        let mut todo = Geometria::default();
+        todo.cargar(&p, &cam, Layers::default());
+        assert!(todo.vertices > 0);
+        assert_eq!(
+            todo.bytes.len() as u32,
+            todo.vertices * 36,
+            "vértices declarados y bytes escritos deben coincidir"
+        );
+
+        let mut sin_alcantarillado = Layers::default();
+        sin_alcantarillado.alcantarillado = false;
+        let mut parte = Geometria::default();
+        parte.cargar(&p, &cam, sin_alcantarillado);
+        assert!(
+            parte.vertices < todo.vertices,
+            "apagar alcantarillado debe reducir los vértices ({} vs {})",
+            parte.vertices,
+            todo.vertices
+        );
+        assert_eq!(parte.bytes.len() as u32, parte.vertices * 36);
+    }
 }

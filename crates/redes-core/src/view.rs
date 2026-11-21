@@ -119,7 +119,9 @@ impl Camera {
             [0.0, 0.0, 0.0, 1.0],
         ];
         let aspect = aspecto.max(0.05) as f64;
-        let tan = (self.fov as f64 * 0.5).tan().max(1e-3);
+        // `fov` está en grados: sin `to_radians` la tangente sale de un ángulo absurdo y el pase
+        // 3D dibujaba el modelo ~1,3× más pequeño que el pintor.
+        let tan = (self.fov as f64 * 0.5).to_radians().tan().max(1e-3);
         // Rango de profundidad atado a la distancia de la cámara: con far/near gigantes el
         // z-búfer pierde precisión y las caras lejanas ganan a las cercanas.
         let cerca = (self.distance * 0.02).clamp(0.05, 200.0);
@@ -1638,6 +1640,42 @@ mod tests {
             contar_cortes(&con) > 0,
             "el corte no seccionó ninguna tubería"
         );
+    }
+
+    /// La matriz del pase 3D y `project()` deben llevar un mismo punto al mismo píxel del lienzo.
+    /// Si divergen, el modelo 3D se dibuja desplazado o estirado respecto al pintor.
+    #[test]
+    fn la_matriz_3d_coincide_con_la_proyeccion_2d() {
+        let p = crate::demo_catalog::catalogo();
+        let mut cam = Camera::default();
+        cam.viewport = [742.0, 714.0];
+        cam.fit(&p);
+        cam.azimuth = -58.0;
+        cam.elevation = 34.0;
+        let (w, h) = (cam.viewport[0], cam.viewport[1]);
+        let m = cam.matriz(w / h, 1.0);
+
+        let puntos = [
+            [0.0, 0.0, 2500.0],
+            [60.0, 24.0, 2502.0],
+            [-40.0, 30.0, 2510.0],
+            [110.0, 45.0, 2505.0],
+        ];
+        for q in puntos {
+            let esperado = cam.project(q).expect("delante de la cámara");
+            // NDC a partir de la matriz (columna mayor).
+            let x = m[0] * q[0] as f32 + m[4] * q[1] as f32 + m[8] * q[2] as f32 + m[12];
+            let y = m[1] * q[0] as f32 + m[5] * q[1] as f32 + m[9] * q[2] as f32 + m[13];
+            let wc = m[3] * q[0] as f32 + m[7] * q[1] as f32 + m[11] * q[2] as f32 + m[15];
+            let (ndc_x, ndc_y) = (x / wc, y / wc);
+            let pantalla = [(ndc_x + 1.0) * 0.5 * w, (1.0 - ndc_y) * 0.5 * h];
+            assert!(
+                (pantalla[0] - esperado[0]).abs() < 1.0 && (pantalla[1] - esperado[1]).abs() < 1.0,
+                "punto {q:?}: matriz {:?} vs proyecto {:?}",
+                pantalla,
+                esperado
+            );
+        }
     }
 
     #[test]
