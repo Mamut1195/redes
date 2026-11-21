@@ -221,9 +221,15 @@ pub struct Project {
     pub entorno: Option<crate::city::Entorno>,
     pub nodes: Vec<Node>,
     pub links: Vec<Link>,
-    next_slot: u32,
+    pub(crate) next_slot: u32,
     #[serde(default)]
     pub journal: Vec<JournalEntry>,
+    /// Campos que esta versión no conoce: se conservan al guardar en vez de borrarlos.
+    ///
+    /// Sin esto, abrir un archivo de una versión futura y guardarlo destruye en silencio los
+    /// campos nuevos (revisión adversarial, D-04).
+    #[serde(flatten, default)]
+    pub extras: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 impl Default for Project {
@@ -249,6 +255,7 @@ impl Project {
             links: Vec::new(),
             next_slot: 1,
             journal: Vec::new(),
+            extras: Default::default(),
         }
     }
 

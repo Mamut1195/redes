@@ -106,6 +106,8 @@ impl State {
 
     /// Cambia el estado de revision de un objeto y marca el documento como sucio.
     fn set_estado(&mut self, code: &str, nuevo: EstadoObjeto, nota: Option<String>) {
+        // La revisión también va al historial: si no, Deshacer la borraba sin avisar.
+        self.recordar();
         let p = Arc::make_mut(&mut self.project);
         let mut touched = false;
         if let Some(n) = p.nodes.iter_mut().find(|n| n.code == code && !n.deleted) {

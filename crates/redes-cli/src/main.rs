@@ -366,9 +366,16 @@ fn run(cli: Cli, t0: Instant) -> i32 {
         }
         Cmd::Importar { cmd } => importar(&mut p, cmd, dry),
         Cmd::Objeto { cmd } => objeto(&mut p, cmd, dry),
-        Cmd::Exportar { cmd } => exportar(&p, cmd),
+        Cmd::Exportar { cmd } => exportar(&p, cmd, dry),
         Cmd::Biblioteca { cmd } => biblioteca(&cmd),
         Cmd::Vista { salida, azimut, elevacion, distancia, ancho, alto } => {
+            if dry {
+                let env = Envelope::ok("vista").with_data(json!({
+                    "dry_run": true,
+                    "salida": salida.display().to_string(),
+                }));
+                return emit(env, pretty, quiet);
+            }
             let mut cam = Camera::default();
             cam.viewport = [ancho, alto];
             cam.fit(&p);
@@ -984,9 +991,16 @@ fn cambiar_estado(
     }))
 }
 
-fn exportar(p: &Project, cmd: ExportarCmd) -> Envelope {
+fn exportar(p: &Project, cmd: ExportarCmd, dry: bool) -> Envelope {
     match cmd {
         ExportarCmd::Dxf { salida, solo_aprobados } => {
+            if dry {
+                return Envelope::ok("exportar.dxf").with_data(json!({
+                    "dry_run": true,
+                    "salida": salida.display().to_string(),
+                    "solo_aprobados": solo_aprobados,
+                }));
+            }
             match export::export_dxf_filtered(p, &salida, solo_aprobados) {
                 Ok(n) => Envelope::ok("exportar.dxf")
                     .with_data(json!({
@@ -1008,6 +1022,14 @@ fn exportar(p: &Project, cmd: ExportarCmd) -> Envelope {
         ExportarCmd::Gltf { salida, sin_terreno } => {
             let opts = redes_core::gltf::OpcionesGltf { con_terreno: !sin_terreno };
             let bytes = redes_core::gltf::exportar_glb(p, opts);
+            if dry {
+                return Envelope::ok("exportar.gltf").with_data(json!({
+                    "dry_run": true,
+                    "salida": salida.display().to_string(),
+                    "bytes": bytes.len(),
+                    "primitivas": redes_core::gltf::contar_primitivas(p, !sin_terreno),
+                }));
+            }
             match std::fs::write(&salida, &bytes) {
                 Ok(()) => Envelope::ok("exportar.gltf")
                     .with_data(json!({
@@ -1019,12 +1041,20 @@ fn exportar(p: &Project, cmd: ExportarCmd) -> Envelope {
                 Err(e) => io_error("exportar.gltf", &e.to_string()),
             }
         }
-        ExportarCmd::Geojson { salida } => match export::export_geojson(p, &salida) {
-            Ok(n) => Envelope::ok("exportar.geojson")
-                .with_data(json!({ "salida": salida.display().to_string(), "features": n }))
-                .with_artifact("geojson", &salida.display().to_string()),
-            Err(e) => io_error("exportar.geojson", &e),
-        },
+        ExportarCmd::Geojson { salida } => {
+            if dry {
+                return Envelope::ok("exportar.geojson").with_data(json!({
+                    "dry_run": true,
+                    "salida": salida.display().to_string(),
+                }));
+            }
+            match export::export_geojson(p, &salida) {
+                Ok(n) => Envelope::ok("exportar.geojson")
+                    .with_data(json!({ "salida": salida.display().to_string(), "features": n }))
+                    .with_artifact("geojson", &salida.display().to_string()),
+                Err(e) => io_error("exportar.geojson", &e),
+            }
+        }
     }
 }
 

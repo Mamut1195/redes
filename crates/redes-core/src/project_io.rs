@@ -94,19 +94,102 @@ pub fn validar_finito(p: &Project) -> Result<(), String> {
     Ok(())
 }
 
-/// Carga un proyecto y valida el esquema.
+/// Versión de esquema que entiende esta compilación.
+pub const SCHEMA_VERSION: u32 = 2;
+
+/// Carga un proyecto y lo valida antes de devolverlo.
+///
+/// Un archivo de disco no es de fiar: puede venir de una versión futura, de una edición manual o
+/// de un proceso interrumpido. Aquí se rechaza lo irrecuperable con un código estable en vez de
+/// reventar más adelante (revisión adversarial D-03, D-04, D-07, D-08).
 pub fn load(path: &Path) -> Result<Project, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("E_IO_NOT_FOUND: {e}"))?;
-    let p: Project = serde_json::from_str(&text).map_err(|e| format!("E_FMT_PARSE: {e}"))?;
-    if !p.schema.starts_with("redes.project/") {
-        return Err(format!("E_PROJ_SCHEMA_TOO_NEW: esquema desconocido {}", p.schema));
-    }
+    let mut p: Project = serde_json::from_str(&text).map_err(|e| format!("E_FMT_PARSE: {e}"))?;
+    validar_esquema(&p.schema)?;
+    validar_tin(&p)?;
+    validar_identidad(&mut p)?;
     // El índice espacial del TIN no se serializa: se reconstruye al abrir.
-    let mut p = p;
     if let Some(t) = p.terrain.as_mut() {
         t.reindexar();
     }
     Ok(p)
+}
+
+/// Acepta versiones hasta [`SCHEMA_VERSION`]; una futura se rechaza en vez de perder datos.
+pub fn validar_esquema(schema: &str) -> Result<(), String> {
+    let version = schema
+        .strip_prefix("redes.project/")
+        .and_then(|v| v.parse::<u32>().ok())
+        .ok_or_else(|| format!("E_PROJ_SCHEMA: esquema desconocido {schema}"))?;
+    if version > SCHEMA_VERSION {
+        return Err(format!(
+            "E_PROJ_SCHEMA_TOO_NEW: el archivo usa la versión {version} y esta app entiende hasta la {SCHEMA_VERSION}; ábralo con una versión más nueva"
+        ));
+    }
+    Ok(())
+}
+
+/// Comprueba que la triangulación del terreno no tenga índices fuera de rango.
+fn validar_tin(p: &Project) -> Result<(), String> {
+    let Some(t) = &p.terrain else { return Ok(()) };
+    if t.points.is_empty() {
+        return Err("E_TIN_INVALIDO: el terreno no tiene puntos".into());
+    }
+    if t.tris.len() > 4_000_000 {
+        return Err(format!("E_TIN_INVALIDO: {} triángulos, demasiados", t.tris.len()));
+    }
+    let n = t.points.len();
+    for (i, tri) in t.tris.iter().enumerate() {
+        for k in tri {
+            if (*k as usize) >= n {
+                return Err(format!(
+                    "E_TIN_INVALIDO: el triángulo {i} referencia el vértice {k} y solo hay {n}"
+                ));
+            }
+        }
+        if tri[0] == tri[1] || tri[1] == tri[2] || tri[0] == tri[2] {
+            return Err(format!("E_TIN_INVALIDO: el triángulo {i} repite vértice"));
+        }
+    }
+    Ok(())
+}
+
+/// Repara `next_slot` y rechaza identificadores o códigos duplicados.
+///
+/// Un `ElementId` repetido hace que se apruebe el objeto equivocado; un código repetido deja un
+/// objeto inalcanzable y bloquea `proyecto aprobar` para siempre.
+fn validar_identidad(p: &mut Project) -> Result<(), String> {
+    use std::collections::HashSet;
+
+    let mut ids: HashSet<(u32, u32)> = HashSet::new();
+    let mut codigos: HashSet<String> = HashSet::new();
+    let mut max_slot = 0u32;
+
+    for (que, n) in p
+        .nodes
+        .iter()
+        .map(|n| ("nodo", (n.id, n.code.clone())))
+        .chain(p.links.iter().map(|l| ("arco", (l.id, l.code.clone()))))
+    {
+        let (id, code) = n;
+        max_slot = max_slot.max(id.slot);
+        if !ids.insert((id.slot, id.generation)) {
+            return Err(format!(
+                "E_STATE_DUPLICATE_ID: el {que} {code} repite el identificador {}/{}",
+                id.slot, id.generation
+            ));
+        }
+        if !codigos.insert(code.clone()) {
+            return Err(format!("E_STATE_DUPLICATE_NAME: código duplicado {code}"));
+        }
+    }
+
+    // `next_slot` no es de fiar: se recalcula para que los objetos nuevos nunca colisionen.
+    let esperado = max_slot.saturating_add(1);
+    if p.next_slot <= max_slot {
+        p.next_slot = esperado;
+    }
+    Ok(())
 }
 
 /// Busca un `*.redes` subiendo por el árbol de directorios.
@@ -146,6 +229,88 @@ mod tests {
         assert!(err.starts_with("E_VALOR_NO_FINITO"), "{err}");
         let despues = std::fs::read(&ruta).expect("leer otra vez");
         assert_eq!(antes, despues, "el archivo no debe cambiar");
+        let _ = std::fs::remove_file(&ruta);
+    }
+
+    fn escribir_temporal(nombre: &str, valor: &serde_json::Value) -> std::path::PathBuf {
+        let ruta = std::env::temp_dir().join(format!("redes-{nombre}-{}.redes", std::process::id()));
+        std::fs::write(&ruta, serde_json::to_string(valor).unwrap()).unwrap();
+        ruta
+    }
+
+    #[test]
+    fn rechaza_un_esquema_futuro() {
+        let mut v = serde_json::to_value(crate::demo_catalog::catalogo()).unwrap();
+        v["schema"] = serde_json::json!("redes.project/99");
+        let ruta = escribir_temporal("futuro", &v);
+        let err = crate::project_io::load(&ruta).unwrap_err();
+        assert!(err.starts_with("E_PROJ_SCHEMA_TOO_NEW"), "{err}");
+        let _ = std::fs::remove_file(&ruta);
+    }
+
+    #[test]
+    fn conserva_los_campos_desconocidos() {
+        let mut v = serde_json::to_value(crate::demo_catalog::catalogo()).unwrap();
+        v["cota_rasante_municipal"] = serde_json::json!(2500.75);
+        let ruta = escribir_temporal("extra", &v);
+        let p = crate::project_io::load(&ruta).expect("carga");
+        crate::project_io::save(&p, &ruta).expect("guarda");
+        let texto = std::fs::read_to_string(&ruta).unwrap();
+        assert!(
+            texto.contains("cota_rasante_municipal"),
+            "el campo desconocido se perdió al guardar"
+        );
+        let _ = std::fs::remove_file(&ruta);
+    }
+
+    #[test]
+    fn rechaza_un_tin_con_indice_fuera_de_rango() {
+        let mut v = serde_json::to_value(crate::demo_city::ciudad()).unwrap();
+        v["terrain"]["tris"] = serde_json::json!([[0, 1, 999999]]);
+        let ruta = escribir_temporal("tin", &v);
+        let err = crate::project_io::load(&ruta).unwrap_err();
+        assert!(err.starts_with("E_TIN_INVALIDO"), "{err}");
+        let _ = std::fs::remove_file(&ruta);
+    }
+
+    #[test]
+    fn rechaza_codigos_duplicados() {
+        let mut v = serde_json::to_value(crate::demo_catalog::catalogo()).unwrap();
+        let primero = v["nodes"][0]["code"].clone();
+        v["nodes"][1]["code"] = primero;
+        let ruta = escribir_temporal("codigos", &v);
+        let err = crate::project_io::load(&ruta).unwrap_err();
+        assert!(err.starts_with("E_STATE_DUPLICATE_NAME"), "{err}");
+        let _ = std::fs::remove_file(&ruta);
+    }
+
+    #[test]
+    fn repara_next_slot_al_cargar() {
+        let mut v = serde_json::to_value(crate::demo_catalog::catalogo()).unwrap();
+        v["next_slot"] = serde_json::json!(0);
+        let ruta = escribir_temporal("slot", &v);
+        let mut p = crate::project_io::load(&ruta).expect("carga");
+        // Todos los objetos tienen id; el siguiente debe ser distinto de cualquiera.
+        let n = crate::model::Node {
+            id: crate::model::ElementId::new(0, 0),
+            family: "saneamiento.pozo".into(),
+            ty: "inspeccion".into(),
+            code: String::new(),
+            pos: crate::geom::P2::new(0.0, 0.0),
+            z_terrain: 0.0,
+            z_rim: 0.0,
+            z_invert: -1.0,
+            attrs: Default::default(),
+            datos: Default::default(),
+            estado: crate::model::EstadoObjeto::Pendiente,
+            nota: None,
+            deleted: false,
+        };
+        let id = p.add_node(n).expect("añade");
+        assert!(
+            !p.nodes.iter().filter(|x| x.id != id).any(|x| x.id.slot == id.slot),
+            "el id nuevo colisiona"
+        );
         let _ = std::fs::remove_file(&ruta);
     }
 

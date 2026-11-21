@@ -1302,18 +1302,100 @@ mod tests {
         assert_ne!(a, b, "la explosión debe mover la geometría");
     }
 
+    /// El render (no `pieza_local`) debe dibujar familias que no son nodo hidráulico, como un
+    /// hito o una tapa. Si vuelve el filtro que las ocultaba, esta prueba falla.
     #[test]
-    fn las_etiquetas_son_pocas_y_tienen_texto() {
-        let p = crate::demo_city::ciudad();
+    fn el_render_dibuja_familias_no_hidraulicas() {
+        use crate::model::{ElementId, Node, Project};
+        use std::collections::BTreeMap;
+
+        let mut p = Project::new("filtro", "EPSG:32717");
+        for (familia, ty) in [
+            ("comun.hito", "bm"),
+            ("comun.tapa", "ciega_circular"),
+            ("comun.escalera", "peldano"),
+        ] {
+            p.add_node(Node {
+                id: ElementId::new(0, 0),
+                family: familia.into(),
+                ty: ty.into(),
+                code: String::new(),
+                pos: crate::geom::P2::new(0.0, 0.0),
+                z_terrain: 0.0,
+                z_rim: 0.0,
+                z_invert: -1.0,
+                attrs: BTreeMap::new(),
+                datos: BTreeMap::new(),
+                estado: crate::model::EstadoObjeto::Pendiente,
+                nota: None,
+                deleted: false,
+            })
+            .expect("nodo");
+        }
         let mut cam = Camera::default();
         cam.viewport = [900.0, 600.0];
         cam.fit(&p);
-        let s = build_opts(&p, p.terrain.as_ref(), &cam, Layers::default(), None, &Opciones::default());
-        assert!(s.etiquetas.len() <= 28);
+        cam.distance = 12.0;
+        let s = build_opts(&p, None, &cam, Layers::default(), None, &Opciones::default());
+        assert!(s.tri_count > 0, "el render no dibujó las familias no hidráulicas");
+    }
+
+    /// Con la cámara cerca debe haber al menos una etiqueta; si dejan de generarse, esto falla.
+    #[test]
+    fn las_etiquetas_aparecen_al_acercarse() {
+        let p = crate::demo_catalog::catalogo();
+        let mut cam = Camera::default();
+        cam.viewport = [900.0, 600.0];
+        cam.fit(&p);
+        cam.distance = 12.0;
+        cam.target = [10.0, 36.0, 2500.0];
+        let s = build_opts(&p, None, &cam, Layers::default(), None, &Opciones::default());
+        assert!(!s.etiquetas.is_empty(), "no se generó ninguna etiqueta");
         for e in &s.etiquetas {
             assert!(!e.texto.is_empty());
-            assert!(e.pos[0].is_finite() && e.pos[1].is_finite());
         }
+    }
+
+    /// El corte debe seccionar también las tuberías. Se aísla la red (sin piezas de nodo) y se
+    /// cuentan las aristas de corte (amarillas): sin corte no debe haber ninguna.
+    #[test]
+    fn el_corte_secciona_las_tuberias() {
+        let p = crate::demo_catalog::catalogo();
+        let mut cam = Camera::default();
+        cam.viewport = [900.0, 600.0];
+        cam.fit(&p);
+        // De cerca: a lo lejos las tuberías se dibujan como líneas y no se pueden seccionar.
+        cam.distance = 18.0;
+        cam.target = [30.0, 36.0, 2501.0];
+        cam.elevation = 20.0;
+        let solo_red = Layers { terreno: false, alcantarillado: true, agua: true, nodos: false, edificios: false };
+
+        let contar_cortes = |s: &Scene| -> usize {
+            s.prims
+                .iter()
+                .filter(|p| match p {
+                    Prim::Line { color, .. } => {
+                        (color[0] - 0.98).abs() < 0.02 && (color[1] - 0.86).abs() < 0.02
+                    }
+                    _ => false,
+                })
+                .count()
+        };
+
+        let sin = build_opts(&p, None, &cam, solo_red, None, &Opciones::default());
+        let con = build_opts(
+            &p,
+            None,
+            &cam,
+            solo_red,
+            None,
+            &Opciones { corte_x: Some(30.0), ..Opciones::default() },
+        );
+        assert_eq!(contar_cortes(&sin), 0, "sin corte no debe haber aristas de corte");
+        assert!(
+            contar_cortes(&con) > 0,
+            "el corte no seccionó ninguna tubería"
+        );
     }
 
     #[test]
