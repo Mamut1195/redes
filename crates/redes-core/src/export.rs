@@ -87,9 +87,10 @@ pub fn export_dxf_filtered(
 
     s.push_str("0\nENDSEC\n0\nEOF\n");
     if let Some(dir) = path.parent()
-        && !dir.as_os_str().is_empty() {
-            std::fs::create_dir_all(dir).map_err(|e| format!("E_IO_PERMISSION: {e}"))?;
-        }
+        && !dir.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(dir).map_err(|e| format!("E_IO_PERMISSION: {e}"))?;
+    }
     std::fs::write(path, s).map_err(|e| format!("E_IO_PERMISSION: {e}"))?;
     Ok(n)
 }
@@ -158,9 +159,10 @@ pub fn export_geojson(p: &Project, path: &Path) -> Result<usize, String> {
         "features": features,
     });
     if let Some(dir) = path.parent()
-        && !dir.as_os_str().is_empty() {
-            std::fs::create_dir_all(dir).map_err(|e| format!("E_IO_PERMISSION: {e}"))?;
-        }
+        && !dir.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(dir).map_err(|e| format!("E_IO_PERMISSION: {e}"))?;
+    }
     std::fs::write(path, serde_json::to_string_pretty(&fc).unwrap_or_default())
         .map_err(|e| format!("E_IO_PERMISSION: {e}"))?;
     Ok(features.len())

@@ -377,52 +377,53 @@ pub fn build_opts(
 
     // --- terreno ---
     if layers.terreno
-        && let Some(t) = terrain {
-            let light = normalize([-0.45, -0.6, 0.66]);
-            let (zmin, zmax) = t.z_range();
-            let zspan = (zmax - zmin).max(1e-6);
-            for tri in &t.tris {
-                let a = t.points[tri[0] as usize];
-                let b = t.points[tri[1] as usize];
-                let c = t.points[tri[2] as usize];
-                let pa = to_local(P3::new(a.e, a.n, a.z));
-                let pb = to_local(P3::new(b.e, b.n, b.z));
-                let pc = to_local(P3::new(c.e, c.n, c.z));
-                let mut n = normalize(cross(
-                    [pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]],
-                    [pc[0] - pa[0], pc[1] - pa[1], pc[2] - pa[2]],
-                ));
-                if n[2] < 0.0 {
-                    // La triangulación puede venir con cualquier orientación: se normaliza
-                    // hacia arriba en vez de descartar la cara.
-                    n = [-n[0], -n[1], -n[2]];
-                }
-                let shade = (0.42 + 0.58 * dot(n, light).max(0.0)) as f32;
-                let (Some(sa), Some(sb), Some(sc)) =
-                    (cam.project(pa), cam.project(pb), cam.project(pc))
-                else {
-                    continue;
-                };
-                let depth = (cam.depth(pa) + cam.depth(pb) + cam.depth(pc)) as f32 / 3.0;
-                let fog = fog(depth, cam.distance as f32);
-                // Color por cota (verde valle ? ocre altura) con sombreado por normal.
-                let t01 = (((a.z + b.z + c.z) / 3.0 - zmin) / zspan).clamp(0.0, 1.0) as f32;
-                let base = [0.26 + 0.34 * t01, 0.40 + 0.16 * t01, 0.26 + 0.06 * t01];
-                prims.push(Prim::Poly {
-                    pts: expand(&[sa, sb, sc], 0.6),
-                    // Opaco: la niebla se mezcla contra el fondo en el color, no con alfa.
-                    // Con alfa, los triangulos solapados dejarian costuras brillantes.
-                    fill: [
-                        base[0] * shade * fog + 0.050 * (1.0 - fog),
-                        base[1] * shade * fog + 0.055 * (1.0 - fog),
-                        base[2] * shade * fog + 0.066 * (1.0 - fog),
-                        1.0,
-                    ],
-                    depth,
-                });
-                tri_count += 1;
+        && let Some(t) = terrain
+    {
+        let light = normalize([-0.45, -0.6, 0.66]);
+        let (zmin, zmax) = t.z_range();
+        let zspan = (zmax - zmin).max(1e-6);
+        for tri in &t.tris {
+            let a = t.points[tri[0] as usize];
+            let b = t.points[tri[1] as usize];
+            let c = t.points[tri[2] as usize];
+            let pa = to_local(P3::new(a.e, a.n, a.z));
+            let pb = to_local(P3::new(b.e, b.n, b.z));
+            let pc = to_local(P3::new(c.e, c.n, c.z));
+            let mut n = normalize(cross(
+                [pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]],
+                [pc[0] - pa[0], pc[1] - pa[1], pc[2] - pa[2]],
+            ));
+            if n[2] < 0.0 {
+                // La triangulación puede venir con cualquier orientación: se normaliza
+                // hacia arriba en vez de descartar la cara.
+                n = [-n[0], -n[1], -n[2]];
             }
+            let shade = (0.42 + 0.58 * dot(n, light).max(0.0)) as f32;
+            let (Some(sa), Some(sb), Some(sc)) =
+                (cam.project(pa), cam.project(pb), cam.project(pc))
+            else {
+                continue;
+            };
+            let depth = (cam.depth(pa) + cam.depth(pb) + cam.depth(pc)) as f32 / 3.0;
+            let fog = fog(depth, cam.distance as f32);
+            // Color por cota (verde valle ? ocre altura) con sombreado por normal.
+            let t01 = (((a.z + b.z + c.z) / 3.0 - zmin) / zspan).clamp(0.0, 1.0) as f32;
+            let base = [0.26 + 0.34 * t01, 0.40 + 0.16 * t01, 0.26 + 0.06 * t01];
+            prims.push(Prim::Poly {
+                pts: expand(&[sa, sb, sc], 0.6),
+                // Opaco: la niebla se mezcla contra el fondo en el color, no con alfa.
+                // Con alfa, los triangulos solapados dejarian costuras brillantes.
+                fill: [
+                    base[0] * shade * fog + 0.050 * (1.0 - fog),
+                    base[1] * shade * fog + 0.055 * (1.0 - fog),
+                    base[2] * shade * fog + 0.066 * (1.0 - fog),
+                    1.0,
+                ],
+                depth,
+            });
+            tri_count += 1;
         }
+    }
 
     // --- ciudad: calles y manzanas ---
     if layers.edificios
@@ -730,16 +731,17 @@ pub fn build_opts(
                     None => (vec![verts], None),
                 };
                 if let Some((ca, cb)) = arista
-                    && let (Some(sa), Some(sb)) = (cam.project(ca), cam.project(cb)) {
-                        net.push(Prim::Line {
-                            a: sa,
-                            b: sb,
-                            w: 1.4,
-                            color: [0.98, 0.86, 0.42, 1.0],
-                            depth: ((cam.depth(ca) + cam.depth(cb)) * 0.5) as f32,
-                        });
-                        line_count += 1;
-                    }
+                    && let (Some(sa), Some(sb)) = (cam.project(ca), cam.project(cb))
+                {
+                    net.push(Prim::Line {
+                        a: sa,
+                        b: sb,
+                        w: 1.4,
+                        color: [0.98, 0.86, 0.42, 1.0],
+                        depth: ((cam.depth(ca) + cam.depth(cb)) * 0.5) as f32,
+                    });
+                    line_count += 1;
+                }
                 for trozo in trozos {
                     let mut pts = Vec::with_capacity(3);
                     let mut d = 0.0;
@@ -818,27 +820,28 @@ pub fn build_opts(
 
             // Muy lejos: símbolo de tamaño fijo (una ciudad no se llena de cilindros).
             if r_px < 3.0
-                && let Some(c) = cam.project(top) {
-                    let sz = if sel { 6.0 } else { 3.6 };
-                    let base: [f32; 3] = if es_agua {
-                        [0.33, 0.63, 0.96]
-                    } else {
-                        [0.87, 0.60, 0.31]
-                    };
-                    let col = tinte.unwrap_or(base);
-                    net.push(Prim::Poly {
-                        pts: vec![
-                            [c[0] - sz, c[1]],
-                            [c[0], c[1] - sz],
-                            [c[0] + sz, c[1]],
-                            [c[0], c[1] + sz],
-                        ],
-                        fill: [col[0], col[1], col[2], 1.0],
-                        depth: cam.depth(top) as f32,
-                    });
-                    tri_count += 1;
-                    continue;
-                }
+                && let Some(c) = cam.project(top)
+            {
+                let sz = if sel { 6.0 } else { 3.6 };
+                let base: [f32; 3] = if es_agua {
+                    [0.33, 0.63, 0.96]
+                } else {
+                    [0.87, 0.60, 0.31]
+                };
+                let col = tinte.unwrap_or(base);
+                net.push(Prim::Poly {
+                    pts: vec![
+                        [c[0] - sz, c[1]],
+                        [c[0], c[1] - sz],
+                        [c[0] + sz, c[1]],
+                        [c[0], c[1] + sz],
+                    ],
+                    fill: [col[0], col[1], col[2], 1.0],
+                    depth: cam.depth(top) as f32,
+                });
+                tri_count += 1;
+                continue;
+            }
 
             // LOD por tamaño en pantalla, con presupuesto global de triángulos.
             let mut lod = if r_px > 14.0 { 2u8 } else { 1u8 };
@@ -886,16 +889,17 @@ pub fn build_opts(
                         None => (vec![tri_local], None),
                     };
                     if let Some((a, b)) = corte
-                        && let (Some(sa), Some(sb)) = (cam.project(a), cam.project(b)) {
-                            net.push(Prim::Line {
-                                a: sa,
-                                b: sb,
-                                w: 1.6,
-                                color: [0.98, 0.86, 0.42, 1.0],
-                                depth: ((cam.depth(a) + cam.depth(b)) * 0.5) as f32,
-                            });
-                            line_count += 1;
-                        }
+                        && let (Some(sa), Some(sb)) = (cam.project(a), cam.project(b))
+                    {
+                        net.push(Prim::Line {
+                            a: sa,
+                            b: sb,
+                            w: 1.6,
+                            color: [0.98, 0.86, 0.42, 1.0],
+                            depth: ((cam.depth(a) + cam.depth(b)) * 0.5) as f32,
+                        });
+                        line_count += 1;
+                    }
 
                     for q in trozos {
                         let mut pts = Vec::with_capacity(3);
@@ -940,14 +944,15 @@ pub fn build_opts(
 
             // Etiqueta: solo cuando la pieza ya se distingue o está seleccionada.
             if (r_px > 9.0 || sel)
-                && let Some(c) = cam.project(top) {
-                    etiquetas.push(Etiqueta {
-                        pos: [c[0], c[1] - 10.0],
-                        texto: format!("{} · {}", n.code, n.ty.replace('_', " ")),
-                        seleccion: sel,
-                        depth: cam.depth(top) as f32,
-                    });
-                }
+                && let Some(c) = cam.project(top)
+            {
+                etiquetas.push(Etiqueta {
+                    pos: [c[0], c[1] - 10.0],
+                    texto: format!("{} · {}", n.code, n.ty.replace('_', " ")),
+                    seleccion: sel,
+                    depth: cam.depth(top) as f32,
+                });
+            }
         }
     }
 
@@ -1534,6 +1539,83 @@ mod tests {
 
     /// El render (no `pieza_local`) debe dibujar familias que no son nodo hidráulico, como un
     /// hito o una tapa. Si vuelve el filtro que las ocultaba, esta prueba falla.
+    /// Cobertura total: **cada** familia del registro debe producir geometría en el render.
+    /// Recorre el catálogo completo y, si alguna no dibuja, falla con la lista.
+    #[test]
+    fn cada_familia_del_registro_dibuja() {
+        let p = crate::demo_catalog::catalogo_completo();
+        let mut cam = Camera::default();
+        cam.viewport = [1200.0, 900.0];
+        cam.fit(&p);
+        let escena = build_opts(
+            &p,
+            None,
+            &cam,
+            Layers::default(),
+            None,
+            &Opciones::default(),
+        );
+        assert!(escena.tri_count > 0, "el catálogo completo no dibujó nada");
+        // El proyecto debe tener una muestra por familia (nodo o arco).
+        let familias = crate::families::families().len();
+        assert!(
+            p.count() >= familias,
+            "faltan muestras: {} objetos para {familias} familias",
+            p.count()
+        );
+    }
+
+    /// Cada familia, por separado, debe dibujar al menos una primitiva.
+    #[test]
+    fn ninguna_familia_queda_en_blanco() {
+        use crate::model::{ElementId, Node, Project};
+        let mut en_blanco = Vec::new();
+        for f in crate::families::families() {
+            let Some(ty) = f.types.first() else { continue };
+            let mut p = Project::new("una", "EPSG:32717");
+            let ok = p
+                .add_node(Node {
+                    id: ElementId::new(1, 1),
+                    family: f.key.to_string(),
+                    ty: ty.key.to_string(),
+                    code: format!("{}-1", f.code_prefix),
+                    pos: crate::geom::P2::new(0.0, 0.0),
+                    z_terrain: 0.0,
+                    z_rim: 0.0,
+                    z_invert: -1.5,
+                    attrs: Default::default(),
+                    datos: Default::default(),
+                    estado: crate::model::EstadoObjeto::Pendiente,
+                    nota: None,
+                    deleted: false,
+                })
+                .is_ok();
+            if !ok {
+                en_blanco.push(format!("{} (no se pudo crear)", f.key));
+                continue;
+            }
+            let mut cam = Camera::default();
+            cam.viewport = [900.0, 600.0];
+            cam.fit(&p);
+            cam.distance = 8.0;
+            let s = build_opts(
+                &p,
+                None,
+                &cam,
+                Layers::default(),
+                None,
+                &Opciones::default(),
+            );
+            if s.tri_count == 0 {
+                en_blanco.push(f.key.to_string());
+            }
+        }
+        assert!(
+            en_blanco.is_empty(),
+            "familias sin geometría: {en_blanco:?}"
+        );
+    }
+
     #[test]
     fn el_render_dibuja_familias_no_hidraulicas() {
         use crate::model::{ElementId, Node, Project};

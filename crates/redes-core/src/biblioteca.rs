@@ -172,68 +172,67 @@ pub fn cantidades_glb(bytes: &[u8]) -> Result<Cantidades, String> {
                 .and_then(|m| m.get(malla_id as usize))
                 .and_then(|m| m.get("primitives"))
                 .and_then(|p| p.as_array())
-            {
-                for prim in prims {
-                    let material = prim
-                        .get("material")
-                        .and_then(|m| m.as_u64())
-                        .map(|m| {
-                            materiales
-                                .get(m as usize)
-                                .cloned()
-                                .unwrap_or_else(|| format!("material_{m}"))
-                        })
-                        .unwrap_or_else(|| "modelo".to_string());
-                    let Some(pos) = prim
-                        .get("attributes")
-                        .and_then(|a| a.get("POSITION"))
-                        .and_then(|v| v.as_u64())
-                        .and_then(|i| leer_vec3(&doc, bin, i as usize))
-                    else {
+        {
+            for prim in prims {
+                let material = prim
+                    .get("material")
+                    .and_then(|m| m.as_u64())
+                    .map(|m| {
+                        materiales
+                            .get(m as usize)
+                            .cloned()
+                            .unwrap_or_else(|| format!("material_{m}"))
+                    })
+                    .unwrap_or_else(|| "modelo".to_string());
+                let Some(pos) = prim
+                    .get("attributes")
+                    .and_then(|a| a.get("POSITION"))
+                    .and_then(|v| v.as_u64())
+                    .and_then(|i| leer_vec3(&doc, bin, i as usize))
+                else {
+                    continue;
+                };
+                let puntos: Vec<[f64; 3]> = pos.iter().map(|q| transformar(&mundo, *q)).collect();
+                let indices = prim
+                    .get("indices")
+                    .and_then(|v| v.as_u64())
+                    .and_then(|i| leer_escalares(&doc, bin, i as usize))
+                    .unwrap_or_else(|| (0..puntos.len() as u32).collect());
+
+                for tri in indices.chunks(3) {
+                    if tri.len() < 3 {
+                        break;
+                    }
+                    let (ia, ib, ic) = (tri[0] as usize, tri[1] as usize, tri[2] as usize);
+                    if ia >= puntos.len() || ib >= puntos.len() || ic >= puntos.len() {
                         continue;
-                    };
-                    let puntos: Vec<[f64; 3]> =
-                        pos.iter().map(|q| transformar(&mundo, *q)).collect();
-                    let indices = prim
-                        .get("indices")
-                        .and_then(|v| v.as_u64())
-                        .and_then(|i| leer_escalares(&doc, bin, i as usize))
-                        .unwrap_or_else(|| (0..puntos.len() as u32).collect());
+                    }
+                    let (a, b, cc) = (puntos[ia], puntos[ib], puntos[ic]);
+                    // Volumen del tetraedro (0, a, b, c).
+                    let vol = (a[0] * (b[1] * cc[2] - b[2] * cc[1])
+                        - a[1] * (b[0] * cc[2] - b[2] * cc[0])
+                        + a[2] * (b[0] * cc[1] - b[1] * cc[0]))
+                        / 6.0;
+                    c.volumen_m3 += vol;
+                    *c.por_material.entry(material.clone()).or_insert(0.0) += vol;
 
-                    for tri in indices.chunks(3) {
-                        if tri.len() < 3 {
-                            break;
-                        }
-                        let (ia, ib, ic) = (tri[0] as usize, tri[1] as usize, tri[2] as usize);
-                        if ia >= puntos.len() || ib >= puntos.len() || ic >= puntos.len() {
-                            continue;
-                        }
-                        let (a, b, cc) = (puntos[ia], puntos[ib], puntos[ic]);
-                        // Volumen del tetraedro (0, a, b, c).
-                        let vol = (a[0] * (b[1] * cc[2] - b[2] * cc[1])
-                            - a[1] * (b[0] * cc[2] - b[2] * cc[0])
-                            + a[2] * (b[0] * cc[1] - b[1] * cc[0]))
-                            / 6.0;
-                        c.volumen_m3 += vol;
-                        *c.por_material.entry(material.clone()).or_insert(0.0) += vol;
+                    let u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+                    let v = [cc[0] - a[0], cc[1] - a[1], cc[2] - a[2]];
+                    let n = [
+                        u[1] * v[2] - u[2] * v[1],
+                        u[2] * v[0] - u[0] * v[2],
+                        u[0] * v[1] - u[1] * v[0],
+                    ];
+                    c.area_m2 += 0.5 * (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
 
-                        let u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
-                        let v = [cc[0] - a[0], cc[1] - a[1], cc[2] - a[2]];
-                        let n = [
-                            u[1] * v[2] - u[2] * v[1],
-                            u[2] * v[0] - u[0] * v[2],
-                            u[0] * v[1] - u[1] * v[0],
-                        ];
-                        c.area_m2 += 0.5 * (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
-
-                        // Aristas (cuantizadas a 0,1 mm) para saber si la malla cierra.
-                        for (p, q) in [(ia, ib), (ib, ic), (ic, ia)] {
-                            let k = arista(puntos[p], puntos[q]);
-                            *aristas.entry(k).or_insert(0) += 1;
-                        }
+                    // Aristas (cuantizadas a 0,1 mm) para saber si la malla cierra.
+                    for (p, q) in [(ia, ib), (ib, ic), (ic, ia)] {
+                        let k = arista(puntos[p], puntos[q]);
+                        *aristas.entry(k).or_insert(0) += 1;
                     }
                 }
             }
+        }
         if let Some(hijos) = nodo.get("children").and_then(|c| c.as_array()) {
             for h in hijos.iter().filter_map(|v| v.as_u64()) {
                 pendientes.push((h as usize, mundo));
@@ -425,12 +424,13 @@ pub fn leer_glb(bytes: &[u8]) -> Result<Modelo, String> {
         let local = matriz_del_nodo(nodo);
         if modelo.giro.is_none()
             && let Some(giro) = nodo.get("rotation").and_then(|r| r.as_array())
-                && giro.len() == 4 {
-                    let q: Vec<f64> = giro.iter().filter_map(|v| v.as_f64()).collect();
-                    if q.len() == 4 {
-                        modelo.giro = Some([q[0], q[1], q[2], q[3]]);
-                    }
-                }
+            && giro.len() == 4
+        {
+            let q: Vec<f64> = giro.iter().filter_map(|v| v.as_f64()).collect();
+            if q.len() == 4 {
+                modelo.giro = Some([q[0], q[1], q[2], q[3]]);
+            }
+        }
         let mundo = multiplicar(padre, local);
 
         if let Some(extras) = nodo.get("extras") {
@@ -441,9 +441,9 @@ pub fn leer_glb(bytes: &[u8]) -> Result<Modelo, String> {
                 .get("meshes")
                 .and_then(|m| m.get(malla_id as usize))
                 .and_then(|m| m.get("extras"))
-            {
-                leer_extras(extras, "malla", &mut modelo.extras);
-            }
+        {
+            leer_extras(extras, "malla", &mut modelo.extras);
+        }
 
         if let Some(malla) = nodo.get("mesh").and_then(|m| m.as_u64()) {
             leer_malla(&doc, bin, malla as usize, &mundo, &materiales, &mut modelo);
@@ -665,13 +665,14 @@ fn identidad() -> [f64; 16] {
 
 fn matriz_del_nodo(nodo: &Value) -> [f64; 16] {
     if let Some(m) = nodo.get("matrix").and_then(|m| m.as_array())
-        && m.len() == 16 {
-            let mut out = [0.0; 16];
-            for i in 0..16 {
-                out[i] = m[i].as_f64().unwrap_or(0.0);
-            }
-            return out;
+        && m.len() == 16
+    {
+        let mut out = [0.0; 16];
+        for i in 0..16 {
+            out[i] = m[i].as_f64().unwrap_or(0.0);
         }
+        return out;
+    }
     let t = nodo
         .get("translation")
         .and_then(|v| v.as_array())
@@ -909,53 +910,53 @@ pub fn triangulos_de_glb(bytes: &[u8]) -> Result<Vec<TrianguloLeido>, String> {
                 .and_then(|m| m.get(malla as usize))
                 .and_then(|m| m.get("primitives"))
                 .and_then(|p| p.as_array())
-            {
-                for prim in prims {
-                    let atributos = prim.get("attributes");
-                    let Some(posiciones) = atributos
-                        .and_then(|a| a.get("POSITION"))
-                        .and_then(|v| v.as_u64())
-                        .and_then(|i| leer_vec3(&doc, bin, i as usize))
-                    else {
-                        continue;
-                    };
-                    let colores = atributos
-                        .and_then(|a| a.get("COLOR_0"))
-                        .and_then(|v| v.as_u64())
-                        .and_then(|i| leer_colores(&doc, bin, i as usize));
-                    let indices = prim
-                        .get("indices")
-                        .and_then(|v| v.as_u64())
-                        .and_then(|i| leer_escalares(&doc, bin, i as usize));
+        {
+            for prim in prims {
+                let atributos = prim.get("attributes");
+                let Some(posiciones) = atributos
+                    .and_then(|a| a.get("POSITION"))
+                    .and_then(|v| v.as_u64())
+                    .and_then(|i| leer_vec3(&doc, bin, i as usize))
+                else {
+                    continue;
+                };
+                let colores = atributos
+                    .and_then(|a| a.get("COLOR_0"))
+                    .and_then(|v| v.as_u64())
+                    .and_then(|i| leer_colores(&doc, bin, i as usize));
+                let indices = prim
+                    .get("indices")
+                    .and_then(|v| v.as_u64())
+                    .and_then(|i| leer_escalares(&doc, bin, i as usize));
 
-                    let mut mundo_pos: Vec<[f64; 3]> = posiciones
-                        .iter()
-                        .map(|p| de_y_arriba(transformar(&mundo, *p)))
-                        .collect();
-                    // Si no hay índices, el orden es el de los vértices.
-                    let lista: Vec<u32> = match indices {
-                        Some(ix) => ix,
-                        None => (0..mundo_pos.len() as u32).collect(),
-                    };
-                    for trozo in lista.chunks(3) {
-                        if trozo.len() < 3 {
-                            break;
-                        }
-                        let (a, b, c) = (trozo[0] as usize, trozo[1] as usize, trozo[2] as usize);
-                        if a >= mundo_pos.len() || b >= mundo_pos.len() || c >= mundo_pos.len() {
-                            continue;
-                        }
-                        let color = colores
-                            .as_ref()
-                            .and_then(|cs| cs.get(a).or_else(|| cs.first()).copied());
-                        out.push(TrianguloLeido {
-                            pos: [mundo_pos[a], mundo_pos[b], mundo_pos[c]],
-                            color,
-                        });
+                let mut mundo_pos: Vec<[f64; 3]> = posiciones
+                    .iter()
+                    .map(|p| de_y_arriba(transformar(&mundo, *p)))
+                    .collect();
+                // Si no hay índices, el orden es el de los vértices.
+                let lista: Vec<u32> = match indices {
+                    Some(ix) => ix,
+                    None => (0..mundo_pos.len() as u32).collect(),
+                };
+                for trozo in lista.chunks(3) {
+                    if trozo.len() < 3 {
+                        break;
                     }
-                    mundo_pos.clear();
+                    let (a, b, c) = (trozo[0] as usize, trozo[1] as usize, trozo[2] as usize);
+                    if a >= mundo_pos.len() || b >= mundo_pos.len() || c >= mundo_pos.len() {
+                        continue;
+                    }
+                    let color = colores
+                        .as_ref()
+                        .and_then(|cs| cs.get(a).or_else(|| cs.first()).copied());
+                    out.push(TrianguloLeido {
+                        pos: [mundo_pos[a], mundo_pos[b], mundo_pos[c]],
+                        color,
+                    });
                 }
+                mundo_pos.clear();
             }
+        }
         if let Some(hijos) = nodo.get("children").and_then(|c| c.as_array()) {
             for h in hijos.iter().filter_map(|v| v.as_u64()) {
                 pendientes.push((h as usize, mundo));
@@ -1051,7 +1052,11 @@ pub fn normalizar_glb(
         let color = t.color.unwrap_or(color_defecto);
         let destino = por_familia.entry("modelo".to_string()).or_default();
         for pos in p {
-            destino.push(crate::gltf::Vertice { pos, normal: n, color });
+            destino.push(crate::gltf::Vertice {
+                pos,
+                normal: n,
+                color,
+            });
         }
     }
     let glb = crate::gltf::glb_desde_vertices(&por_familia);

@@ -24,9 +24,10 @@ pub fn save(p: &Project, path: &Path) -> Result<(), String> {
     // Se rechaza antes de tocar el disco.
     validar_finito(p)?;
     if let Some(dir) = path.parent()
-        && !dir.as_os_str().is_empty() {
-            std::fs::create_dir_all(dir).map_err(|e| format!("E_IO_PERMISSION: {e}"))?;
-        }
+        && !dir.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(dir).map_err(|e| format!("E_IO_PERMISSION: {e}"))?;
+    }
     let json = serde_json::to_string_pretty(p).map_err(|e| format!("E_FMT_PARSE: {e}"))?;
     let tmp = path.with_extension("redes.tmp");
     {

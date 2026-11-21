@@ -219,27 +219,26 @@ pub fn triangulos_exportables(p: &Project, con_terreno: bool) -> Malla {
         }
     }
 
-    if con_terreno
-        && let Some(t) = &p.terrain {
-            let (zmin, zmax) = t.z_range();
-            let zspan = (zmax - zmin).max(1e-6);
-            for tri in &t.tris {
-                let pts = [
-                    &t.points[tri[0] as usize],
-                    &t.points[tri[1] as usize],
-                    &t.points[tri[2] as usize],
-                ];
-                let pos = pts.map(|q| a_local(P3::new(q.e, q.n, q.z)));
-                let zc = (pts[0].z + pts[1].z + pts[2].z) / 3.0;
-                let t01 = ((zc - zmin) / zspan).clamp(0.0, 1.0) as f32;
-                out.tris.push(Triangulo {
-                    pos,
-                    normal: normal_de(pos),
-                    color: [0.26 + 0.34 * t01, 0.40 + 0.16 * t01, 0.26 + 0.06 * t01],
-                    familia: familia("terreno"),
-                });
-            }
+    if con_terreno && let Some(t) = &p.terrain {
+        let (zmin, zmax) = t.z_range();
+        let zspan = (zmax - zmin).max(1e-6);
+        for tri in &t.tris {
+            let pts = [
+                &t.points[tri[0] as usize],
+                &t.points[tri[1] as usize],
+                &t.points[tri[2] as usize],
+            ];
+            let pos = pts.map(|q| a_local(P3::new(q.e, q.n, q.z)));
+            let zc = (pts[0].z + pts[1].z + pts[2].z) / 3.0;
+            let t01 = ((zc - zmin) / zspan).clamp(0.0, 1.0) as f32;
+            out.tris.push(Triangulo {
+                pos,
+                normal: normal_de(pos),
+                color: [0.26 + 0.34 * t01, 0.40 + 0.16 * t01, 0.26 + 0.06 * t01],
+                familia: familia("terreno"),
+            });
         }
+    }
     out
 }
 

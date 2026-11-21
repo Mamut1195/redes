@@ -418,3 +418,113 @@ mod tests {
         assert!(p.count() > 20);
     }
 }
+
+/// Catálogo **completo**: una muestra de cada familia del registro, en rejilla.
+///
+/// Es la garantía de cobertura: si una familia nueva no se puede dibujar, esta escena (y la prueba
+/// que la acompaña) lo delata. Las familias lineales se colocan como arco entre dos nodos.
+pub fn catalogo_completo() -> Project {
+    use crate::families::{GeomKind, families};
+
+    let familias = families();
+    let columnas = 6usize;
+    let paso = 9.0;
+    let filas = familias.len().div_ceil(columnas);
+    let ancho = columnas as f64 * paso + 4.0;
+    let alto = filas as f64 * paso + 4.0;
+
+    let mut p = Project::new("Catálogo completo", "EPSG:32717");
+    p.origin = P2::new(ORIGEN_E, ORIGEN_N);
+    p.estado = EstadoProyecto::EnRevision;
+    p.fuentes = vec![Fuente {
+        app: "Catálogo Redes".into(),
+        archivo: "catalogo-completo.json".into(),
+        formato: "plan".into(),
+        importado_en: "2026-11-21".into(),
+    }];
+
+    // Plataforma plana del tamaño de la rejilla.
+    let mut pts = Vec::new();
+    for ix in 0..=6 {
+        for iy in 0..=6 {
+            let x = ancho * ix as f64 / 6.0;
+            let y = alto * iy as f64 / 6.0;
+            pts.push(SurfacePoint::new(
+                ORIGEN_E + x,
+                ORIGEN_N + y,
+                2500.0 + 0.01 * x,
+            ));
+        }
+    }
+    p.terrain = Some(Terrain::build("catalogo-completo", 32717, pts));
+
+    let mut previo: Option<(ElementId, P3)> = None;
+    for (i, f) in familias.iter().enumerate() {
+        let col = i % columnas;
+        let fila = i / columnas;
+        let x = 2.0 + col as f64 * paso;
+        let y = 2.0 + fila as f64 * paso;
+        let z = 2500.0 + 0.01 * x;
+        let ty = f
+            .types
+            .first()
+            .map(|t| t.key.to_string())
+            .unwrap_or_default();
+        if ty.is_empty() {
+            continue;
+        }
+
+        let nodo = Node {
+            id: ElementId::new(0, 0),
+            family: f.key.to_string(),
+            ty: ty.clone(),
+            // Código explícito: dos familias pueden compartir prefijo y `next_code` colisionaría.
+            code: format!("{}-{:03}", f.code_prefix, i + 1),
+            pos: P2::new(ORIGEN_E + x, ORIGEN_N + y),
+            z_terrain: z,
+            z_rim: z,
+            z_invert: z - 1.5,
+            attrs: BTreeMap::new(),
+            datos: BTreeMap::new(),
+            estado: EstadoObjeto::Pendiente,
+            nota: None,
+            deleted: false,
+        };
+        let id = match p.add_node(nodo) {
+            Ok(id) => id,
+            Err(_) => continue,
+        };
+
+        // Familias lineales: un arco corto que sale del nodo, para que se dibuje el trazado.
+        if f.geom == GeomKind::Polyline
+            && let Some((prev_id, prev_pos)) = previo
+        {
+            let arco = Link {
+                id: ElementId::new(0, 0),
+                family: f.key.to_string(),
+                ty,
+                code: String::new(),
+                from: prev_id,
+                to: id,
+                path: vec![
+                    prev_pos,
+                    P3::new(
+                        (prev_pos.x + ORIGEN_E + x) * 0.5,
+                        (prev_pos.y + ORIGEN_N + y) * 0.5,
+                        z - 1.5,
+                    ),
+                    P3::new(ORIGEN_E + x, ORIGEN_N + y, z - 1.5),
+                ],
+                d_mm: 200,
+                attrs: BTreeMap::new(),
+                datos: BTreeMap::new(),
+                estado: EstadoObjeto::Pendiente,
+                nota: None,
+                deleted: false,
+            };
+            let _ = p.add_link(arco);
+        }
+        previo = Some((id, P3::new(ORIGEN_E + x, ORIGEN_N + y, z - 1.5)));
+    }
+    p
+}

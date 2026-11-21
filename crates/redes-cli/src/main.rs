@@ -122,6 +122,13 @@ enum ProyectoCmd {
         #[arg(long)]
         salida: Option<PathBuf>,
     },
+    /// Catálogo completo: una muestra de **todas** las familias del registro, en rejilla.
+    ///
+    /// Sirve como prueba de cobertura: si una familia no dibuja, se ve aquí.
+    CatalogoTotal {
+        #[arg(long)]
+        salida: Option<PathBuf>,
+    },
     /// Catálogo de piezas: una muestra de cada familia para ver el detalle de cerca.
     Catalogo {
         #[arg(long)]
@@ -297,10 +304,9 @@ fn run(cli: Cli, t0: Instant) -> i32 {
                 let path = salida
                     .clone()
                     .unwrap_or_else(|| PathBuf::from(format!("{}.redes", slug(nombre))));
-                if !dry
-                    && let Err(e) = redes_core::project_io::save(&p, &path) {
-                        return emit(io_error("proyecto.nuevo", &e), pretty, quiet);
-                    }
+                if !dry && let Err(e) = redes_core::project_io::save(&p, &path) {
+                    return emit(io_error("proyecto.nuevo", &e), pretty, quiet);
+                }
                 let env = Envelope::ok("proyecto.nuevo")
                     .with_project(&p, &path.display().to_string())
                     .with_data(json!({ "nombre": p.name, "crs": p.crs, "archivo": path.display().to_string() }))
@@ -310,11 +316,24 @@ fn run(cli: Cli, t0: Instant) -> i32 {
             }
             ProyectoCmd::Demo { salida }
             | ProyectoCmd::Ciudad { salida }
+            | ProyectoCmd::CatalogoTotal { salida }
             | ProyectoCmd::Catalogo { salida } => {
+                let nombre = match &cmd {
+                    ProyectoCmd::Ciudad { .. } => "proyecto.ciudad",
+                    ProyectoCmd::CatalogoTotal { .. } => "proyecto.catalogo_total",
+                    ProyectoCmd::Catalogo { .. } => "proyecto.catalogo",
+                    _ => "proyecto.demo",
+                };
                 let es_ciudad = matches!(cmd, ProyectoCmd::Ciudad { .. });
-                let es_catalogo = matches!(cmd, ProyectoCmd::Catalogo { .. });
+                let es_catalogo = matches!(
+                    cmd,
+                    ProyectoCmd::Catalogo { .. } | ProyectoCmd::CatalogoTotal { .. }
+                );
+                let total = matches!(cmd, ProyectoCmd::CatalogoTotal { .. });
                 let p = if es_ciudad {
                     redes_core::demo_city::ciudad()
+                } else if total {
+                    redes_core::demo_catalog::catalogo_completo()
                 } else if es_catalogo {
                     redes_core::demo_catalog::catalogo()
                 } else {
@@ -322,18 +341,19 @@ fn run(cli: Cli, t0: Instant) -> i32 {
                 };
                 let por_defecto = if es_ciudad {
                     "ciudad-san-bartolo.redes"
+                } else if total {
+                    "catalogo-total.redes"
                 } else if es_catalogo {
                     "catalogo.redes"
                 } else {
                     "la-esperanza.redes"
                 };
                 let path = salida.clone().unwrap_or_else(|| PathBuf::from(por_defecto));
-                if !dry
-                    && let Err(e) = redes_core::project_io::save(&p, &path) {
-                        return emit(io_error("proyecto.demo", &e), pretty, quiet);
-                    }
+                if !dry && let Err(e) = redes_core::project_io::save(&p, &path) {
+                    return emit(io_error(nombre, &e), pretty, quiet);
+                }
                 let (pnd, ok, obs) = p.revision_counts();
-                let env = Envelope::ok("proyecto.demo")
+                let env = Envelope::ok(nombre)
                     .with_project(&p, &path.display().to_string())
                     .with_data(json!({
                         "nombre": p.name,
@@ -416,9 +436,10 @@ fn run(cli: Cli, t0: Instant) -> i32 {
             let scene = view::build(&p, &cam, Layers::default(), None);
             let text = svg::render(&scene, cam.viewport);
             if let Some(dir) = salida.parent()
-                && !dir.as_os_str().is_empty() {
-                    let _ = std::fs::create_dir_all(dir);
-                }
+                && !dir.as_os_str().is_empty()
+            {
+                let _ = std::fs::create_dir_all(dir);
+            }
             match std::fs::write(&salida, text) {
                 Ok(()) => Envelope::ok("vista")
                     .with_data(json!({
@@ -438,10 +459,14 @@ fn run(cli: Cli, t0: Instant) -> i32 {
     env.command = cmd_name;
     env = env.with_project(&p, &path.display().to_string());
 
-    if !dry && env.ok && writes && !destructive
-        && let Err(e) = redes_core::project_io::save(&p, &path) {
-            return emit(io_error(&env.command.clone(), &e), pretty, quiet);
-        }
+    if !dry
+        && env.ok
+        && writes
+        && !destructive
+        && let Err(e) = redes_core::project_io::save(&p, &path)
+    {
+        return emit(io_error(&env.command.clone(), &e), pretty, quiet);
+    }
     emit(env.within(elapsed(t0)), pretty, quiet)
 }
 
@@ -559,17 +584,15 @@ fn biblioteca(cmd: &BibliotecaCmd) -> Envelope {
             escala,
             carpeta,
             nombre,
-        } => {
-            biblioteca_importar(
-                glb,
-                familia,
-                subtipo.as_deref(),
-                *dn,
-                *escala,
-                carpeta.as_deref(),
-                nombre.as_deref(),
-            )
-        }
+        } => biblioteca_importar(
+            glb,
+            familia,
+            subtipo.as_deref(),
+            *dn,
+            *escala,
+            carpeta.as_deref(),
+            nombre.as_deref(),
+        ),
         BibliotecaCmd::Lista { carpeta } => {
             let dir = carpeta.clone().unwrap_or_else(|| PathBuf::from("."));
             let ruta = dir.join("biblioteca.json");
@@ -581,12 +604,8 @@ fn biblioteca(cmd: &BibliotecaCmd) -> Envelope {
                 Err(e) => io_error("biblioteca.lista", &e),
             }
         }
-        BibliotecaCmd::Revisar { glb, familia } => {
-            biblioteca_revisar(glb, familia.as_deref())
-        }
-        BibliotecaCmd::Cantidades { glb, densidad } => {
-            biblioteca_cantidades(glb, *densidad)
-        }
+        BibliotecaCmd::Revisar { glb, familia } => biblioteca_revisar(glb, familia.as_deref()),
+        BibliotecaCmd::Cantidades { glb, densidad } => biblioteca_cantidades(glb, *densidad),
     }
 }
 
@@ -726,6 +745,7 @@ fn command_id(c: &Cmd) -> &'static str {
             ProyectoCmd::Nuevo { .. } => "proyecto.nuevo",
             ProyectoCmd::Demo { .. } => "proyecto.demo",
             ProyectoCmd::Ciudad { .. } => "proyecto.ciudad",
+            ProyectoCmd::CatalogoTotal { .. } => "proyecto.catalogo_total",
             ProyectoCmd::Catalogo { .. } => "proyecto.catalogo",
             ProyectoCmd::Info => "proyecto.info",
             ProyectoCmd::Aprobar => "proyecto.aprobar",
@@ -784,9 +804,10 @@ fn esquema(filtro: Option<&str>) -> Envelope {
     let mut fams = Vec::new();
     for f in families::families() {
         if let Some(k) = filtro
-            && !f.key.contains(k) {
-                continue;
-            }
+            && !f.key.contains(k)
+        {
+            continue;
+        }
         let attrs: Vec<serde_json::Value> = f
             .attrs
             .iter()
@@ -978,13 +999,15 @@ fn objeto(p: &mut Project, cmd: ObjetoCmd, dry: bool) -> Envelope {
             let mut items = Vec::new();
             for n in p.nodes.iter().filter(|n| !n.deleted) {
                 if let Some(f) = &familia
-                    && !n.family.contains(f.as_str()) {
-                        continue;
-                    }
+                    && !n.family.contains(f.as_str())
+                {
+                    continue;
+                }
                 if let Some(e) = &filtro_estado
-                    && n.estado.key() != e {
-                        continue;
-                    }
+                    && n.estado.key() != e
+                {
+                    continue;
+                }
                 items.push(json!({
                     "codigo": n.code, "familia": n.family, "subtipo": n.ty,
                     "estado": n.estado.key(), "e": round(n.pos.x, 3), "n": round(n.pos.y, 3),
@@ -993,13 +1016,15 @@ fn objeto(p: &mut Project, cmd: ObjetoCmd, dry: bool) -> Envelope {
             }
             for l in p.links.iter().filter(|l| !l.deleted) {
                 if let Some(f) = &familia
-                    && !l.family.contains(f.as_str()) {
-                        continue;
-                    }
+                    && !l.family.contains(f.as_str())
+                {
+                    continue;
+                }
                 if let Some(e) = &filtro_estado
-                    && l.estado.key() != e {
-                        continue;
-                    }
+                    && l.estado.key() != e
+                {
+                    continue;
+                }
                 items.push(json!({
                     "codigo": l.code, "familia": l.family, "subtipo": l.ty,
                     "estado": l.estado.key(), "diametro_mm": l.d_mm, "nota": l.nota,

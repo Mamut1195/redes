@@ -146,13 +146,16 @@ impl Terrain {
                 self.points[tri[2] as usize],
             );
             if let Some((w0, w1, w2)) = barycentric(p, a.p2(), b.p2(), c.p2())
-                && w0 >= -1e-9 && w1 >= -1e-9 && w2 >= -1e-9 {
-                    let z = w0 * a.z + w1 * b.z + w2 * c.z;
-                    let depth = w0.min(w1).min(w2);
-                    if best.is_none_or(|(bd, _)| depth > bd) {
-                        best = Some((depth, z));
-                    }
+                && w0 >= -1e-9
+                && w1 >= -1e-9
+                && w2 >= -1e-9
+            {
+                let z = w0 * a.z + w1 * b.z + w2 * c.z;
+                let depth = w0.min(w1).min(w2);
+                if best.is_none_or(|(bd, _)| depth > bd) {
+                    best = Some((depth, z));
                 }
+            }
         }
         best.map(|(_, z)| z)
     }
