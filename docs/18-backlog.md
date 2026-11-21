@@ -34,7 +34,13 @@ se arrastre.
 
 ---
 
-## F7 — Datos y cantidades (medición)
+## F7 — Datos y cantidades (medición) — **cerrada**
+
+> Implementado el 21/11/2026 (commit `65db0fe`): `redes cantidades` con unidades por familia,
+> longitud por familia/DN/material, volumen y área medidos, peso por densidad, discrepancias
+> declarado/medido con tolerancia y export CSV (BOM y `;`, Excel en español). **Sin valoración**:
+> la app emite cantidades, no precios (F7-07 cerrado como «no»).
+
 
 Objetivo: que el modelo alimente el listado de cantidades con procedencia, y que un descuadre se
 vea.
