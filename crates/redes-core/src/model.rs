@@ -503,8 +503,17 @@ fn fnv1a(bytes: &[u8]) -> u32 {
     h
 }
 
-/// Usuario del sistema operativo, si está disponible (`USERNAME` en Windows, `USER` en Unix).
+/// Usuario del sistema, **solo si se pide** con `REDES_JOURNAL_USUARIO=1`.
+///
+/// Decisión del 2026-11-21: la revisión no identifica a nadie por defecto. El journal guarda la
+/// revisión, el comando y la fecha; el usuario es opcional y explícito.
 fn usuario_del_sistema() -> Option<String> {
+    let activo = std::env::var("REDES_JOURNAL_USUARIO")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    if !activo {
+        return None;
+    }
     std::env::var("USERNAME")
         .or_else(|_| std::env::var("USER"))
         .ok()
@@ -597,8 +606,8 @@ mod tests {
         p.commit("objeto.aprobar");
         let e = p.journal.last().expect("entrada");
         assert_eq!(e.command, "objeto.aprobar");
-        let usuario = e.usuario.clone().expect("usuario de la sesión");
-        assert!(!usuario.trim().is_empty());
+        // Sin `REDES_JOURNAL_USUARIO=1` no se identifica a nadie (decisión del producto).
+        assert!(e.usuario.is_none(), "no debe identificar por defecto");
         let cuando = e.cuando.clone().expect("fecha");
         assert_eq!(cuando.len(), 20, "formato UTC: {cuando}");
         assert!(cuando.ends_with('Z') && cuando.contains('T'), "{cuando}");

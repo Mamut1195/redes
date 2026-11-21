@@ -74,7 +74,7 @@ Objetivo: que lo que el CAD devuelve no pierda familia, código, atributos ni da
 |---|---|---|---|---|
 | F8-01 | **Arreglar el round-trip DXF** | exportar e importar conserva `family`, `ty`, `code`, `attrs`, `datos` | prueba: exportar 44 objetos, borrar el `.redes`, importar el DXF → 44 objetos con los mismos datos | 2 |
 | F8-02 | **Bloques con atributos** | cada familia como bloque con atributos (código, DN, cotas) para que el CAD los devuelva | un bloque editado en CAD vuelve con los atributos actualizados | 2 |
-| F8-03 | **Importar DWG** | conversión vía ODA File Converter (licencia) o servicio; decisión previa | un `.dwg` real se abre y conserva capas y bloques | 2 + licencia |
+| F8-03 | **Importar DWG** (cerrado como «no»: ver `22-decisiones.md`) | conversión vía ODA File Converter (licencia) o servicio; decisión previa | un `.dwg` real se abre y conserva capas y bloques | 2 + licencia |
 | F8-04 | **Fixture real** | archivo del cliente para calibrar capas y bloques | importa sin descartes y con informe de mapeo | 1 |
 | F8-05 | **GeoJSON/Shapefile con atributos** | exportar atributos y estilos | QGIS abre el archivo con la tabla completa | 1 |
 
