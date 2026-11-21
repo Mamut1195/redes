@@ -590,29 +590,12 @@ impl PathStroker {
         }
 
         let mut quad_points = QuadConstruct::default();
-        self.init_quad(
-            StrokeType::Outer,
-            NormalizedF32::ZERO,
-            NormalizedF32::ONE,
-            &mut quad_points,
-        );
+        self.init_quad(StrokeType::Outer, NormalizedF32::ZERO, NormalizedF32::ONE, &mut quad_points);
         self.conic_stroke(&conic, weight, &mut quad_points);
-        self.init_quad(
-            StrokeType::Inner,
-            NormalizedF32::ZERO,
-            NormalizedF32::ONE,
-            &mut quad_points,
-        );
+        self.init_quad(StrokeType::Inner, NormalizedF32::ZERO, NormalizedF32::ONE, &mut quad_points);
         self.conic_stroke(&conic, weight, &mut quad_points);
 
-        let ok = set_normal_unit_normal(
-            conic[1],
-            conic[2],
-            self.res_scale,
-            self.radius,
-            &mut normal_bc,
-            &mut unit_bc,
-        );
+        let ok = set_normal_unit_normal(conic[1], conic[2], self.res_scale, self.radius, &mut normal_bc, &mut unit_bc);
         if !ok {
             normal_bc = normal_ab;
             unit_bc = unit_ab;
@@ -621,25 +604,11 @@ impl PathStroker {
         self.post_join_to(p2, normal_bc, unit_bc);
     }
 
-    fn conic_stroke(
-        &mut self,
-        conic: &[Point; 3],
-        weight: f32,
-        quad_points: &mut QuadConstruct,
-    ) -> bool {
+    fn conic_stroke(&mut self, conic: &[Point; 3], weight: f32, quad_points: &mut QuadConstruct) -> bool {
         let result_type = self.compare_quad_conic(conic, weight, quad_points);
         if result_type == ResultType::Quad {
-            let path = if self.stroke_type == StrokeType::Outer {
-                &mut self.outer
-            } else {
-                &mut self.inner
-            };
-            path.quad_to(
-                quad_points.quad[1].x,
-                quad_points.quad[1].y,
-                quad_points.quad[2].x,
-                quad_points.quad[2].y,
-            );
+            let path = if self.stroke_type == StrokeType::Outer { &mut self.outer } else { &mut self.inner };
+            path.quad_to(quad_points.quad[1].x, quad_points.quad[1].y, quad_points.quad[2].x, quad_points.quad[2].y);
             return true;
         }
 
@@ -682,34 +651,15 @@ impl PathStroker {
         true
     }
 
-    fn compare_quad_conic(
-        &mut self,
-        conic: &[Point; 3],
-        weight: f32,
-        quad_points: &mut QuadConstruct,
-    ) -> ResultType {
+    fn compare_quad_conic(&mut self, conic: &[Point; 3], weight: f32, quad_points: &mut QuadConstruct) -> ResultType {
         if !quad_points.start_set {
             let mut start = Point::zero();
-            self.conic_perp_ray(
-                conic,
-                weight,
-                quad_points.start_t,
-                &mut start,
-                &mut quad_points.quad[0],
-                Some(&mut quad_points.tangent_start),
-            );
+            self.conic_perp_ray(conic, weight, quad_points.start_t, &mut start, &mut quad_points.quad[0], Some(&mut quad_points.tangent_start));
             quad_points.start_set = true;
         }
         if !quad_points.end_set {
             let mut end = Point::zero();
-            self.conic_perp_ray(
-                conic,
-                weight,
-                quad_points.end_t,
-                &mut end,
-                &mut quad_points.quad[2],
-                Some(&mut quad_points.tangent_end),
-            );
+            self.conic_perp_ray(conic, weight, quad_points.end_t, &mut end, &mut quad_points.quad[2], Some(&mut quad_points.tangent_end));
             quad_points.end_set = true;
         }
 
@@ -724,15 +674,7 @@ impl PathStroker {
         self.stroke_close_enough(&quad_points.quad.clone(), &[ray0, ray1], quad_points)
     }
 
-    fn conic_perp_ray(
-        &self,
-        conic: &[Point; 3],
-        weight: f32,
-        t: NormalizedF32,
-        tp: &mut Point,
-        on_p: &mut Point,
-        tangent: Option<&mut Point>,
-    ) {
+    fn conic_perp_ray(&self, conic: &[Point; 3], weight: f32, t: NormalizedF32, tp: &mut Point, on_p: &mut Point, tangent: Option<&mut Point>) {
         *tp = conic_eval(conic, weight, t.get());
         let mut dxy = conic_eval_tangent(conic, weight, t.get());
         if dxy.is_zero() {
@@ -2049,10 +1991,7 @@ fn conic_eval(conic: &[Point; 3], weight: f32, t: f32) -> Point {
     let (p0, p1, p2) = (conic[0], conic[1], conic[2]);
     let p1w = Point::from_xy(p1.x * weight, p1.y * weight);
     let a = Point::from_xy(p2.x - (p1w.x + p1w.x) + p0.x, p2.y - (p1w.y + p1w.y) + p0.y);
-    let b = Point::from_xy(
-        (p1w.x - p0.x) + (p1w.x - p0.x),
-        (p1w.y - p0.y) + (p1w.y - p0.y),
-    );
+    let b = Point::from_xy((p1w.x - p0.x) + (p1w.x - p0.x), (p1w.y - p0.y) + (p1w.y - p0.y));
     let db = (weight - 1.0) + (weight - 1.0);
     let da = 0.0 - db;
     let numer = Point::from_xy((a.x * t + b.x) * t + p0.x, (a.y * t + b.y) * t + p0.y);
