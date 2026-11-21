@@ -14,7 +14,12 @@ Lo que sigue se agrupa en **seis fases**. La ruta corta a valor para el usuario 
 
 ---
 
-## F6 — Modelos propios en el visor (apariencia)
+## F6 — Modelos propios en el visor — **F6-01, F6-02, F6-03, F6-04 y F6-07 hechos**
+
+> Un objeto con `modelo` se dibuja con su `.glb` en el pase 3D, con caché por pieza, política de
+> modelos pesados (aviso si no hay `--gpu3d`) y **foco sobre la caja del modelo** (`F6-07`).
+> Quedan F6-05 (proxy decimado), F6-06 (selector en el inspector) y F6-08 (anclas de conexión).
+
 
 Objetivo: que un modelo importado se vea en su pozo, válvula o planta, con su cota y su giro.
 
