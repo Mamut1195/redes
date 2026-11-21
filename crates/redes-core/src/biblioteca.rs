@@ -1571,7 +1571,7 @@ pub fn aplicar(
             pieza.familia
         ));
     }
-    let fuente = format!("modelo:{modelo}");
+    let _fuente = format!("modelo:{modelo}");
     let volumen = pieza.volumen_m3.unwrap_or(0.0);
     let area = pieza.area_m2.unwrap_or(0.0);
     let peso = volumen * densidad;
@@ -1698,7 +1698,7 @@ mod tests_aplicar {
 
     #[test]
     fn aplicar_a_un_objeto_es_lo_que_usa_el_inspector() {
-        let mut p = crate::demo_catalog::catalogo();
+        let p = crate::demo_catalog::catalogo();
         let bib = biblioteca_de_prueba();
         let pieza = &bib.piezas[0];
         let mut n = p.nodes[0].clone();

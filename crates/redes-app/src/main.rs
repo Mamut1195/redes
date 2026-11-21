@@ -434,10 +434,10 @@ impl State {
             self.opts.explosion = 0.0;
             self.aviso = Some("Explosión desactivada".into());
         } else {
-            if self.opts.foco.is_none() {
-                if let Some(code) = self.sel.clone() {
-                    self.opts.foco = self.project.node_by_code(&code).map(|n| n.id);
-                }
+            if self.opts.foco.is_none()
+                && let Some(code) = self.sel.clone()
+            {
+                self.opts.foco = self.project.node_by_code(&code).map(|n| n.id);
             }
             self.opts.explosion = 0.9;
             self.aviso = Some("Explosión activa: Shift + rueda la abre".into());
@@ -710,9 +710,9 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
             // Shift + rueda: mueve el plano de corte o abre la explosión.
             if e.mods.shift {
                 if let Some(x) = s.opts.corte_x {
-                    s.opts.corte_x = Some(x + (e.dy * 0.02) as f32);
+                    s.opts.corte_x = Some(x + (e.dy * 0.02));
                 } else if s.opts.explosion > 0.0 {
-                    s.opts.explosion = (s.opts.explosion + (e.dy * 0.004) as f32).clamp(0.0, 2.5);
+                    s.opts.explosion = (s.opts.explosion + (e.dy * 0.004)).clamp(0.0, 2.5);
                 } else {
                     s.cam.dolly(((e.dy * 0.0015).exp()) as f64);
                 }
