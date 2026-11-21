@@ -223,6 +223,7 @@ mod tests {
                 volumen_m3: Some(8.0),
                 area_m2: Some(24.0),
                 cerrada: Some(true),
+                anclas: Default::default(),
                 extras: Default::default(),
                 licencia: None,
                 autor: None,

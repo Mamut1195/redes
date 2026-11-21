@@ -1094,6 +1094,76 @@ fn normal_de_f32(tri: [[f32; 3]; 3]) -> [f32; 3] {
 }
 
 /// Abre un `.glb` y devuelve su JSON y su bloque binario.
+/// Puntos de conexión declarados como *empties* en el `.glb`.
+///
+/// Se reconoce un nodo sin malla cuyo nombre contiene `entrada`, `salida`, `cielo`, `rebose` o
+/// `desague` (sin distinguir mayúsculas). Devuelve la posición en el mismo espacio que los
+/// vértices normalizados: centrada en planta y con la base en z = 0.
+pub fn anclas_de_glb(bytes: &[u8]) -> Result<std::collections::BTreeMap<String, [f32; 3]>, String> {
+    let (doc, _) = abrir_glb(bytes)?;
+    let centro_base = centro_y_base(&doc, bytes);
+    Ok(anclas_desde_doc(&doc, centro_base))
+}
+
+/// Nombres que cuentan como punto de conexión.
+const NOMBRES_ANCLA: &[&str] = &["entrada", "salida", "cielo", "rebose", "desague", "desagüe"];
+
+fn anclas_desde_doc(
+    doc: &Value,
+    (centro, base): ([f64; 3], f64),
+) -> std::collections::BTreeMap<String, [f32; 3]> {
+    let mut out = std::collections::BTreeMap::new();
+    let Some(nodos) = doc.get("nodes").and_then(|n| n.as_array()) else {
+        return out;
+    };
+    for n in nodos {
+        if n.get("mesh").is_some() {
+            continue;
+        }
+        let nombre = n.get("name").and_then(|x| x.as_str()).unwrap_or("");
+        let clave = NOMBRES_ANCLA
+            .iter()
+            .find(|k| nombre.to_lowercase().contains(*k));
+        let Some(clave) = clave else { continue };
+        let tr = n
+            .get("translation")
+            .and_then(|v| v.as_array())
+            .map(|a| {
+                [
+                    a.first().and_then(|x| x.as_f64()).unwrap_or(0.0),
+                    a.get(1).and_then(|x| x.as_f64()).unwrap_or(0.0),
+                    a.get(2).and_then(|x| x.as_f64()).unwrap_or(0.0),
+                ]
+            })
+            .unwrap_or([0.0, 0.0, 0.0]);
+        // glTF es Y-arriba: (x, y, z) -> mundo (x, -z, y), y luego se resta centro y base.
+        out.insert(
+            (*clave).to_string(),
+            [
+                (tr[0] - centro[0]) as f32,
+                (-(tr[2] - base)) as f32,
+                (tr[1] - centro[1]) as f32,
+            ],
+        );
+    }
+    out
+}
+
+/// Centro en planta y base en z del modelo, para normalizar las anclas igual que los vértices.
+fn centro_y_base(_doc: &Value, bytes: &[u8]) -> ([f64; 3], f64) {
+    if let Ok(tris) = triangulos_de_glb(bytes) {
+        let mut bb = Bbox3::vacia();
+        for t in &tris {
+            for p in t.pos {
+                bb.add(p);
+            }
+        }
+        let c = bb.centro();
+        return ([c[0], c[1], 0.0], bb.min[2]);
+    }
+    ([0.0, 0.0, 0.0], 0.0)
+}
+
 fn abrir_glb(bytes: &[u8]) -> Result<(Value, &[u8]), String> {
     if bytes.len() < 20 {
         return Err("E_GLB_CORTO: el archivo no tiene cabecera glTF".into());
@@ -1155,6 +1225,12 @@ pub struct Entrada {
     /// La malla cierra (sin aristas de un solo triángulo).
     #[serde(default)]
     pub cerrada: Option<bool>,
+    /// Puntos de conexión que el modelo declara con empties (`entrada`, `salida`, `cielo`…).
+    ///
+    /// Ya normalizados como los vértices: centrados en planta y con la base en z = 0, de modo que
+    /// se colocan con la misma transformación que la malla.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub anclas: std::collections::BTreeMap<String, [f32; 3]>,
     /// Datos maestros declarados en Blender (`extras` de glTF).
     #[serde(default)]
     pub extras: std::collections::BTreeMap<String, String>,
@@ -1330,6 +1406,7 @@ mod tests {
             area_m2: Some(1.2),
             cerrada: Some(true),
             extras: Default::default(),
+            anclas: Default::default(),
             licencia: None,
             autor: None,
         });
@@ -1541,6 +1618,7 @@ mod tests_aplicar {
                 volumen_m3: Some(2.0),
                 area_m2: Some(9.0),
                 cerrada: Some(true),
+                anclas: Default::default(),
                 extras: Default::default(),
                 licencia: None,
                 autor: None,
@@ -1583,6 +1661,39 @@ mod tests_aplicar {
         assert!(d.fuente.starts_with("modelo:"));
         assert!((d.valor - 2.0).abs() < 1e-9);
         assert!(con_modelo.datos.contains_key("peso_t"));
+    }
+
+    #[test]
+    fn las_anclas_se_leen_de_los_empties_normalizadas() {
+        // glTF de juguete: un nodo con malla (el cuerpo) y dos empties de conexión.
+        let doc = serde_json::json!({
+            "asset": {"version": "2.0"},
+            "nodes": [
+                {"name": "cuerpo", "mesh": 0},
+                {"name": "entrada", "translation": [0.5, 1.0, 0.0]},
+                {"name": "SALIDA", "translation": [0.5, 2.0, 1.0]},
+                {"name": "otra_cosa", "translation": [9.0, 9.0, 9.0]}
+            ]
+        });
+        // Centro (0.5, 0.5) y base 0, como dejaría la normalización de un cubo de 1 m.
+        let anclas = anclas_desde_doc(&doc, ([0.5, 0.5, 0.0], 0.0));
+        assert_eq!(anclas.len(), 2, "solo los nombres conocidos: {anclas:?}");
+        let entrada = anclas.get("entrada").expect("entrada");
+        // glTF (x, y, z) -> mundo (x - cx, -(z - base), y - cy)
+        assert!((entrada[0] - 0.0).abs() < 1e-6, "{entrada:?}");
+        assert!((entrada[1] - 0.0).abs() < 1e-6, "{entrada:?}");
+        assert!((entrada[2] - 0.5).abs() < 1e-6, "{entrada:?}");
+        let salida = anclas.get("salida").expect("salida");
+        assert!((salida[1] + 1.0).abs() < 1e-6, "{salida:?}");
+        assert!((salida[2] - 1.5).abs() < 1e-6, "{salida:?}");
+    }
+
+    #[test]
+    fn un_glb_sin_empties_no_declara_anclas() {
+        let p = crate::demo_catalog::catalogo();
+        let glb = crate::gltf::exportar_glb(&p, crate::gltf::OpcionesGltf { con_terreno: false });
+        let anclas = anclas_de_glb(&glb).expect("lee");
+        assert!(anclas.is_empty(), "{anclas:?}");
     }
 
     #[test]

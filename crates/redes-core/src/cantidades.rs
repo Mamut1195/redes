@@ -304,6 +304,7 @@ mod tests {
                 area_m2: Some(9.0),
                 cerrada: Some(true),
                 extras: Default::default(),
+                anclas: Default::default(),
                 licencia: None,
                 autor: None,
             }],

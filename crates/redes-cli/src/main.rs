@@ -725,6 +725,7 @@ fn biblioteca_importar(
         area_m2: medidas.as_ref().map(|c| round(c.area_m2, 3)),
         cerrada: medidas.as_ref().map(|c| c.cerrada()),
         extras,
+        anclas: redes_core::biblioteca::anclas_de_glb(&bytes).unwrap_or_default(),
         licencia: licencia.map(|s| s.to_string()),
         autor: autor.map(|s| s.to_string()),
     };
@@ -889,6 +890,7 @@ fn biblioteca_revisar(glb: &PathBuf, familia: Option<&str>) -> Envelope {
                 "dimensiones_m": [round(dims[0], 3), round(dims[1], 3), round(dims[2], 3)],
                 "base_z": round(modelo.bbox.min[2], 3),
                 "giro_y_arriba": modelo.giro.is_some(),
+                "anclas": redes_core::biblioteca::anclas_de_glb(&bytes).unwrap_or_default(),
                 "errores": errores,
                 "avisos": avisos.iter().map(|a| json!({
                     "gravedad": match a.gravedad {
