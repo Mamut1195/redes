@@ -127,7 +127,7 @@ struct State {
 
 impl State {
     fn new() -> State {
-        let (project, path) = load_project();
+        let (project, path, error_carga) = load_project();
         let mut cam = Camera::default();
         // Coherente con `canvas_rect` inicial: si no, el primer frame (y cualquier `--snap`)
         // sale con el aspecto de la ventana y el modelo estirado.
@@ -155,8 +155,8 @@ impl State {
             drag_last: [0.0, 0.0],
             opts: Opciones::default(),
             historial: Vec::new(),
-            aviso: None,
             gpu3d: gpu3d::activo(),
+            aviso: error_carga,
             geom: Arc::new(Mutex::new(gpu3d::Geometria::default())),
             // Estimación para el primer frame (el layout aún no ha corrido): 1280×800 con los
             // paneles de 214 y 292 pt. `on_layout` la sustituye por el rectángulo real.
@@ -418,7 +418,7 @@ fn dist_seg(p: [f32; 2], a: [f32; 2], b: [f32; 2]) -> f32 {
     ((p[0] - q[0]).powi(2) + (p[1] - q[1]).powi(2)).sqrt()
 }
 
-fn load_project() -> (Project, Option<PathBuf>) {
+fn load_project() -> (Project, Option<PathBuf>, Option<String>) {
     // 1) Argumento propio: `--abrir <ruta>` (o una ruta `*.redes` suelta).
     let extra = rune::extra_args();
     let mut pedido: Option<PathBuf> = None;
@@ -436,19 +436,32 @@ fn load_project() -> (Project, Option<PathBuf>) {
         i += 1;
     }
 
-    // 2) La variable de entorno, y 3) el demo interno.
-    let candidatos: Vec<PathBuf> = pedido
-        .into_iter()
-        .chain(std::env::var("REDES_PROJECT").ok().map(PathBuf::from))
-        .collect();
+    let mut candidatos: Vec<PathBuf> = pedido.into_iter().collect();
+    if let Ok(env) = std::env::var("REDES_PROJECT") {
+        candidatos.push(PathBuf::from(env));
+    }
+    cargar_de(candidatos)
+}
 
+/// Abre el primer candidato que funcione.
+///
+/// Si el usuario pidió un archivo y falla, **no** se cae al demo: se devuelve un proyecto vacío
+/// con el motivo, para que la barra de estado lo muestre. Antes la app mostraba el proyecto de
+/// demostración sin avisar y el usuario creía haber abierto el suyo.
+fn cargar_de(candidatos: Vec<PathBuf>) -> (Project, Option<PathBuf>, Option<String>) {
+    let pidieron_algo = !candidatos.is_empty();
+    let mut ultimo: Option<String> = None;
     for ruta in candidatos {
         match redes_core::project_io::load(&ruta) {
-            Ok(p) => return (p, Some(ruta)),
-            Err(e) => eprintln!("redes: no se pudo abrir {}: {e}", ruta.display()),
+            Ok(p) => return (p, Some(ruta), None),
+            Err(e) => ultimo = Some(format!("No se pudo abrir {}: {e}", ruta.display())),
         }
     }
-    (redes_core::demo::project(), None)
+    if pidieron_algo {
+        let vacio = Project::new("Sin proyecto", "EPSG:32717");
+        return (vacio, None, ultimo);
+    }
+    (redes_core::demo::project(), None, None)
 }
 
 fn color(c: [f32; 4]) -> Color {
@@ -1576,6 +1589,24 @@ mod tests {
         assert!(rt.state.opts.corte_x.is_none());
         assert!(rt.state.opts.foco.is_none());
         assert!(rt.state.cam.distance > 20.0, "vuelve al encuadre general");
+    }
+
+    /// Abrir un archivo que no existe no debe caer en silencio al proyecto de demostración.
+    #[test]
+    fn abrir_un_archivo_inexistente_no_cae_al_demo() {
+        let (p, ruta, error) = cargar_de(vec![PathBuf::from("no-existe-de-verdad.redes")]);
+        assert!(ruta.is_none());
+        assert_eq!(p.count(), 0, "no debe cargar el demo");
+        let msg = error.expect("debe explicar el fallo");
+        assert!(msg.contains("no-existe-de-verdad.redes"), "{msg}");
+    }
+
+    /// Sin candidatos sí se carga el demo (primer arranque sin proyecto).
+    #[test]
+    fn sin_candidatos_carga_el_demo() {
+        let (p, ruta, error) = cargar_de(Vec::new());
+        assert!(ruta.is_none() && error.is_none());
+        assert!(p.count() > 0, "el demo debe tener objetos");
     }
 
     /// Sin seleccion no hay botones de revision.
