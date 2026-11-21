@@ -28,6 +28,42 @@ redes objeto lista                    # comprobar que están todos
   Esos números **vienen de la app de origen** y se copian como `datos`.
 - Para editar el diseño. Se corrige en la app de origen y se reimporta.
 
+## Qué formato entra por script y cuál por la CLI
+
+No todo pasa por el script: DXF, GeoJSON y terreno los lee la propia CLI, que entiende el formato
+mejor que cualquier conversión intermedia. Usa la vía más corta.
+
+| Lo que llega | Vía | Comando |
+|---|---|---|
+| SWMM o EPANET (`.inp`) | **script** `inp_to_plan.py` | `python scripts/inp_to_plan.py red.inp --tipo swmm --salida plan.json` y luego `redes importar plan --archivo plan.json` |
+| Hoja de cálculo con pozos/tramos (CSV/TSV) | **script** `plan_desde_tabla.py` | `python scripts/plan_desde_tabla.py pozos.csv --tipo pozos --salida plan.json` |
+| DXF de Civil 3D u otro CAD | **CLI directa** | `redes importar dxf --archivo red.dxf` |
+| SIG (GeoJSON) con propiedades | **CLI directa** | `redes importar geojson --archivo red.geojson` |
+| Nube de puntos del terreno (CSV E,N,Z) | **CLI directa** | `redes importar terreno --archivo terreno.csv` |
+
+Reglas para elegir:
+
+1. Si el archivo ya trae familia, código y atributos, pásalo por la **CLI**: no hay nada que mapear
+   y una conversión intermedia solo puede perder datos.
+2. Si el archivo es de una app que no conoce a Redes (SWMM, EPANET, una hoja de cálculo), usa el
+   **script**: ahí es donde se decide qué familia y qué subtipo le toca a cada objeto.
+3. Si el DXF viene de otra aplicación y las capas no se llaman como las de Redes, primero prueba la
+   CLI y mira `descartados`; si el mapeo no sirve, escribe un `plan.json` a mano con
+   `plan_desde_tabla.py` como plantilla.
+
+## Tabla de decisión de familia y subtipo
+
+El registro completo (46 familias, 315 subtipos) se consulta con `redes capacidades`. Para no
+inventar claves:
+
+```powershell
+redes capacidades > capacidades.json      # todas las familias, subtipos y atributos
+```
+
+Si una clave del origen no existe, la importación la traduce si está entre las retiradas (por
+ejemplo `agua.captacion:toma_rio` → `agua.bocatoma:barraje_fijo`) y lo informa en `renombrados`.
+Lo que no se puede traducir se descarta y aparece en `descartados`: nunca se pierde en silencio.
+
 ## El contrato `redes.plan/1`
 
 ```json

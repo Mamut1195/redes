@@ -210,6 +210,15 @@ impl Link {
 pub struct JournalEntry {
     pub revision: u64,
     pub command: String,
+    /// Usuario del sistema que hizo el cambio, si se pudo leer.
+    ///
+    /// No es una firma criptográfica: identifica la sesión, no prueba quién estuvo delante de la
+    /// pantalla. Sirve para saber a quién preguntar y para que una aprobación no quede anónima.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usuario: Option<String>,
+    /// Fecha del cambio, en UTC (`YYYY-MM-DDTHH:MM:SSZ`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cuando: Option<String>,
 }
 
 /// El documento: la única fuente de verdad de lo que se ve.
@@ -387,6 +396,8 @@ impl Project {
         self.journal.push(JournalEntry {
             revision: self.revision,
             command: command.to_string(),
+            usuario: usuario_del_sistema(),
+            cuando: ahora_utc(),
         });
     }
 
@@ -492,6 +503,60 @@ fn fnv1a(bytes: &[u8]) -> u32 {
     h
 }
 
+/// Usuario del sistema operativo, si está disponible (`USERNAME` en Windows, `USER` en Unix).
+fn usuario_del_sistema() -> Option<String> {
+    std::env::var("USERNAME")
+        .or_else(|_| std::env::var("USER"))
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+}
+
+/// Fecha y hora en UTC, sin dependencias: `YYYY-MM-DDTHH:MM:SSZ`.
+fn ahora_utc() -> Option<String> {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_secs();
+    let (dias, resto) = (secs / 86_400, secs % 86_400);
+    let (h, m, s) = (resto / 3600, (resto % 3600) / 60, resto % 60);
+    let mut year = 1970i64;
+    let mut dias = dias as i64;
+    loop {
+        let bisiesto = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+        let largo = if bisiesto { 366 } else { 365 };
+        if dias < largo {
+            break;
+        }
+        dias -= largo;
+        year += 1;
+    }
+    let bisiesto = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+    let meses = [
+        31,
+        if bisiesto { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
+    let mut mes = 0usize;
+    while mes < 12 && dias >= meses[mes] {
+        dias -= meses[mes];
+        mes += 1;
+    }
+    Some(format!(
+        "{year:04}-{:02}-{:02}T{h:02}:{m:02}:{s:02}Z",
+        mes + 1,
+        dias + 1
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -523,6 +588,20 @@ mod tests {
         let b = pozo(&mut p, 10.0, 0.0, 99.0);
         assert_eq!(p.node(a).unwrap().code, "PZ-001");
         assert_eq!(p.node(b).unwrap().code, "PZ-002");
+    }
+
+    /// Las aprobaciones no quedan anónimas: el journal anota usuario y fecha (F11-02 parcial).
+    #[test]
+    fn el_journal_registra_usuario_y_fecha() {
+        let mut p = Project::new("journal", "EPSG:32717");
+        p.commit("objeto.aprobar");
+        let e = p.journal.last().expect("entrada");
+        assert_eq!(e.command, "objeto.aprobar");
+        let usuario = e.usuario.clone().expect("usuario de la sesión");
+        assert!(!usuario.trim().is_empty());
+        let cuando = e.cuando.clone().expect("fecha");
+        assert_eq!(cuando.len(), 20, "formato UTC: {cuando}");
+        assert!(cuando.ends_with('Z') && cuando.contains('T'), "{cuando}");
     }
 
     #[test]
