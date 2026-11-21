@@ -1733,3 +1733,121 @@ mod tests_aplicar {
         assert!(err.starts_with("E_ARG_INVALIDO"), "{err}");
     }
 }
+
+/// Mueve el extremo de cada arco que toca el objeto hasta el ancla del modelo (F6-08).
+///
+/// `entrada` se usa para los arcos que salen del nodo y `salida` para los que llegan; si el modelo
+/// solo declara una, se usa esa. Nunca mueve un extremo que esté lejos del nodo (más de 5 m):
+/// eso sería teleportar geometría de otro tramo.
+pub fn anclar_conexiones(
+    p: &mut crate::model::Project,
+    codigo: &str,
+    anclas: &std::collections::BTreeMap<String, [f32; 3]>,
+) -> usize {
+    if anclas.is_empty() {
+        return 0;
+    }
+    let Some(nodo) = p
+        .nodes
+        .iter()
+        .find(|n| n.code == codigo && !n.deleted)
+        .cloned()
+    else {
+        return 0;
+    };
+    let punto = |clave: &str| -> Option<[f64; 3]> {
+        let a = anclas.get(clave)?;
+        Some([
+            nodo.pos.x + a[0] as f64,
+            nodo.pos.y + a[1] as f64,
+            nodo.z_rim + a[2] as f64,
+        ])
+    };
+    let entrada = punto("entrada").or_else(|| punto("salida"));
+    let salida = punto("salida").or_else(|| punto("entrada"));
+
+    let mut movidos = 0usize;
+    for l in p.links.iter_mut().filter(|l| !l.deleted) {
+        if l.from == nodo.id
+            && let Some(destino) = entrada
+            && let Some(q) = l.path.first_mut()
+            && q.p2().dist(nodo.pos) < 5.0
+        {
+            *q = crate::geom::P3::new(destino[0], destino[1], destino[2]);
+            movidos += 1;
+        }
+        if l.to == nodo.id
+            && let Some(destino) = salida
+            && let Some(q) = l.path.last_mut()
+            && q.p2().dist(nodo.pos) < 5.0
+        {
+            *q = crate::geom::P3::new(destino[0], destino[1], destino[2]);
+            movidos += 1;
+        }
+    }
+    if movidos > 0 {
+        p.commit("biblioteca.anclar");
+    }
+    movidos
+}
+
+#[cfg(test)]
+mod tests_anclas {
+    use super::*;
+
+    #[test]
+    fn el_arco_entra_por_el_ancla_del_modelo() {
+        let mut p = crate::demo_catalog::catalogo();
+        // Un pozo del catálogo con su colector.
+        let pozo = p
+            .nodes
+            .iter()
+            .find(|n| n.family == "saneamiento.pozo")
+            .cloned()
+            .expect("pozo");
+        let antes: Vec<_> = p
+            .links
+            .iter()
+            .filter(|l| l.from == pozo.id || l.to == pozo.id)
+            .map(|l| {
+                (
+                    l.code.clone(),
+                    l.path.first().copied(),
+                    l.path.last().copied(),
+                )
+            })
+            .collect();
+        if antes.is_empty() {
+            return; // el catálogo no siempre tiene un arco en ese pozo
+        }
+        let anclas = std::collections::BTreeMap::from([
+            ("entrada".to_string(), [0.5f32, 0.0, 0.2]),
+            ("salida".to_string(), [-0.5, 0.0, 0.2]),
+        ]);
+        let n = anclar_conexiones(&mut p, &pozo.code, &anclas);
+        assert!(n > 0, "debe mover al menos un extremo");
+        // El extremo movido queda en la cota del ancla respecto de la tapa del pozo.
+        let z_esperada = pozo.z_rim + 0.2;
+        for l in p
+            .links
+            .iter()
+            .filter(|l| l.from == pozo.id || l.to == pozo.id)
+        {
+            let q = if l.from == pozo.id {
+                l.path.first()
+            } else {
+                l.path.last()
+            }
+            .unwrap();
+            assert!((q.z - z_esperada).abs() < 1e-6, "cota del ancla: {q:?}");
+        }
+    }
+
+    #[test]
+    fn sin_anclas_no_toca_nada() {
+        let mut p = crate::demo_catalog::catalogo();
+        let code = p.nodes[0].code.clone();
+        let vacio = std::collections::BTreeMap::new();
+        assert_eq!(anclar_conexiones(&mut p, &code, &vacio), 0);
+    }
+}

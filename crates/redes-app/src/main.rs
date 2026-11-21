@@ -396,12 +396,18 @@ impl State {
             };
             redes_core::biblioteca::aplicar_a(n, &pieza, 2.4)
         };
+        // Los arcos que tocan el objeto entran por el puerto del modelo, si lo declara.
+        let anclados = redes_core::biblioteca::anclar_conexiones(&mut nuevo, &code, &pieza.anclas);
         nuevo.commit("ui.modelo");
         self.recordar();
         self.project = std::sync::Arc::new(nuevo);
         self.dirty = true;
         self.aviso = Some(if conservados.is_empty() {
-            format!("Modelo {modelo} aplicado a {code}")
+            if anclados > 0 {
+                format!("Modelo {modelo} aplicado a {code}; {anclados} extremos anclados")
+            } else {
+                format!("Modelo {modelo} aplicado a {code}")
+            }
         } else {
             format!(
                 "Modelo {modelo} aplicado; {} datos conservados por otra fuente",

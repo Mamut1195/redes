@@ -544,6 +544,25 @@ fn run(cli: Cli, t0: Instant) -> i32 {
                             .to_string_lossy()
                             .to_string(),
                     );
+                    // Si el modelo declara anclas, los arcos entran por el puerto y no por el
+                    // centro del pozo (F6-08).
+                    let mut movidos = 0usize;
+                    if let Some(pieza) = bib.piezas.iter().find(|x| x.id == modelo) {
+                        let codigos: Vec<String> = p
+                            .nodes
+                            .iter()
+                            .filter(|n| !n.deleted && n.family == familia)
+                            .filter(|n| subtipo.as_deref().is_none_or(|s| n.ty == s))
+                            .map(|n| n.code.clone())
+                            .collect();
+                        for code in codigos {
+                            movidos += redes_core::biblioteca::anclar_conexiones(
+                                &mut p,
+                                &code,
+                                &pieza.anclas,
+                            );
+                        }
+                    }
                     if !dry && let Err(e) = redes_core::project_io::save(&p, &path) {
                         return emit(io_error("biblioteca.aplicar", &e), pretty, quiet);
                     }
