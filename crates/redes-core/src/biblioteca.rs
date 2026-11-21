@@ -1429,6 +1429,38 @@ mod tests {
     }
 }
 
+/// Aplica una pieza a **un** objeto: fija el modelo y escribe las medidas con su fuente.
+///
+/// Devuelve las claves que se dejaron intactas porque ya tenían otro origen. Lo usan tanto la CLI
+/// como el selector del inspector.
+pub fn aplicar_a(n: &mut crate::model::Node, pieza: &Entrada, densidad: f64) -> Vec<String> {
+    let fuente = format!("modelo:{}", pieza.id);
+    let volumen = pieza.volumen_m3.unwrap_or(0.0);
+    let area = pieza.area_m2.unwrap_or(0.0);
+    let peso = volumen * densidad;
+    n.modelo = Some(pieza.id.clone());
+    let mut conservados = Vec::new();
+    for (clave, valor, unidad) in [
+        ("volumen_m3", volumen, "m3"),
+        ("area_m2", area, "m2"),
+        ("peso_t", peso, "t"),
+    ] {
+        if n.datos.get(clave).is_some_and(|d| d.fuente != fuente) {
+            conservados.push(format!("{}:{clave}", n.code));
+            continue;
+        }
+        n.datos.insert(
+            clave.to_string(),
+            crate::model::Dato {
+                valor,
+                unidad: unidad.to_string(),
+                fuente: fuente.clone(),
+            },
+        );
+    }
+    conservados
+}
+
 /// Resultado de aplicar una pieza a un proyecto.
 #[derive(Clone, Debug, Default)]
 pub struct Aplicacion {
@@ -1482,26 +1514,7 @@ pub fn aplicar(
         {
             continue;
         }
-        n.modelo = Some(modelo.to_string());
-        for (clave, valor, unidad) in [
-            ("volumen_m3", volumen, "m3"),
-            ("area_m2", area, "m2"),
-            ("peso_t", peso, "t"),
-        ] {
-            let ocupado = n.datos.get(clave).is_some_and(|d| d.fuente != fuente);
-            if ocupado {
-                r.conservados.push(format!("{}:{clave}", n.code));
-                continue;
-            }
-            n.datos.insert(
-                clave.to_string(),
-                crate::model::Dato {
-                    valor,
-                    unidad: unidad.to_string(),
-                    fuente: fuente.clone(),
-                },
-            );
-        }
+        r.conservados.extend(aplicar_a(n, pieza, densidad));
         r.aplicados += 1;
     }
     p.commit("biblioteca.aplicar");
@@ -1570,6 +1583,35 @@ mod tests_aplicar {
         assert!(d.fuente.starts_with("modelo:"));
         assert!((d.valor - 2.0).abs() < 1e-9);
         assert!(con_modelo.datos.contains_key("peso_t"));
+    }
+
+    #[test]
+    fn aplicar_a_un_objeto_es_lo_que_usa_el_inspector() {
+        let mut p = crate::demo_catalog::catalogo();
+        let bib = biblioteca_de_prueba();
+        let pieza = &bib.piezas[0];
+        let mut n = p.nodes[0].clone();
+        let conservados = aplicar_a(&mut n, pieza, 2.4);
+        assert!(conservados.is_empty(), "{conservados:?}");
+        assert_eq!(n.modelo.as_deref(), Some("pozo-tipo"));
+        let v = n.datos.get("volumen_m3").expect("volumen");
+        assert!((v.valor - 2.0).abs() < 1e-9);
+        assert_eq!(v.fuente, "modelo:pozo-tipo");
+
+        // Un dato con otra fuente no se pisa y se informa.
+        let mut m = p.nodes[0].clone();
+        m.datos.insert(
+            "volumen_m3".to_string(),
+            crate::model::Dato {
+                valor: 9.0,
+                unidad: "m3".into(),
+                fuente: "Civil 3D".into(),
+            },
+        );
+        let conservados = aplicar_a(&mut m, pieza, 2.4);
+        assert_eq!(conservados.len(), 1);
+        assert!((m.datos["volumen_m3"].valor - 9.0).abs() < 1e-9);
+        assert_eq!(m.modelo.as_deref(), Some("pozo-tipo"));
     }
 
     #[test]

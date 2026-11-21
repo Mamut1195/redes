@@ -374,6 +374,43 @@ impl State {
         self.rebuild();
     }
 
+    /// Asigna un modelo de la biblioteca al objeto seleccionado y le pasa sus medidas.
+    fn aplicar_modelo(&mut self, modelo: &str) {
+        let Some((_, bib)) = self.bib.clone() else {
+            self.aviso = Some("El proyecto no tiene biblioteca de modelos".into());
+            return;
+        };
+        let Some(pieza) = bib.piezas.iter().find(|x| x.id == modelo).cloned() else {
+            return;
+        };
+        let Some(code) = self.sel.clone() else { return };
+        // Se copia el proyecto para no dejar el historial a medias si algo falla.
+        let mut nuevo = (*self.project).clone();
+        let conservados = {
+            let Some(n) = nuevo
+                .nodes
+                .iter_mut()
+                .find(|n| n.code == code && !n.deleted)
+            else {
+                return;
+            };
+            redes_core::biblioteca::aplicar_a(n, &pieza, 2.4)
+        };
+        nuevo.commit("ui.modelo");
+        self.recordar();
+        self.project = std::sync::Arc::new(nuevo);
+        self.dirty = true;
+        self.aviso = Some(if conservados.is_empty() {
+            format!("Modelo {modelo} aplicado a {code}")
+        } else {
+            format!(
+                "Modelo {modelo} aplicado; {} datos conservados por otra fuente",
+                conservados.len()
+            )
+        });
+        self.rebuild();
+    }
+
     /// Activa o desactiva los rayos X: lo enterrado se dibuja translúcido.
     fn alternar_rayos_x(&mut self) {
         self.opts.rayos_x = !self.opts.rayos_x;
@@ -898,6 +935,33 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
             right = right.child(kv("cota clave", format!("{:.3} m", n.z_invert)));
             right = right.child(kv("altura", format!("{:.2} m", n.altura())));
             right = right.child(kv("diámetro", format!("{:.2} m", n.diametro())));
+            // Modelos de la biblioteca para esta familia: se eligen aquí, sin tocar la CLI.
+            if let Some((_, bib)) = s.bib.clone() {
+                let candidatos: Vec<String> = bib
+                    .piezas
+                    .iter()
+                    .filter(|x| x.familia == n.family)
+                    .map(|x| x.id.clone())
+                    .collect();
+                if !candidatos.is_empty() {
+                    right = right.child(el().h(6.0));
+                    right = right.child(section("Modelos de la biblioteca"));
+                    for id in candidatos {
+                        let actual = n.modelo.as_deref() == Some(id.as_str());
+                        let elegido = id.clone();
+                        let etiqueta = if actual {
+                            format!("{id} *")
+                        } else {
+                            id.clone()
+                        };
+                        right = right.child(
+                            chip(&etiqueta, actual)
+                                .on_press(move |s: &mut State| s.aplicar_modelo(&elegido)),
+                        );
+                    }
+                }
+            }
+
             right = right.child(el().h(6.0));
             right = right.child(section("Parámetros (en vivo)"));
             right = right.child(
