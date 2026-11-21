@@ -3,7 +3,8 @@
 # Uso:  powershell -NoProfile -File scripts/mutar.ps1
 #       powershell -NoProfile -File scripts/mutar.ps1 -Solo etiquetas
 #
-# Requiere el árbol limpio: restaura cada mutación con `git checkout`.
+# Restaura siempre desde una copia de seguridad local (no depende de git), incluso si el script
+# falla a mitad: una mutación nunca debe quedarse en el árbol.
 # Sale con código 1 si alguna mutación **sobrevive** (la suite pasa con el código roto).
 
 param(
@@ -15,13 +16,6 @@ $ErrorActionPreference = "Continue"
 $raiz = Split-Path -Parent $PSScriptRoot
 Set-Location $raiz
 
-$estado = ((git status --porcelain) -join "").Trim()
-if ($estado -ne "") {
-    Write-Host "El arbol tiene cambios sin commitear; la mutacion necesita partir de un estado limpio." -ForegroundColor Red
-    exit 2
-}
-
-# Cada mutacion: archivo, patron (regex), reemplazo y prueba que DEBE fallar.
 $mutaciones = @(
     @{
         Nombre = "etiquetas"
@@ -57,24 +51,33 @@ foreach ($m in $mutaciones) {
     Write-Host ""
     Write-Host "== Mutacion: $($m.Nombre) - $($m.Que)" -ForegroundColor Cyan
 
-    $texto = Get-Content -Raw $m.Archivo
-    $mutado = [regex]::Replace($texto, $m.Patron, $m.Reemplazo, 1)
-    if ($mutado -eq $texto) {
+    $original = Get-Content -Raw $m.Archivo
+    $respaldo = "$($m.Archivo).mutacion.bak"
+    Set-Content -Path $respaldo -Value $original -NoNewline
+
+    $mutado = [regex]::Replace($original, $m.Patron, $m.Reemplazo, 1)
+    if ($mutado -eq $original) {
         Write-Host "   No se pudo aplicar (el patron ya no esta)." -ForegroundColor Yellow
+        Remove-Item $respaldo -Force -ErrorAction SilentlyContinue
         $sobrevivieron += "$($m.Nombre) (no aplicable)"
         continue
     }
 
-    Set-Content -Path $m.Archivo -Value $mutado -NoNewline
-    $salida = (& cargo test -p redes-core $m.Prueba 2>&1 | Out-String)
-    git checkout -- $m.Archivo | Out-Null
-
-    if ($salida -match "test result: ok") {
-        Write-Host "   SOBREVIVIO: la suite pasa con el codigo roto ($($m.Prueba))" -ForegroundColor Red
-        $sobrevivieron += $m.Nombre
+    try {
+        Set-Content -Path $m.Archivo -Value $mutado -NoNewline
+        $salida = (& cargo test -p redes-core $m.Prueba 2>&1 | Out-String)
+        if ($salida -match "test result: ok") {
+            Write-Host "   SOBREVIVIO: la suite pasa con el codigo roto ($($m.Prueba))" -ForegroundColor Red
+            $sobrevivieron += $m.Nombre
+        }
+        else {
+            Write-Host "   Detectada por $($m.Prueba)" -ForegroundColor Green
+        }
     }
-    else {
-        Write-Host "   Detectada por $($m.Prueba)" -ForegroundColor Green
+    finally {
+        # Siempre: si el árbol se queda mutado, el siguiente commit sería una bomba.
+        Copy-Item $respaldo $m.Archivo -Force
+        Remove-Item $respaldo -Force -ErrorAction SilentlyContinue
     }
 }
 

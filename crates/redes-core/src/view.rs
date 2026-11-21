@@ -707,7 +707,7 @@ pub fn build_opts(
                 ];
                 // El corte secciona también las tuberías.
                 let (trozos, arista) = match opts.corte_x {
-                    Some(_) => (vec![verts], None),
+                    Some(xc) => cortar_tri(verts, xc),
                     None => (vec![verts], None),
                 };
                 if let Some((ca, cb)) = arista {
@@ -923,7 +923,7 @@ pub fn build_opts(
             }
 
             // Etiqueta: solo cuando la pieza ya se distingue o está seleccionada.
-            if false {
+            if r_px > 9.0 || sel {
                 if let Some(c) = cam.project(top) {
                     etiquetas.push(Etiqueta {
                         pos: [c[0], c[1] - 10.0],
