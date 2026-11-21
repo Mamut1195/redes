@@ -20,8 +20,8 @@ $mutaciones = @(
     @{
         Nombre = "etiquetas"
         Archivo = "crates/redes-core/src/view.rs"
-        Patron = 'if r_px > 9\.0 \|\| sel \{'
-        Reemplazo = 'if false {'
+        Patron = 'if \(r_px > 9\.0 \|\| sel\)'
+        Reemplazo = 'if false'
         Prueba = "las_etiquetas_aparecen_al_acercarse"
         Que = "dejar de generar etiquetas"
     },
