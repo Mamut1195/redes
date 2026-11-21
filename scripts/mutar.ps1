@@ -34,6 +34,22 @@ $mutaciones = @(
         Que = "dejar de seccionar las tuberias en el corte"
     },
     @{
+        Nombre = "terreno-plano"
+        Archivo = "crates/redes-core/src/view.rs"
+        Patron = 'let depth = \(cam\.depth\(pa\) \+ cam\.depth\(pb\) \+ cam\.depth\(pc\)\) as f32 / 3\.0;'
+        Reemplazo = 'let depth = 0.0f32; let _ = (pa, pb, pc);'
+        Prueba = "el_terreno_queda_ordenado_de_lejos_a_cerca"
+        Que = "dejar el terreno sin orden de profundidad"
+    },
+    @{
+        Nombre = "base-previa"
+        Archivo = "crates/redes-core/src/biblioteca.rs"
+        Patron = 'base_previa: base,'
+        Reemplazo = 'base_previa: base + 1.0,'
+        Prueba = "normalizar_centra_y_apoya_la_base"
+        Que = "informar una base falsa al normalizar"
+    },
+    @{
         Nombre = "filtro-familias"
         Archivo = "crates/redes-core/src/view.rs"
         Patron = '(?s)if !def\.can\(caps::HYDRAULIC_NODE\).*?continue;\s*\}'

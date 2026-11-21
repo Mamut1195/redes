@@ -1283,7 +1283,28 @@ mod tests {
             "base en z=0: {:?}",
             despues.bbox.min
         );
-        assert!(info.base_previa.abs() > 0.001 || info.base_previa.abs() < 0.001);
+        // La normalización informa la base del modelo original (no un valor cualquiera): debe
+        // coincidir con el mínimo en z del glb de entrada.
+        assert!(
+            (info.base_previa as f64 - antes.bbox.min[2] as f64).abs() < 1e-4,
+            "base_previa {:?} vs min z original {:?}",
+            info.base_previa,
+            antes.bbox.min[2]
+        );
+        // Y es idempotente: normalizar lo ya normalizado no mueve nada.
+        let (otra, info2) =
+            normalizar_glb(&norm, 1.0, [0.6, 0.6, 0.6]).expect("normaliza otra vez");
+        let b2 = leer_glb(&otra).expect("legible").bbox;
+        assert!(info2.base_previa.abs() < 1e-4, "base ya en cero");
+        for i in 0..3 {
+            assert!(
+                (b2.min[i] - despues.bbox.min[i]).abs() < 1e-4
+                    && (b2.max[i] - despues.bbox.max[i]).abs() < 1e-4,
+                "eje {i}: {:?} vs {:?}",
+                b2,
+                despues.bbox
+            );
+        }
     }
 
     #[test]

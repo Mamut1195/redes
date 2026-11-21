@@ -1767,5 +1767,26 @@ mod tests {
             .collect();
         assert!(depths.len() >= terreno);
         assert!(depths.windows(2).all(|w| w[0] >= w[1] - 1e-3));
+        // Si la profundidad fuera constante (mutación que la suite no detectaba) esta resta da 0.
+        let (lejos, cerca) = (depths[0], *depths.last().unwrap());
+        assert!(
+            lejos - cerca > 1.0,
+            "el terreno debe abarcar profundidad real: {lejos} -> {cerca}"
+        );
+        // Y el orden tiene que depender de la cámara: mirando desde el otro lado cambia.
+        let mut al_revés = c;
+        al_revés.azimuth += 180.0;
+        let otro = build(&p, &al_revés, Layers::default(), None);
+        let primer_vertice = |escena: &Scene| -> Option<[f32; 2]> {
+            escena.prims.first().and_then(|x| match x {
+                Prim::Poly { pts, .. } => pts.first().copied(),
+                Prim::Line { .. } => None,
+            })
+        };
+        assert_ne!(
+            primer_vertice(&s),
+            primer_vertice(&otro),
+            "el orden del terreno no depende de la cámara"
+        );
     }
 }
