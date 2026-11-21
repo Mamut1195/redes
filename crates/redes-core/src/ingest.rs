@@ -27,7 +27,11 @@ pub struct ImportReport {
     pub nodos: usize,
     pub arcos: usize,
     pub puntos_terreno: usize,
+    /// Objetos descartados de verdad (no se pudieron importar).
     pub descartados: Vec<String>,
+    /// Objetos que entraron con otra clave porque la suya estaba retirada (docs/20 §4.2).
+    #[serde(default)]
+    pub renombrados: Vec<String>,
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -184,6 +188,13 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
                 nota: None,
                 deleted: false,
             };
+            // Clave retirada: se traduce a su destino y se anota (nunca en silencio).
+            if let Some((nf, nt)) = crate::families_extra::alias(&node.family, &node.ty) {
+                rep.renombrados
+                    .push(format!("{}:{} -> {nf}:{nt}", node.family, node.ty));
+                node.family = nf.to_string();
+                node.ty = nt.to_string();
+            }
             match p.add_node(node) {
                 Ok(id) => {
                     codes.insert(code, id);
@@ -468,10 +479,15 @@ pub fn import_dxf(p: &mut Project, path: &Path, tolerance: f64) -> Result<Import
         };
         // Si la clave viene de una familia retirada, se traduce a su destino (nunca en silencio).
         if let Some((nf, nt)) = crate::families_extra::alias(&node.family, &node.ty) {
-            rep.descartados.push(format!(
-                "{}:{} renombrado a {nf}:{nt}",
-                node.family, node.ty
-            ));
+            rep.renombrados
+                .push(format!("{}:{} -> {nf}:{nt}", node.family, node.ty));
+            node.family = nf.to_string();
+            node.ty = nt.to_string();
+        }
+        // Clave retirada: se traduce a su destino y se anota (nunca en silencio).
+        if let Some((nf, nt)) = crate::families_extra::alias(&node.family, &node.ty) {
+            rep.renombrados
+                .push(format!("{}:{} -> {nf}:{nt}", node.family, node.ty));
             node.family = nf.to_string();
             node.ty = nt.to_string();
         }
@@ -552,7 +568,7 @@ fn nearest_node(
         return Some(*id);
     }
     let zt = p.terrain.as_ref().and_then(|t| t.z_at(pos)).unwrap_or(0.0);
-    let node = Node {
+    let mut node = Node {
         id: ElementId::new(0, 0),
         family: "saneamiento.pozo".into(),
         ty: "inspeccion".into(),
@@ -567,6 +583,13 @@ fn nearest_node(
         nota: None,
         deleted: false,
     };
+    // Clave retirada: se traduce a su destino y se anota (nunca en silencio).
+    if let Some((nf, nt)) = crate::families_extra::alias(&node.family, &node.ty) {
+        rep.renombrados
+            .push(format!("{}:{} -> {nf}:{nt}", node.family, node.ty));
+        node.family = nf.to_string();
+        node.ty = nt.to_string();
+    }
     match p.add_node(node) {
         Ok(id) => {
             ids.push((id, pos));
@@ -582,6 +605,34 @@ fn nearest_node(
 
 fn family_for_layer(layer: &str, point: bool) -> &'static str {
     let l = layer.to_ascii_uppercase();
+    // Cadena de agua cruda (docs/20 §8.1): cada capa con su familia, no con la genérica.
+    if l.contains("BOCATOMA") || l.contains("BARRaje") || l.contains("AZUD") {
+        return "agua.bocatoma";
+    }
+    if l.contains("DESAREN") {
+        return "comun.desarenador";
+    }
+    if l.contains("REJA") || l.contains("REJILLA") || l.contains("CRIBA") {
+        return "comun.reja";
+    }
+    if l.contains("COMPUERTA") {
+        return "comun.compuerta";
+    }
+    if l.contains("FILTRO") {
+        return "agua.filtro";
+    }
+    if l.contains("FLOCUL") {
+        return "agua.floculador";
+    }
+    if l.contains("SEDIMENT") || l.contains("DECANT") {
+        return "agua.sedimentador";
+    }
+    if l.contains("LAGUNA") {
+        return "saneamiento.laguna";
+    }
+    if l.contains("PTAR") || l.contains("REACTOR") {
+        return "saneamiento.reactor";
+    }
     if l.contains("POZO") || l.contains("MH") || l.contains("PZ") || l.contains("CAMARA") {
         return "saneamiento.pozo";
     }
@@ -666,7 +717,7 @@ pub fn import_geojson(p: &mut Project, path: &Path) -> Result<ImportReport, Stri
                 .as_ref()
                 .and_then(|t| t.z_at(P2::new(e, n)))
                 .unwrap_or(z);
-            let node = Node {
+            let mut node = Node {
                 id: ElementId::new(0, 0),
                 family: fam.clone(),
                 ty: default_subtype(&fam),
@@ -681,6 +732,13 @@ pub fn import_geojson(p: &mut Project, path: &Path) -> Result<ImportReport, Stri
                 nota: None,
                 deleted: false,
             };
+            // Clave retirada: se traduce a su destino y se anota (nunca en silencio).
+            if let Some((nf, nt)) = crate::families_extra::alias(&node.family, &node.ty) {
+                rep.renombrados
+                    .push(format!("{}:{} -> {nf}:{nt}", node.family, node.ty));
+                node.family = nf.to_string();
+                node.ty = nt.to_string();
+            }
             match p.add_node(node) {
                 Ok(id) => {
                     codes.insert(

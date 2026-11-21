@@ -159,7 +159,7 @@ def epanet_plan(sections: dict[str, list[list[str]]], fuente: str) -> tuple[dict
             {
                 "tipo": "nodo",
                 "codigo": name,
-                "familia": "saneamiento.camara",
+                "familia": "agua.camara",
                 "subtipo": "valvulas",
                 "e": 0.0,
                 "n": 0.0,
@@ -255,6 +255,33 @@ def coordenadas_del_inp(sections: dict[str, list[list[str]]]) -> dict[str, tuple
     return coords
 
 
+ALIAS = {
+    ("agua.captacion", "toma_rio"): ("agua.bocatoma", "barraje_fijo"),
+    ("agua.captacion", "toma_quebrada"): ("agua.bocatoma", "bocatoma_lateral"),
+    ("agua.captacion", "rejilla_fondo"): ("agua.bocatoma", "toma_tirolesa"),
+    ("saneamiento.camara", "carga"): ("agua.camara", "carga"),
+    ("saneamiento.camara", "quiebre"): ("agua.camara", "quiebre"),
+    ("saneamiento.camara", "valvulas"): ("agua.camara", "valvulas"),
+    ("saneamiento.camara", "medicion"): ("agua.camara", "medicion"),
+    ("saneamiento.camara", "reparto"): ("agua.camara", "reparto"),
+    ("saneamiento.camara", "alivio"): ("agua.camara", "alivio"),
+    ("agua.planta", "cloracion"): ("comun.caseta", "cloracion"),
+    ("agua.planta", "lecho_secado"): ("comun.lecho_secado", "arena_grava"),
+    ("agua.planta", "espesador"): ("saneamiento.sedimentador", "espesador"),
+    ("agua.planta", "laguna_estabilizacion"): ("saneamiento.laguna", "facultativa"),
+}
+
+
+def aplicar_alias(plan: dict, avisos: list[str]) -> None:
+    """Traduce las claves retiradas a su destino. Nunca en silencio: queda el aviso."""
+    for o in plan.get("objetos", []):
+        clave = (o.get("familia"), o.get("subtipo"))
+        destino = ALIAS.get(clave)
+        if destino:
+            avisos.append(f"{clave[0]}:{clave[1]} renombrado a {destino[0]}:{destino[1]}")
+            o["familia"], o["subtipo"] = destino
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Convierte SWMM/EPANET .inp a redes.plan/1")
     ap.add_argument("--tipo", choices=["swmm", "epanet"], required=True)
@@ -270,6 +297,8 @@ def main() -> int:
     sections = read_sections(args.archivo)
     builder = swmm_plan if args.tipo == "swmm" else epanet_plan
     plan, avisos = builder(sections, str(args.archivo))
+
+    aplicar_alias(plan, avisos)
 
     # Planta: primero la del propio .inp; `--coords` (CSV) la sobrescribe si se pasa.
     coords = coordenadas_del_inp(sections)
