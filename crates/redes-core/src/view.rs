@@ -333,6 +333,25 @@ pub fn build_with(
 }
 
 /// Igual que [`build_with`] con los modos de detalle activos.
+/// Encoge un punto al interior de una caja, con un margen de 0,5 m.
+///
+/// Con una caja menor de 1 m el margen deja `min > max` y `clamp` paniquea (R-10). Aquí los
+/// límites se ordenan y, si no queda hueco, se devuelve el centro.
+fn recortar_a_bbox(
+    q: crate::geom::P2,
+    (xmin, xmax, ymin, ymax): (f64, f64, f64, f64),
+) -> crate::geom::P2 {
+    fn eje(v: f64, min: f64, max: f64) -> f64 {
+        let (lo, hi) = (min + 0.5, max - 0.5);
+        if lo <= hi {
+            v.clamp(lo, hi)
+        } else {
+            (min + max) * 0.5
+        }
+    }
+    crate::geom::P2::new(eje(q.x, xmin, xmax), eje(q.y, ymin, ymax))
+}
+
 pub fn build_opts(
     p: &Project,
     terrain: Option<&crate::terrain::Terrain>,
@@ -415,9 +434,8 @@ pub fn build_opts(
         let z_de = |q: crate::geom::P2| -> Option<f64> {
             for tr in [terrain, p.terrain.as_ref()].into_iter().flatten() {
                 let bb = tr.bbox;
-                let x = q.x.clamp(bb.xmin + 0.5, bb.xmax - 0.5);
-                let y = q.y.clamp(bb.ymin + 0.5, bb.ymax - 0.5);
-                if let Some(z) = tr.z_at(crate::geom::P2::new(x, y)) {
+                let dentro = recortar_a_bbox(q, (bb.xmin, bb.xmax, bb.ymin, bb.ymax));
+                if let Some(z) = tr.z_at(dentro) {
                     return Some(z);
                 }
             }
@@ -1644,6 +1662,58 @@ mod tests {
 
     /// La matriz del pase 3D y `project()` deben llevar un mismo punto al mismo píxel del lienzo.
     /// Si divergen, el modelo 3D se dibuja desplazado o estirado respecto al pintor.
+    /// Con una caja de terreno menor de 1 m, el margen de 0,5 m dejaba `min > max` y `clamp`
+    /// paniqueaba (R-10).
+    #[test]
+    fn el_recorte_a_la_caja_no_panica_con_una_caja_minuscula() {
+        use crate::geom::P2;
+        let caja = (0.0, 0.4, 0.0, 0.4);
+        for q in [
+            P2::new(0.0, 0.0),
+            P2::new(0.4, 0.4),
+            P2::new(-5.0, 9.0),
+            P2::new(f64::MAX, f64::MIN),
+        ] {
+            let r = super::recortar_a_bbox(q, caja);
+            assert!(r.x.is_finite() && r.y.is_finite(), "{q:?} -> {r:?}");
+            assert!(r.x >= 0.0 && r.x <= 0.4, "{q:?} -> {r:?}");
+            assert!(r.y >= 0.0 && r.y <= 0.4, "{q:?} -> {r:?}");
+        }
+        // Caja normal: el punto se recorta al interior con el margen.
+        let normal = (0.0, 100.0, 0.0, 50.0);
+        let r = super::recortar_a_bbox(P2::new(-10.0, 80.0), normal);
+        assert!(
+            (r.x - 0.5).abs() < 1e-9 && (r.y - 49.5).abs() < 1e-9,
+            "{r:?}"
+        );
+    }
+
+    /// La vista de planta debe mirar desde el sur: norte arriba, este a la derecha.
+    #[test]
+    fn la_planta_pone_el_norte_arriba() {
+        let mut cam = Camera::default();
+        cam.viewport = [742.0, 714.0];
+        cam.target = [0.0, 0.0, 0.0];
+        cam.azimuth = -90.0;
+        cam.elevation = 88.0;
+        cam.distance = 100.0;
+        let centro = cam.project([0.0, 0.0, 0.0]).expect("centro visible");
+        let norte = cam.project([0.0, 20.0, 0.0]).expect("norte visible");
+        let este = cam.project([20.0, 0.0, 0.0]).expect("este visible");
+        assert!(
+            norte[1] < centro[1] - 5.0,
+            "el norte debe quedar arriba: {:?} vs {:?}",
+            norte,
+            centro
+        );
+        assert!(
+            este[0] > centro[0] + 5.0,
+            "el este debe quedar a la derecha: {:?} vs {:?}",
+            este,
+            centro
+        );
+    }
+
     #[test]
     fn la_matriz_3d_coincide_con_la_proyeccion_2d() {
         let p = crate::demo_catalog::catalogo();

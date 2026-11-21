@@ -743,7 +743,8 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
         .child(text("Cámaras").font(type_::TITLE).color(INK));
 
     for (label, az, ev) in [
-        ("Planta", 0.0f32, 88.0f32),
+        // Azimut -90: se mira desde el sur, así que el norte queda arriba y el este a la derecha.
+        ("Planta", -90.0f32, 88.0f32),
         ("Isométrica", -55.0, 32.0),
         ("Perfil", -90.0, 4.0),
     ] {
@@ -980,7 +981,7 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
             button("Planta")
                 .key("btn-planta")
                 .on_press(|s: &mut State| {
-                    s.cam.azimuth = 0.0;
+                    s.cam.azimuth = -90.0;
                     s.cam.elevation = 88.0;
                     s.rebuild();
                 }),
@@ -1179,10 +1180,12 @@ fn main() {
             (
                 "planta",
                 (|s: &mut State| {
-                    s.cam.azimuth = 0.0;
+                    s.cam.azimuth = -90.0;
                     s.cam.elevation = 88.0;
+                    // En planta se encuadra el proyecto completo: es la vista de revisión general.
+                    s.fitted = false;
+                    s.fit();
                     s.fitted = true;
-                    s.rebuild();
                 }) as fn(&mut State),
             ),
             (
@@ -1231,7 +1234,7 @@ fn main() {
                     if let Some((code, pos, z)) = elegido {
                         s.cam.target = [pos.x - s.project.origin.x, pos.y - s.project.origin.y, z];
                         s.cam.distance = 165.0;
-                        s.cam.azimuth = 0.0;
+                        s.cam.azimuth = -90.0;
                         s.cam.elevation = 27.0;
                         s.sel = Some(code);
                     }
