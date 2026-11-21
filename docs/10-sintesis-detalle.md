@@ -1,5 +1,10 @@
 # 10 — Síntesis: catálogo de piezas y motor gráfico
 
+> ⚠️ **Cifras corregidas.** Varios números de este documento se escribieron antes de que el
+> código cambiara y ya no son ciertos. Las cifras vigentes, con cómo reproducirlas, están en
+> [`21-cifras-medidas.md`](21-cifras-medidas.md). Este documento se conserva como historia.
+
+
 > Este documento cierra el consejo sobre detalle. Responde las dos preguntas del cliente:
 > «¿qué familias y con qué detalle?» y «¿no sería mejor three.js?». Al final dice qué quedó
 > implementado y qué sigue.

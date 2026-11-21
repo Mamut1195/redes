@@ -1,5 +1,10 @@
 # 17 — Importar modelos de Blender (biblioteca de piezas)
 
+> ⚠️ **Cifras corregidas.** Varios números de este documento se escribieron antes de que el
+> código cambiara y ya no son ciertos. Las cifras vigentes, con cómo reproducirlas, están en
+> [`21-cifras-medidas.md`](21-cifras-medidas.md). Este documento se conserva como historia.
+
+
 > Qué hace falta para que una válvula, un pozo o una planta de tratamiento modelados en Blender
 > sustituyan (o acompañen) a la pieza paramétrica. Qué ya está hecho y qué falta.
 

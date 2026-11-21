@@ -1,5 +1,10 @@
 # 15 — Revisión del consejo (fases 1‑3) y respuesta
 
+> ⚠️ **Cifras corregidas.** Varios números de este documento se escribieron antes de que el
+> código cambiara y ya no son ciertos. Las cifras vigentes, con cómo reproducirlas, están en
+> [`21-cifras-medidas.md`](21-cifras-medidas.md). Este documento se conserva como historia.
+
+
 > Tres revisiones independientes sobre el código y los artefactos de las fases 1‑3, y qué se
 > corrigió antes de seguir. Informes completos:
 > [12-revision-arquitectura](consejo/12-revision-arquitectura.md),

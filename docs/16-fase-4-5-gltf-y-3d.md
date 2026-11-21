@@ -1,5 +1,10 @@
 # 16 — Fase 4 y fase 5: glTF y pase 3D con profundidad
 
+> ⚠️ **Cifras corregidas.** Varios números de este documento se escribieron antes de que el
+> código cambiara y ya no son ciertos. Las cifras vigentes, con cómo reproducirlas, están en
+> [`21-cifras-medidas.md`](21-cifras-medidas.md). Este documento se conserva como historia.
+
+
 ## Fase 4 — `exportar gltf`
 
 ```powershell

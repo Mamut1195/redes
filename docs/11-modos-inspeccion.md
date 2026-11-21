@@ -1,5 +1,10 @@
 # 11 — Modos de inspección y capa de lectura (fases 2 y 3)
 
+> ⚠️ **Cifras corregidas.** Varios números de este documento se escribieron antes de que el
+> código cambiara y ya no son ciertos. Las cifras vigentes, con cómo reproducirlas, están en
+> [`21-cifras-medidas.md`](21-cifras-medidas.md). Este documento se conserva como historia.
+
+
 > Lo que se implementó después del catálogo: ver la pieza por dentro, separarla, leer sus datos y
 > cambiarlos en vivo. Todo dentro del visor, sin otra aplicación.
 
