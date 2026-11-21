@@ -27,6 +27,7 @@ pub mod gltf;
 pub mod ingest;
 pub mod model;
 pub mod parts;
+pub mod parts_cadena;
 pub mod project_io;
 pub mod terrain;
 pub mod topology;

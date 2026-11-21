@@ -1108,6 +1108,10 @@ pub fn pieza_para_exportar(n: &crate::model::Node) -> crate::parts::Mesh {
 /// Construye las partes nombradas de una pieza (pozos y válvulas se despiezan; el resto es una).
 fn pieza_partes(n: &crate::model::Node, lod: u8) -> Vec<crate::parts::Parte> {
     use crate::parts as pt;
+    // Cadena de agua cruda (docs/20): bocatoma, cámaras, tratamiento y salida del alcantarillado.
+    if let Some(partes) = crate::parts_cadena::piezas(n, lod) {
+        return partes;
+    }
     let dn = n.num("diametro_nominal").unwrap_or(200.0) as u32;
     match n.family.as_str() {
         "saneamiento.pozo" | "saneamiento.bombeo" => {

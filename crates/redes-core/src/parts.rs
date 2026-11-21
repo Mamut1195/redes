@@ -383,6 +383,48 @@ pub fn barra_tapada(a: [f32; 3], b: [f32; 3], radio: f32, caras: usize, m: Mater
     }
     mesh
 }
+/// Placa inclinada entre dos cotas: el polígono se dibuja a `z0` y `z1` y se une con paredes.
+///
+/// Sirve para placas de sedimentador, taludes de laguna y transiciones de aforador: `Mesh::girar`
+/// solo gira alrededor de Z, así que una superficie inclinada no se podía componer con lo que
+/// había.
+pub fn rampa(poly: &[[f32; 2]], z0: f32, z1: f32, m: Material) -> Mesh {
+    let mut mesh = Mesh::default();
+    if poly.len() < 3 {
+        return mesh;
+    }
+    let n = poly.len();
+    let (cx, cy) = (
+        poly.iter().map(|q| q[0]).sum::<f32>() / n as f32,
+        poly.iter().map(|q| q[1]).sum::<f32>() / n as f32,
+    );
+    // Cara superior.
+    for k in 0..n {
+        let a = poly[k];
+        let b = poly[(k + 1) % n];
+        mesh.tri([cx, cy, z1], [a[0], a[1], z1], [b[0], b[1], z1], m);
+    }
+    // Cara inferior (girada) y paredes laterales.
+    for k in 0..n {
+        let a = poly[k];
+        let b = poly[(k + 1) % n];
+        mesh.tri([cx, cy, z0], [b[0], b[1], z0], [a[0], a[1], z0], m);
+        mesh.tri([a[0], a[1], z0], [b[0], b[1], z0], [b[0], b[1], z1], m);
+        mesh.tri([a[0], a[1], z0], [b[0], b[1], z1], [a[0], a[1], z1], m);
+    }
+    mesh
+}
+
+/// Marco rectangular (hueco) para rejas y compuertas: cuatro barras de sección cuadrada.
+pub fn marco_rectangular(ancho: f32, alto: f32, espesor: f32, m: Material) -> Mesh {
+    let mut mesh = Mesh::default();
+    let (w, h, e) = (ancho.max(0.2), alto.max(0.2), espesor.max(0.02));
+    mesh.extend(caja(w, e, e, m).mover([0.0, 0.0, h * 0.5]));
+    mesh.extend(caja(w, e, e, m).mover([0.0, 0.0, -h * 0.5]));
+    mesh.extend(caja(e, e, h, m).mover([w * 0.5, 0.0, 0.0]));
+    mesh.extend(caja(e, e, h, m).mover([-w * 0.5, 0.0, 0.0]));
+    mesh
+}
 
 /// Prisma extruido desde un polígono en planta (muros de cabeza, alas de descarga).
 pub fn prisma(poly: &[[f32; 2]], alto: f32, m: Material) -> Mesh {
