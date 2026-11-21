@@ -500,7 +500,13 @@ const ATTRS: &[(&str, &[AttrSpec])] = &[
 ];
 
 /// Subtipos nuevos en familias existentes (§4.1).
-const SUBTIPOS: &[(&str, &[(&str, &str, &[&str])])] = &[
+/// (familia, subtipos) y cada subtipo es (clave, etiqueta, atributos obligatorios).
+type Subtipos = (
+    &'static str,
+    &'static [(&'static str, &'static str, &'static [&'static str])],
+);
+
+const SUBTIPOS: &[Subtipos] = &[
     (
         "agua.captacion",
         &[

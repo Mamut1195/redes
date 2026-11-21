@@ -53,10 +53,12 @@ impl Cache {
     }
 
     /// Cuántas veces se ha leído un `.glb` (para las pruebas).
+    #[allow(dead_code)]
     pub fn cargas(&self) -> usize {
         self.cargas
     }
 
+    #[allow(dead_code)]
     pub fn olvidar_fallos(&mut self) {
         self.fallos.clear();
     }

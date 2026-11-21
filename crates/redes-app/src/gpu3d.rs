@@ -59,6 +59,7 @@ pub struct Geometria {
 
 impl Geometria {
     /// Recalcula la geometría a partir del proyecto (solo cuando algo cambia).
+    #[allow(dead_code)]
     pub fn cargar(
         &mut self,
         p: &redes_core::model::Project,
@@ -322,7 +323,7 @@ impl Compositor3d {
             return;
         }
         let paso = 4 * 1024 * 1024;
-        let nueva = (((bytes as u64 + paso - 1) / paso) * paso).min(TOPE);
+        let nueva = ((bytes as u64).div_ceil(paso) * paso).min(TOPE);
         r.vertices = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("redes-3d-vertices"),
             size: nueva,

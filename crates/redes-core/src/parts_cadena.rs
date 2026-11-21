@@ -170,7 +170,7 @@ fn unidad_tabiques(
     let largo = m(n, "largo", 6.0);
     let ancho = m(n, "ancho", 4.0);
     let alto = m(n, "altura_util", 3.0);
-    let mut cuerpo = deposito(largo, ancho, alto, 0.25, HORMIGON);
+    let cuerpo = deposito(largo, ancho, alto, 0.25, HORMIGON);
     let mut agua = crate::parts::Mesh::default();
     if lod >= 1 {
         agua.extend(caja(largo - 0.6, ancho - 0.6, 0.05, AGUA).mover([0.0, 0.0, alto * 0.72]));
@@ -412,7 +412,7 @@ fn compuerta(n: &Node, lod: u8) -> Vec<Parte> {
     let ancho = m(n, "ancho", 1.0);
     let alto = m(n, "altura", 1.0);
     let vastago = m(n, "altura_vastago", 1.6);
-    let mut marco =
+    let marco =
         marco_rectangular(ancho + 0.16, alto + 0.16, 0.1, HIERRO).mover([0.0, 0.0, alto * 0.5]);
     let hoja = caja(ancho, 0.08, alto, HIERRO).mover([0.0, 0.0, alto * 0.5]);
     let mut husillo = crate::parts::Mesh::default();
@@ -505,7 +505,7 @@ fn caseta(n: &Node, lod: u8) -> Vec<Parte> {
     let largo = m(n, "largo", 4.0);
     let ancho = m(n, "ancho", 3.0);
     let alto = m(n, "altura", 2.6);
-    let mut cuerpo = caja(largo, ancho, alto, HORMIGON).mover([0.0, 0.0, alto * 0.5]);
+    let cuerpo = caja(largo, ancho, alto, HORMIGON).mover([0.0, 0.0, alto * 0.5]);
     let cubierta =
         caja(largo * 1.08, ancho * 1.08, 0.18, HORMIGON_OSCURO).mover([0.0, 0.0, alto + 0.09]);
     let mut puerta = crate::parts::Mesh::default();

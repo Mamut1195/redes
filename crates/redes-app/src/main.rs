@@ -441,7 +441,7 @@ impl State {
             let p = [n.pos.x - o.x, n.pos.y - o.y, n.z_rim];
             if let Some(s) = self.cam.project(p) {
                 let d = ((s[0] - at[0]).powi(2) + (s[1] - at[1]).powi(2)).sqrt();
-                if d < 18.0 && best.as_ref().map_or(true, |(bd, _)| d < *bd) {
+                if d < 18.0 && best.as_ref().is_none_or(|(bd, _)| d < *bd) {
                     best = Some((d, n.code.clone()));
                 }
             }
@@ -459,7 +459,7 @@ impl State {
                 continue;
             };
             let d = dist_seg(at, sa, sb);
-            if d < 14.0 && best.as_ref().map_or(true, |(bd, _)| d < *bd) {
+            if d < 14.0 && best.as_ref().is_none_or(|(bd, _)| d < *bd) {
                 best = Some((d, l.code.clone()));
             }
         }

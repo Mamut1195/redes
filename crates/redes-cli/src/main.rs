@@ -500,10 +500,8 @@ fn run(cli: Cli, t0: Instant) -> i32 {
                 .within(elapsed(t0));
             if let Some(destino) = csv {
                 let texto = redes_core::cantidades::a_csv(&filas);
-                if !dry {
-                    if let Err(e) = std::fs::write(&destino, texto) {
-                        return emit(io_error("cantidades", &e.to_string()), pretty, quiet);
-                    }
+                if !dry && let Err(e) = std::fs::write(&destino, texto) {
+                    return emit(io_error("cantidades", &e.to_string()), pretty, quiet);
                 }
                 env = env.with_artifact("csv", &destino.display().to_string());
             }

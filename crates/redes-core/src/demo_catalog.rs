@@ -400,32 +400,6 @@ pub fn catalogo() -> Project {
     p
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn hay_una_pieza_de_cada_familia_principal() {
-        let p = catalogo();
-        let mut vistos: Vec<&str> = p.nodes.iter().map(|n| n.family.as_str()).collect();
-        vistos.sort_unstable();
-        vistos.dedup();
-        for f in [
-            "saneamiento.pozo",
-            "saneamiento.camara",
-            "saneamiento.sumidero",
-            "saneamiento.descarga",
-            "agua.valvula",
-            "agua.hidrante",
-            "agua.medidor",
-            "agua.tanque",
-        ] {
-            assert!(vistos.contains(&f), "falta la familia {f}");
-        }
-        assert!(p.count() > 20);
-    }
-}
-
 /// Catálogo **completo**: una muestra de cada familia del registro, en rejilla.
 ///
 /// Es la garantía de cobertura: si una familia nueva no se puede dibujar, esta escena (y la prueba
@@ -535,4 +509,30 @@ pub fn catalogo_completo() -> Project {
         previo = Some((id, P3::new(ORIGEN_E + x, ORIGEN_N + y, z - 1.5)));
     }
     p
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hay_una_pieza_de_cada_familia_principal() {
+        let p = catalogo();
+        let mut vistos: Vec<&str> = p.nodes.iter().map(|n| n.family.as_str()).collect();
+        vistos.sort_unstable();
+        vistos.dedup();
+        for f in [
+            "saneamiento.pozo",
+            "saneamiento.camara",
+            "saneamiento.sumidero",
+            "saneamiento.descarga",
+            "agua.valvula",
+            "agua.hidrante",
+            "agua.medidor",
+            "agua.tanque",
+        ] {
+            assert!(vistos.contains(&f), "falta la familia {f}");
+        }
+        assert!(p.count() > 20);
+    }
 }

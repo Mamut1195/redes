@@ -20,6 +20,7 @@ fn cota(x: f64, y: f64) -> f64 {
     2532.0 - 0.085 * x + 0.02 * (y - 120.0).abs() - 1.2 * (-((y - 200.0) / 18.0).powi(2)).exp()
 }
 
+#[allow(clippy::too_many_arguments)]
 fn nodo(
     p: &mut Project,
     familia: &str,
@@ -53,6 +54,7 @@ fn nodo(
     .unwrap_or_else(|e| panic!("{code}: {e}"))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn tuberia(
     p: &mut Project,
     familia: &str,
