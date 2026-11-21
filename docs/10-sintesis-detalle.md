@@ -21,9 +21,9 @@ líneas), [07-geometria-parametrica](07-geometria-parametrica.md) (1 025),
 
 ---
 
-## 2. Catálogo: de 18 familias a 29 y 216 subtipos
+## 2. Catálogo: de 18 familias a 46 y 315 subtipos
 
-El registro tenía 18 claves y 60 subtipos. El consejo propone **29 familias y 216 subtipos**,
+El registro tenía 18 claves y 60 subtipos. El consejo propuso **29 familias y 216 subtipos**; la cadena de agua cruda (docs/20) añadió **17 familias y 99 subtipos netos** hasta **46 y 315**,
 con una regla que evita explotar el catálogo:
 
 > **El subtipo es la función; la variante de forma es un atributo.**
@@ -142,7 +142,7 @@ pase con profundidad sobre el target de la ventana.
 
 | Pieza | Estado |
 |---|---|
-| Registro | **29 familias y 216 subtipos**, transcritos del catálogo del consejo con sus parámetros |
+| Registro | **46 familias y 315 subtipos**: 29 del consejo + 17 de la cadena de agua cruda |
 | Primitivas | cilindro, tronco, caja, tubo, anillo, disco, prisma, barra, barra con tapas |
 | Pozos | inspección, caída, resalto, ciego, bombeo, limpieza (cono, marco, tapa, escalera) |
 | Válvulas | compuerta (volante), mariposa (palanca), retención, aire/purga, RP |
@@ -153,10 +153,10 @@ pase con profundidad sobre el target de la ventana.
 
 **Fase 1 cerrada** con evidencia:
 
-- `redes esquema` publica **29 familias / 216 subtipos**; la prueba `el_catalogo_tiene_la_escala_del_consejo` falla si baja de ahí.
+- `redes esquema` publica **46 familias / 315 subtipos**; la prueba `el_catalogo_tiene_la_escala_del_consejo` falla si baja de 29/216.
 - La prueba `todas_las_familias_dibujan` recorre el registro y exige que **cada familia** produzca
   geometría (pieza de nodo o tubo), así que una familia nueva sin dibujo rompe la suite.
-- `redes proyecto catalogo` arma una vitrina con **27 de las 29 familias** en 49 objetos
+- `redes proyecto catalogo-total` arma una muestra de **las 46 familias** en una rejilla, y la prueba `cada_familia_del_registro_dibuja` falla si alguna no dibuja
   (las dos restantes son variantes de arco sin nodo propio).
 
 **Fase 2 y 3 cerradas** (ver [11-modos-inspeccion](11-modos-inspeccion.md)):

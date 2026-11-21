@@ -40,7 +40,7 @@ cargo run -p redes-app --release
 | Accesorios | codo, tee, cruz, reducción, unión, tapón |
 | Tapa, escalera, arqueta, caja, arenero, trampa, dado | marco y tapa, peldaños, caja con cubierta |
 
-El registro pasó de 18 a **29 familias y 216 subtipos** y el detalle está presupuestado por nivel (símbolo /
+El registro pasó de 18 a **46 familias y 315 subtipos** (29 + las 17 de la cadena de agua cruda: captación, conducción, pretratamiento, tratamiento y salida del alcantarillado) y el detalle está presupuestado por nivel (símbolo /
 simple / completo). Decisiones y comparación de motores en
 [10-sintesis-detalle.md](docs/10-sintesis-detalle.md).
 
@@ -208,6 +208,16 @@ framework); no se modifica.
 - `target/`, `out/` y `spike/` no se versionan; el árbol de Rune sí (para compilar sin red).
 - Commits en imperativo y en español, con el identificador del ticket al principio:
   `MAM-1066: añade modelo al nodo y biblioteca al proyecto`.
+
+## La cadena completa
+
+`redes proyecto cadena` genera una red de demostración que va **desde la captación hasta la planta de
+tratamiento y la descarga**: bocatoma en la quebrada, desarenador, línea de conducción con cámaras de
+carga y de quiebre, PTAP (mezcla, floculación, sedimentación, filtración y desinfección), reservorio,
+red de distribución y, en paralelo, el alcantarillado hasta la PTAR (reja, desarenador, reactor UASB,
+sedimentador y laguna de maduración).
+
+En la app: `--scene ptap` y `--scene ptar` enfocan la planta y la salida del alcantarillado.
 
 ## Estado
 
