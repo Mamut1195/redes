@@ -11,7 +11,7 @@ Documento de traspaso: qué está hecho, qué falta y por dónde seguir. Las cif
 | Cadena completa | `redes proyecto cadena`: 90 objetos, 72 tramos, de la bocatoma (2530 m) a la descarga (2498 m) |
 | Modelos | importación, validación, medidas, caché, dibujo en el pase 3D, política de pesados, foco sobre el modelo, **selector en el inspector** y **anclas de conexión** (se leen del `.glb` y la tubería nace en el puerto, no en el centro) |
 | Cantidades | `redes cantidades`: unidades, longitudes por DN/material, volúmenes, pesos, discrepancias y CSV |
-| CAD | ida y vuelta DXF sin pérdida (46 familias y 7 arcos vuelven idénticos) y GeoJSON con atributos |
+| CAD | ida y vuelta DXF sin pérdida (46 familias y 7 arcos vuelven idénticos), **bloques con atributos** por familia y GeoJSON con atributos |
 | Calidad | 89 + 14 + 11 + 5 + 2 + 1 pruebas, arnés de 5 mutaciones, CI en GitHub **en verde** |
 | Producto | plantilla, licencias de modelos, journal con fecha, paquete portable y **release 0.1.0 publicada** |
 | Documentación | 23 documentos; los informes antiguos llevan aviso de cifras corregidas |
@@ -21,9 +21,8 @@ Documento de traspaso: qué está hecho, qué falta y por dónde seguir. Las cif
 | # | Tarea | Dónde | Notas |
 |---|---|---|---|
 | 1 | **F6-05 proxy decimado** | `modelos.rs` | Hoy, sin `--gpu3d` se dibuja la paramétrica y se avisa; el proxy permitiría ver una silueta del modelo |
-| 2 | **F8-02 bloques DXF con atributos** | `export.rs` | Comodidad para CAD: hoy los datos viajan en la capa `REDES_INFO` (TEXT) y la ida y vuelta funciona |
-| 3 | **«Vertedero» y «pozo profundo»** | `docs/22-decisiones.md` | Decisión de dominio del usuario; afecta a mapeos de la skill, no al motor |
-| 4 | Avisos de clippy de estilo | varios | Correctness en cero; quedan ~9 de estilo propios y los de `vendor/` |
+| 2 | **«Vertedero» y «pozo profundo»** | `docs/22-decisiones.md` | Decisión de dominio del usuario; afecta a mapeos de la skill, no al motor |
+| 3 | Avisos de clippy de estilo | varios | Correctness en cero; quedan ~9 de estilo propios y los de `vendor/` |
 
 ## Cómo retomar
 
