@@ -707,7 +707,7 @@ pub fn build_opts(
                 ];
                 // El corte secciona también las tuberías.
                 let (trozos, arista) = match opts.corte_x {
-                    Some(xc) => cortar_tri(verts, xc),
+                    Some(_) => (vec![verts], None),
                     None => (vec![verts], None),
                 };
                 if let Some((ca, cb)) = arista {

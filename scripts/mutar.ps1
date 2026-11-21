@@ -10,7 +10,8 @@ param(
     [string]$Solo = ""
 )
 
-$ErrorActionPreference = "Stop"
+# Los stderr de cargo no deben abortar el script.
+$ErrorActionPreference = "Continue"
 $raiz = Split-Path -Parent $PSScriptRoot
 Set-Location $raiz
 
