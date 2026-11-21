@@ -297,11 +297,10 @@ fn run(cli: Cli, t0: Instant) -> i32 {
                 let path = salida
                     .clone()
                     .unwrap_or_else(|| PathBuf::from(format!("{}.redes", slug(nombre))));
-                if !dry {
-                    if let Err(e) = redes_core::project_io::save(&p, &path) {
+                if !dry
+                    && let Err(e) = redes_core::project_io::save(&p, &path) {
                         return emit(io_error("proyecto.nuevo", &e), pretty, quiet);
                     }
-                }
                 let env = Envelope::ok("proyecto.nuevo")
                     .with_project(&p, &path.display().to_string())
                     .with_data(json!({ "nombre": p.name, "crs": p.crs, "archivo": path.display().to_string() }))
@@ -329,11 +328,10 @@ fn run(cli: Cli, t0: Instant) -> i32 {
                     "la-esperanza.redes"
                 };
                 let path = salida.clone().unwrap_or_else(|| PathBuf::from(por_defecto));
-                if !dry {
-                    if let Err(e) = redes_core::project_io::save(&p, &path) {
+                if !dry
+                    && let Err(e) = redes_core::project_io::save(&p, &path) {
                         return emit(io_error("proyecto.demo", &e), pretty, quiet);
                     }
-                }
                 let (pnd, ok, obs) = p.revision_counts();
                 let env = Envelope::ok("proyecto.demo")
                     .with_project(&p, &path.display().to_string())
@@ -417,11 +415,10 @@ fn run(cli: Cli, t0: Instant) -> i32 {
             }
             let scene = view::build(&p, &cam, Layers::default(), None);
             let text = svg::render(&scene, cam.viewport);
-            if let Some(dir) = salida.parent() {
-                if !dir.as_os_str().is_empty() {
+            if let Some(dir) = salida.parent()
+                && !dir.as_os_str().is_empty() {
                     let _ = std::fs::create_dir_all(dir);
                 }
-            }
             match std::fs::write(&salida, text) {
                 Ok(()) => Envelope::ok("vista")
                     .with_data(json!({
@@ -441,11 +438,10 @@ fn run(cli: Cli, t0: Instant) -> i32 {
     env.command = cmd_name;
     env = env.with_project(&p, &path.display().to_string());
 
-    if !dry && env.ok && writes && !destructive {
-        if let Err(e) = redes_core::project_io::save(&p, &path) {
+    if !dry && env.ok && writes && !destructive
+        && let Err(e) = redes_core::project_io::save(&p, &path) {
             return emit(io_error(&env.command.clone(), &e), pretty, quiet);
         }
-    }
     emit(env.within(elapsed(t0)), pretty, quiet)
 }
 
@@ -475,7 +471,7 @@ fn biblioteca_importar(
     let dir = carpeta
         .map(|c| c.to_path_buf())
         .unwrap_or_else(|| PathBuf::from("."));
-    let id = nombre.map(|n| slug(n)).unwrap_or_else(|| {
+    let id = nombre.map(slug).unwrap_or_else(|| {
         let base = glb.file_stem().and_then(|s| s.to_str()).unwrap_or("pieza");
         slug(base)
     });
@@ -564,7 +560,7 @@ fn biblioteca(cmd: &BibliotecaCmd) -> Envelope {
             carpeta,
             nombre,
         } => {
-            return biblioteca_importar(
+            biblioteca_importar(
                 glb,
                 familia,
                 subtipo.as_deref(),
@@ -572,24 +568,24 @@ fn biblioteca(cmd: &BibliotecaCmd) -> Envelope {
                 *escala,
                 carpeta.as_deref(),
                 nombre.as_deref(),
-            );
+            )
         }
         BibliotecaCmd::Lista { carpeta } => {
             let dir = carpeta.clone().unwrap_or_else(|| PathBuf::from("."));
             let ruta = dir.join("biblioteca.json");
-            return match redes_core::biblioteca::Biblioteca::cargar(&ruta) {
+            match redes_core::biblioteca::Biblioteca::cargar(&ruta) {
                 Ok(b) => Envelope::ok("biblioteca.lista").with_data(json!({
                     "manifiesto": ruta.display().to_string(),
                     "piezas": b.piezas,
                 })),
                 Err(e) => io_error("biblioteca.lista", &e),
-            };
+            }
         }
         BibliotecaCmd::Revisar { glb, familia } => {
-            return biblioteca_revisar(glb, familia.as_deref());
+            biblioteca_revisar(glb, familia.as_deref())
         }
         BibliotecaCmd::Cantidades { glb, densidad } => {
-            return biblioteca_cantidades(glb, *densidad);
+            biblioteca_cantidades(glb, *densidad)
         }
     }
 }
@@ -637,7 +633,7 @@ fn biblioteca_revisar(glb: &PathBuf, familia: Option<&str>) -> Envelope {
     };
     match redes_core::biblioteca::leer_glb(&bytes) {
         Ok(modelo) => {
-            let esperado = match familia.as_deref() {
+            let esperado = match familia {
                 Some(f) if f.contains("planta") => redes_core::biblioteca::Expectativa::planta(),
                 _ => redes_core::biblioteca::Expectativa::pieza(),
             };
@@ -787,11 +783,10 @@ fn open_project(cli: &Cli) -> Result<(Project, PathBuf), Envelope> {
 fn esquema(filtro: Option<&str>) -> Envelope {
     let mut fams = Vec::new();
     for f in families::families() {
-        if let Some(k) = filtro {
-            if !f.key.contains(k) {
+        if let Some(k) = filtro
+            && !f.key.contains(k) {
                 continue;
             }
-        }
         let attrs: Vec<serde_json::Value> = f
             .attrs
             .iter()
@@ -982,16 +977,14 @@ fn objeto(p: &mut Project, cmd: ObjetoCmd, dry: bool) -> Envelope {
             let filtro_estado = estado.as_deref().map(|e| e.to_ascii_lowercase());
             let mut items = Vec::new();
             for n in p.nodes.iter().filter(|n| !n.deleted) {
-                if let Some(f) = &familia {
-                    if !n.family.contains(f.as_str()) {
+                if let Some(f) = &familia
+                    && !n.family.contains(f.as_str()) {
                         continue;
                     }
-                }
-                if let Some(e) = &filtro_estado {
-                    if n.estado.key() != e {
+                if let Some(e) = &filtro_estado
+                    && n.estado.key() != e {
                         continue;
                     }
-                }
                 items.push(json!({
                     "codigo": n.code, "familia": n.family, "subtipo": n.ty,
                     "estado": n.estado.key(), "e": round(n.pos.x, 3), "n": round(n.pos.y, 3),
@@ -999,16 +992,14 @@ fn objeto(p: &mut Project, cmd: ObjetoCmd, dry: bool) -> Envelope {
                 }));
             }
             for l in p.links.iter().filter(|l| !l.deleted) {
-                if let Some(f) = &familia {
-                    if !l.family.contains(f.as_str()) {
+                if let Some(f) = &familia
+                    && !l.family.contains(f.as_str()) {
                         continue;
                     }
-                }
-                if let Some(e) = &filtro_estado {
-                    if l.estado.key() != e {
+                if let Some(e) = &filtro_estado
+                    && l.estado.key() != e {
                         continue;
                     }
-                }
                 items.push(json!({
                     "codigo": l.code, "familia": l.family, "subtipo": l.ty,
                     "estado": l.estado.key(), "diametro_mm": l.d_mm, "nota": l.nota,

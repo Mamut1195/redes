@@ -219,8 +219,8 @@ pub fn triangulos_exportables(p: &Project, con_terreno: bool) -> Malla {
         }
     }
 
-    if con_terreno {
-        if let Some(t) = &p.terrain {
+    if con_terreno
+        && let Some(t) = &p.terrain {
             let (zmin, zmax) = t.z_range();
             let zspan = (zmax - zmin).max(1e-6);
             for tri in &t.tris {
@@ -240,7 +240,6 @@ pub fn triangulos_exportables(p: &Project, con_terreno: bool) -> Malla {
                 });
             }
         }
-    }
     out
 }
 
@@ -355,7 +354,7 @@ fn construir_glb(por_familia: &BTreeMap<String, Vec<Vertice>>) -> Vec<u8> {
         ] {
             let offset = bin.len();
             bin.extend_from_slice(&datos);
-            while bin.len() % 4 != 0 {
+            while !bin.len().is_multiple_of(4) {
                 bin.push(0);
             }
             vistas.push(format!(
@@ -401,7 +400,7 @@ fn construir_glb(por_familia: &BTreeMap<String, Vec<Vertice>>) -> Vec<u8> {
     while json_bytes.len() % 4 != 0 {
         json_bytes.push(b' ');
     }
-    while bin.len() % 4 != 0 {
+    while !bin.len().is_multiple_of(4) {
         bin.push(0);
     }
     let total = 12 + 8 + json_bytes.len() + 8 + bin.len();

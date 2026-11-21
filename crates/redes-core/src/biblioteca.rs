@@ -21,9 +21,9 @@ impl Bbox3 {
         }
     }
     pub fn add(&mut self, p: [f64; 3]) {
-        for i in 0..3 {
-            self.min[i] = self.min[i].min(p[i]);
-            self.max[i] = self.max[i].max(p[i]);
+        for ((mn, mx), v) in self.min.iter_mut().zip(self.max.iter_mut()).zip(p) {
+            *mn = mn.min(v);
+            *mx = mx.max(v);
         }
     }
     pub fn dimensiones(&self) -> [f64; 3] {
@@ -166,8 +166,8 @@ pub fn cantidades_glb(bytes: &[u8]) -> Result<Cantidades, String> {
             continue;
         };
         let mundo = multiplicar(padre, matriz_del_nodo(nodo));
-        if let Some(malla_id) = nodo.get("mesh").and_then(|m| m.as_u64()) {
-            if let Some(prims) = doc
+        if let Some(malla_id) = nodo.get("mesh").and_then(|m| m.as_u64())
+            && let Some(prims) = doc
                 .get("meshes")
                 .and_then(|m| m.get(malla_id as usize))
                 .and_then(|m| m.get("primitives"))
@@ -234,7 +234,6 @@ pub fn cantidades_glb(bytes: &[u8]) -> Result<Cantidades, String> {
                     }
                 }
             }
-        }
         if let Some(hijos) = nodo.get("children").and_then(|c| c.as_array()) {
             for h in hijos.iter().filter_map(|v| v.as_u64()) {
                 pendientes.push((h as usize, mundo));
@@ -424,30 +423,27 @@ pub fn leer_glb(bytes: &[u8]) -> Result<Modelo, String> {
             continue;
         };
         let local = matriz_del_nodo(nodo);
-        if modelo.giro.is_none() {
-            if let Some(giro) = nodo.get("rotation").and_then(|r| r.as_array()) {
-                if giro.len() == 4 {
+        if modelo.giro.is_none()
+            && let Some(giro) = nodo.get("rotation").and_then(|r| r.as_array())
+                && giro.len() == 4 {
                     let q: Vec<f64> = giro.iter().filter_map(|v| v.as_f64()).collect();
                     if q.len() == 4 {
                         modelo.giro = Some([q[0], q[1], q[2], q[3]]);
                     }
                 }
-            }
-        }
         let mundo = multiplicar(padre, local);
 
         if let Some(extras) = nodo.get("extras") {
             leer_extras(extras, "nodo", &mut modelo.extras);
         }
-        if let Some(malla_id) = nodo.get("mesh").and_then(|m| m.as_u64()) {
-            if let Some(extras) = doc
+        if let Some(malla_id) = nodo.get("mesh").and_then(|m| m.as_u64())
+            && let Some(extras) = doc
                 .get("meshes")
                 .and_then(|m| m.get(malla_id as usize))
                 .and_then(|m| m.get("extras"))
             {
                 leer_extras(extras, "malla", &mut modelo.extras);
             }
-        }
 
         if let Some(malla) = nodo.get("mesh").and_then(|m| m.as_u64()) {
             leer_malla(&doc, bin, malla as usize, &mundo, &materiales, &mut modelo);
@@ -668,15 +664,14 @@ fn identidad() -> [f64; 16] {
 }
 
 fn matriz_del_nodo(nodo: &Value) -> [f64; 16] {
-    if let Some(m) = nodo.get("matrix").and_then(|m| m.as_array()) {
-        if m.len() == 16 {
+    if let Some(m) = nodo.get("matrix").and_then(|m| m.as_array())
+        && m.len() == 16 {
             let mut out = [0.0; 16];
             for i in 0..16 {
                 out[i] = m[i].as_f64().unwrap_or(0.0);
             }
             return out;
         }
-    }
     let t = nodo
         .get("translation")
         .and_then(|v| v.as_array())
@@ -908,8 +903,8 @@ pub fn triangulos_de_glb(bytes: &[u8]) -> Result<Vec<TrianguloLeido>, String> {
             continue;
         };
         let mundo = multiplicar(padre, matriz_del_nodo(nodo));
-        if let Some(malla) = nodo.get("mesh").and_then(|m| m.as_u64()) {
-            if let Some(prims) = doc
+        if let Some(malla) = nodo.get("mesh").and_then(|m| m.as_u64())
+            && let Some(prims) = doc
                 .get("meshes")
                 .and_then(|m| m.get(malla as usize))
                 .and_then(|m| m.get("primitives"))
@@ -961,7 +956,6 @@ pub fn triangulos_de_glb(bytes: &[u8]) -> Result<Vec<TrianguloLeido>, String> {
                     mundo_pos.clear();
                 }
             }
-        }
         if let Some(hijos) = nodo.get("children").and_then(|c| c.as_array()) {
             for h in hijos.iter().filter_map(|v| v.as_u64()) {
                 pendientes.push((h as usize, mundo));
@@ -1056,12 +1050,8 @@ pub fn normalizar_glb(
         let n = normal_de_f32(p);
         let color = t.color.unwrap_or(color_defecto);
         let destino = por_familia.entry("modelo".to_string()).or_default();
-        for i in 0..3 {
-            destino.push(crate::gltf::Vertice {
-                pos: p[i],
-                normal: n,
-                color,
-            });
+        for pos in p {
+            destino.push(crate::gltf::Vertice { pos, normal: n, color });
         }
     }
     let glb = crate::gltf::glb_desde_vertices(&por_familia);
@@ -1286,7 +1276,7 @@ mod tests {
         // La normalización informa la base del modelo original (no un valor cualquiera): debe
         // coincidir con el mínimo en z del glb de entrada.
         assert!(
-            (info.base_previa as f64 - antes.bbox.min[2] as f64).abs() < 1e-4,
+            (info.base_previa - antes.bbox.min[2]).abs() < 1e-4,
             "base_previa {:?} vs min z original {:?}",
             info.base_previa,
             antes.bbox.min[2]
@@ -1421,12 +1411,14 @@ mod tests {
 
     #[test]
     fn detecta_un_modelo_gigante() {
-        let mut m = Modelo::default();
-        m.bbox = Bbox3 {
-            min: [0.0, 0.0, 0.0],
-            max: [500.0, 20.0, 30.0],
+        let m = Modelo {
+            bbox: Bbox3 {
+                min: [0.0, 0.0, 0.0],
+                max: [500.0, 20.0, 30.0],
+            },
+            triangulos: 100,
+            ..Modelo::default()
         };
-        m.triangulos = 100;
         let avisos = revisar(&m, Expectativa::pieza());
         assert!(avisos.iter().any(|a| a.gravedad == Gravedad::Error));
     }

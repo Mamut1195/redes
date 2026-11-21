@@ -121,7 +121,7 @@ impl Camera {
         let aspect = aspecto.max(0.05) as f64;
         // `fov` está en grados: sin `to_radians` la tangente sale de un ángulo absurdo y el pase
         // 3D dibujaba el modelo ~1,3× más pequeño que el pintor.
-        let tan = (self.fov as f64 * 0.5).to_radians().tan().max(1e-3);
+        let tan = (self.fov * 0.5).to_radians().tan().max(1e-3);
         // Rango de profundidad atado a la distancia de la cámara: con far/near gigantes el
         // z-búfer pierde precisión y las caras lejanas ganan a las cercanas.
         let cerca = (self.distance * 0.02).clamp(0.05, 200.0);
@@ -376,8 +376,8 @@ pub fn build_opts(
     let mut etiquetas: Vec<Etiqueta> = Vec::new();
 
     // --- terreno ---
-    if layers.terreno {
-        if let Some(t) = terrain {
+    if layers.terreno
+        && let Some(t) = terrain {
             let light = normalize([-0.45, -0.6, 0.66]);
             let (zmin, zmax) = t.z_range();
             let zspan = (zmax - zmin).max(1e-6);
@@ -423,7 +423,6 @@ pub fn build_opts(
                 tri_count += 1;
             }
         }
-    }
 
     // --- ciudad: calles y manzanas ---
     if layers.edificios
@@ -730,8 +729,8 @@ pub fn build_opts(
                     Some(xc) => cortar_tri(verts, xc),
                     None => (vec![verts], None),
                 };
-                if let Some((ca, cb)) = arista {
-                    if let (Some(sa), Some(sb)) = (cam.project(ca), cam.project(cb)) {
+                if let Some((ca, cb)) = arista
+                    && let (Some(sa), Some(sb)) = (cam.project(ca), cam.project(cb)) {
                         net.push(Prim::Line {
                             a: sa,
                             b: sb,
@@ -741,7 +740,6 @@ pub fn build_opts(
                         });
                         line_count += 1;
                     }
-                }
                 for trozo in trozos {
                     let mut pts = Vec::with_capacity(3);
                     let mut d = 0.0;
@@ -819,8 +817,8 @@ pub fn build_opts(
             };
 
             // Muy lejos: símbolo de tamaño fijo (una ciudad no se llena de cilindros).
-            if r_px < 3.0 {
-                if let Some(c) = cam.project(top) {
+            if r_px < 3.0
+                && let Some(c) = cam.project(top) {
                     let sz = if sel { 6.0 } else { 3.6 };
                     let base: [f32; 3] = if es_agua {
                         [0.33, 0.63, 0.96]
@@ -841,7 +839,6 @@ pub fn build_opts(
                     tri_count += 1;
                     continue;
                 }
-            }
 
             // LOD por tamaño en pantalla, con presupuesto global de triángulos.
             let mut lod = if r_px > 14.0 { 2u8 } else { 1u8 };
@@ -888,8 +885,8 @@ pub fn build_opts(
                         Some(xc) => cortar_tri(tri_local, xc),
                         None => (vec![tri_local], None),
                     };
-                    if let Some((a, b)) = corte {
-                        if let (Some(sa), Some(sb)) = (cam.project(a), cam.project(b)) {
+                    if let Some((a, b)) = corte
+                        && let (Some(sa), Some(sb)) = (cam.project(a), cam.project(b)) {
                             net.push(Prim::Line {
                                 a: sa,
                                 b: sb,
@@ -899,7 +896,6 @@ pub fn build_opts(
                             });
                             line_count += 1;
                         }
-                    }
 
                     for q in trozos {
                         let mut pts = Vec::with_capacity(3);
@@ -943,8 +939,8 @@ pub fn build_opts(
             }
 
             // Etiqueta: solo cuando la pieza ya se distingue o está seleccionada.
-            if r_px > 9.0 || sel {
-                if let Some(c) = cam.project(top) {
+            if (r_px > 9.0 || sel)
+                && let Some(c) = cam.project(top) {
                     etiquetas.push(Etiqueta {
                         pos: [c[0], c[1] - 10.0],
                         texto: format!("{} · {}", n.code, n.ty.replace('_', " ")),
@@ -952,7 +948,6 @@ pub fn build_opts(
                         depth: cam.depth(top) as f32,
                     });
                 }
-            }
         }
     }
 
@@ -1052,7 +1047,10 @@ fn recortar_extremos(pts: &mut [P3], r0: f64, r1: f64) {
 
 /// Recorta un triángulo contra el semiespacio `x <= xc` y devuelve los trozos que quedan
 /// más la arista de corte (si el plano lo atraviesa).
-fn cortar_tri(tri: [[f64; 3]; 3], xc: f32) -> (Vec<[[f64; 3]; 3]>, Option<([f64; 3], [f64; 3])>) {
+/// Trozos de un triángulo al cortarlo y, si el plano lo atraviesa, la arista de corte.
+type Corte = (Vec<[[f64; 3]; 3]>, Option<([f64; 3], [f64; 3])>);
+
+fn cortar_tri(tri: [[f64; 3]; 3], xc: f32) -> Corte {
     let xc = xc as f64;
     let dentro = |p: [f64; 3]| p[0] <= xc;
     let n_dentro = tri.iter().filter(|p| dentro(**p)).count();
@@ -1715,6 +1713,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::field_reassign_with_default)]
     fn la_matriz_3d_coincide_con_la_proyeccion_2d() {
         let p = crate::demo_catalog::catalogo();
         let mut cam = Camera::default();

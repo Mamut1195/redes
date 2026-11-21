@@ -145,15 +145,14 @@ impl Terrain {
                 self.points[tri[1] as usize],
                 self.points[tri[2] as usize],
             );
-            if let Some((w0, w1, w2)) = barycentric(p, a.p2(), b.p2(), c.p2()) {
-                if w0 >= -1e-9 && w1 >= -1e-9 && w2 >= -1e-9 {
+            if let Some((w0, w1, w2)) = barycentric(p, a.p2(), b.p2(), c.p2())
+                && w0 >= -1e-9 && w1 >= -1e-9 && w2 >= -1e-9 {
                     let z = w0 * a.z + w1 * b.z + w2 * c.z;
                     let depth = w0.min(w1).min(w2);
-                    if best.map_or(true, |(bd, _)| depth > bd) {
+                    if best.is_none_or(|(bd, _)| depth > bd) {
                         best = Some((depth, z));
                     }
                 }
-            }
         }
         best.map(|(_, z)| z)
     }
@@ -183,7 +182,8 @@ impl Terrain {
     /// Devuelve segmentos agrupados por cota, listos para dibujar.
     pub fn contours(&self, interval: f64, cells: usize) -> Vec<Contour> {
         let (zmin, zmax) = self.z_range();
-        if !(interval > 0.0) || self.is_empty() {
+        // `is_nan` explícito: `!(a > b)` y `a <= b` no son equivalentes con NaN.
+        if interval.is_nan() || interval <= 0.0 || self.is_empty() {
             return Vec::new();
         }
         let nx = cells.clamp(8, 400);

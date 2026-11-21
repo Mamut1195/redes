@@ -10,7 +10,6 @@
 //! El canvas se pinta transparente para que el pase 3D se vea a través de él. Sin GPU o con
 //! `--sin-gpu3d` la app usa el renderer 2D de siempre.
 
-use std::sync::{Arc, Mutex};
 
 use rune::compose::{Compositor, Frame};
 use rune::render::EffectSite;

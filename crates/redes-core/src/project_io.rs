@@ -23,11 +23,10 @@ pub fn save(p: &Project, path: &Path) -> Result<(), String> {
     // Blindaje: `serde_json` escribe `null` para NaN/infinito y el archivo deja de poder abrirse.
     // Se rechaza antes de tocar el disco.
     validar_finito(p)?;
-    if let Some(dir) = path.parent() {
-        if !dir.as_os_str().is_empty() {
+    if let Some(dir) = path.parent()
+        && !dir.as_os_str().is_empty() {
             std::fs::create_dir_all(dir).map_err(|e| format!("E_IO_PERMISSION: {e}"))?;
         }
-    }
     let json = serde_json::to_string_pretty(p).map_err(|e| format!("E_FMT_PARSE: {e}"))?;
     let tmp = path.with_extension("redes.tmp");
     {

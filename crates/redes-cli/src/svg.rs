@@ -9,9 +9,9 @@ use redes_core::view::{Prim, Scene};
 
 pub fn render(scene: &Scene, viewport: [f32; 2]) -> String {
     let mut s = String::with_capacity(64 * 1024);
-    let _ = write!(
+    let _ = writeln!(
         s,
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{:.0}\" height=\"{:.0}\" viewBox=\"0 0 {:.0} {:.0}\">\n",
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{:.0}\" height=\"{:.0}\" viewBox=\"0 0 {:.0} {:.0}\">",
         viewport[0], viewport[1], viewport[0], viewport[1]
     );
     s.push_str("<rect width=\"100%\" height=\"100%\" fill=\"#12141a\"/>\n");
@@ -34,9 +34,9 @@ pub fn render(scene: &Scene, viewport: [f32; 2]) -> String {
                 s.push_str("\"/>\n");
             }
             Prim::Line { a, b, w, color, .. } => {
-                let _ = write!(
+                let _ = writeln!(
                     s,
-                    "<line x1=\"{:.1}\" y1=\"{:.1}\" x2=\"{:.1}\" y2=\"{:.1}\" stroke=\"{}\" stroke-width=\"{:.2}\" stroke-linecap=\"round\"/>\n",
+                    "<line x1=\"{:.1}\" y1=\"{:.1}\" x2=\"{:.1}\" y2=\"{:.1}\" stroke=\"{}\" stroke-width=\"{:.2}\" stroke-linecap=\"round\"/>",
                     a[0],
                     a[1],
                     b[0],

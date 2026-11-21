@@ -769,7 +769,7 @@ pub fn import_terreno(p: &mut Project, path: &Path, epsg: u32) -> Result<ImportR
             continue;
         }
         let parts: Vec<&str> = l
-            .split(|c| c == ',' || c == ';' || c == '\t' || c == ' ')
+            .split([',', ';', '\t', ' '])
             .filter(|s| !s.is_empty())
             .collect();
         if parts.len() < 3 {
