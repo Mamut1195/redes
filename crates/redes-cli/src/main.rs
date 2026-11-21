@@ -83,6 +83,20 @@ enum Cmd {
         #[command(subcommand)]
         cmd: BibliotecaCmd,
     },
+    /// Listado de cantidades: objetos, longitudes, volúmenes y pesos, con su procedencia.
+    ///
+    /// No valora: emite cantidades. La hoja de precios es de otra aplicación.
+    Cantidades {
+        /// `familia`, `longitud`, `volumen`, `area`, `peso` o `todo`.
+        #[arg(long, default_value = "todo")]
+        grupo: String,
+        /// Escribe el listado en CSV (Excel lo abre con acentos).
+        #[arg(long)]
+        csv: Option<PathBuf>,
+        /// Umbral de discrepancia declarado/medido, en porcentaje.
+        #[arg(long, default_value_t = 10.0)]
+        tolerancia: f64,
+    },
     /// Vista 3D del modelo en SVG (sin GPU, apta para agentes).
     Vista {
         #[arg(long)]
@@ -412,6 +426,70 @@ fn run(cli: Cli, t0: Instant) -> i32 {
 
     let destructive = false;
     let mut env = match cli.cmd {
+        Cmd::Cantidades {
+            grupo,
+            csv,
+            tolerancia,
+        } => {
+            let mut filas = Vec::new();
+            let todo = grupo == "todo" || grupo.is_empty();
+            if todo || grupo == "familia" {
+                filas.extend(redes_core::cantidades::por_familia(&p));
+            }
+            if todo || grupo == "longitud" || grupo == "longitudes" {
+                filas.extend(redes_core::cantidades::longitudes(&p));
+            }
+            if todo || grupo == "volumen" || grupo == "area" {
+                filas.extend(redes_core::cantidades::de_modelos(&p));
+            }
+            if todo || grupo == "peso" {
+                filas.extend(redes_core::cantidades::pesos(&p));
+            }
+            // La biblioteca del proyecto permite comparar lo declarado con lo medido.
+            let bib = p.biblioteca.as_ref().and_then(|ruta| {
+                let base = path
+                    .parent()
+                    .map(|d| d.join(ruta))
+                    .unwrap_or_else(|| PathBuf::from(ruta));
+                redes_core::biblioteca::Biblioteca::cargar(&base).ok()
+            });
+            let discrepancias = redes_core::cantidades::discrepancias(&p, bib.as_ref(), tolerancia);
+            let totales: Vec<_> = redes_core::cantidades::totales(&filas)
+                .into_iter()
+                .map(|(g, u, c)| json!({ "grupo": g, "unidad": u, "cantidad": round(c, 3) }))
+                .collect();
+            let mut env = Envelope::ok("cantidades")
+                .with_project(&p, &path.display().to_string())
+                .with_data(json!({
+                    "filas": filas.iter().map(|f| json!({
+                        "grupo": f.grupo,
+                        "clave": f.clave,
+                        "unidad": f.unidad,
+                        "cantidad": round(f.cantidad, 3),
+                        "fuente": f.fuente,
+                    })).collect::<Vec<_>>(),
+                    "totales": totales,
+                    "discrepancias": discrepancias.iter().map(|d| json!({
+                        "objeto": d.codigo,
+                        "familia": d.familia,
+                        "declarado": round(d.declarado, 4),
+                        "medido": round(d.medido, 4),
+                        "desvio_pct": round(d.desvio_pct, 2),
+                    })).collect::<Vec<_>>(),
+                    "precios": "fuera de alcance: la app emite cantidades, no valoraciones",
+                }))
+                .within(elapsed(t0));
+            if let Some(destino) = csv {
+                let texto = redes_core::cantidades::a_csv(&filas);
+                if !dry {
+                    if let Err(e) = std::fs::write(&destino, texto) {
+                        return emit(io_error("cantidades", &e.to_string()), pretty, quiet);
+                    }
+                }
+                env = env.with_artifact("csv", &destino.display().to_string());
+            }
+            env
+        }
         Cmd::Biblioteca {
             cmd:
                 BibliotecaCmd::Aplicar {
@@ -871,6 +949,7 @@ fn command_id(c: &Cmd) -> &'static str {
             ExportarCmd::Geojson { .. } => "exportar.geojson",
             ExportarCmd::Gltf { .. } => "exportar.gltf",
         },
+        Cmd::Cantidades { .. } => "cantidades",
         Cmd::Vista { .. } => "vista",
         Cmd::Biblioteca { cmd } => match cmd {
             BibliotecaCmd::Revisar { .. } => "biblioteca.revisar",

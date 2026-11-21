@@ -61,6 +61,7 @@ fn tuberia(
     desde: (ElementId, [f64; 3]),
     hasta: (ElementId, [f64; 3]),
     dn: u32,
+    material: &str,
 ) -> ElementId {
     let medio = [
         (desde.1[0] + hasta.1[0]) * 0.5,
@@ -80,7 +81,10 @@ fn tuberia(
             P3::new(hasta.1[0], hasta.1[1], hasta.1[2]),
         ],
         d_mm: dn,
-        attrs: BTreeMap::from([("diametro_nominal".to_string(), Value::Num(dn as f64))]),
+        attrs: BTreeMap::from([
+            ("diametro_nominal".to_string(), Value::Num(dn as f64)),
+            ("material".to_string(), Value::Text(material.to_string())),
+        ]),
         datos: BTreeMap::new(),
         estado: EstadoObjeto::Pendiente,
         nota: None,
@@ -233,6 +237,7 @@ pub fn cadena() -> Project {
         (bocatoma, [ORIGEN_E + 26.0, ORIGEN_N + 198.0, 2529.6]),
         (desarenador, [ORIGEN_E + 48.0, ORIGEN_N + 192.0, 2528.2]),
         200,
+        "PVC",
     );
     let _ = tuberia(
         &mut p,
@@ -242,6 +247,7 @@ pub fn cadena() -> Project {
         (desarenador, [ORIGEN_E + 52.0, ORIGEN_N + 192.0, 2528.0]),
         (camara_carga, [ORIGEN_E + 72.0, ORIGEN_N + 186.0, 2527.2]),
         200,
+        "PVC",
     );
     let _ = tuberia(
         &mut p,
@@ -251,6 +257,7 @@ pub fn cadena() -> Project {
         (camara_carga, [ORIGEN_E + 74.0, ORIGEN_N + 185.0, 2527.0]),
         (valvula_aire, [ORIGEN_E + 110.0, ORIGEN_N + 178.0, 2523.4]),
         250,
+        "PVC",
     );
     let _ = tuberia(
         &mut p,
@@ -260,6 +267,7 @@ pub fn cadena() -> Project {
         (valvula_aire, [ORIGEN_E + 111.0, ORIGEN_N + 177.0, 2523.2]),
         (valvula_purga, [ORIGEN_E + 130.0, ORIGEN_N + 172.0, 2521.6]),
         250,
+        "PVC",
     );
     let _ = tuberia(
         &mut p,
@@ -269,6 +277,7 @@ pub fn cadena() -> Project {
         (valvula_purga, [ORIGEN_E + 131.0, ORIGEN_N + 171.0, 2521.4]),
         (camara_quiebre, [ORIGEN_E + 150.0, ORIGEN_N + 168.0, 2519.0]),
         250,
+        "PVC",
     );
 
     // --- 2. Planta de tratamiento (PTAP) ---
@@ -440,6 +449,7 @@ pub fn cadena() -> Project {
         (camara_quiebre, [ORIGEN_E + 151.0, ORIGEN_N + 167.0, 2518.8]),
         (aforador, [ORIGEN_E + 168.0, ORIGEN_N + 160.0, 2517.4]),
         250,
+        "PVC",
     );
     let _ = tuberia(
         &mut p,
@@ -449,6 +459,7 @@ pub fn cadena() -> Project {
         (aforador, [ORIGEN_E + 170.0, ORIGEN_N + 160.0, 2517.4]),
         (mezcla, [ORIGEN_E + 178.0, ORIGEN_N + 160.0, 2517.0]),
         250,
+        "PVC",
     );
     let _ = tuberia(
         &mut p,
@@ -458,6 +469,7 @@ pub fn cadena() -> Project {
         (mezcla, [ORIGEN_E + 180.0, ORIGEN_N + 160.0, 2516.6]),
         (floculador, [ORIGEN_E + 196.0, ORIGEN_N + 160.0, 2516.4]),
         250,
+        "PVC",
     );
     let _ = tuberia(
         &mut p,
@@ -467,6 +479,7 @@ pub fn cadena() -> Project {
         (floculador, [ORIGEN_E + 201.0, ORIGEN_N + 160.0, 2516.2]),
         (sedimentador, [ORIGEN_E + 216.0, ORIGEN_N + 160.0, 2516.0]),
         250,
+        "PVC",
     );
     let _ = tuberia(
         &mut p,
@@ -476,6 +489,7 @@ pub fn cadena() -> Project {
         (sedimentador, [ORIGEN_E + 222.0, ORIGEN_N + 160.0, 2515.8]),
         (filtro, [ORIGEN_E + 238.0, ORIGEN_N + 160.0, 2515.6]),
         250,
+        "PVC",
     );
     let _ = tuberia(
         &mut p,
@@ -485,6 +499,7 @@ pub fn cadena() -> Project {
         (filtro, [ORIGEN_E + 242.0, ORIGEN_N + 160.0, 2515.5]),
         (desinfeccion, [ORIGEN_E + 254.0, ORIGEN_N + 160.0, 2515.4]),
         250,
+        "PVC",
     );
     let _ = tuberia(
         &mut p,
@@ -494,6 +509,7 @@ pub fn cadena() -> Project {
         (desinfeccion, [ORIGEN_E + 256.0, ORIGEN_N + 160.0, 2515.3]),
         (contacto, [ORIGEN_E + 268.0, ORIGEN_N + 160.0, 2515.2]),
         250,
+        "PVC",
     );
 
     // --- 3. Reservorio y distribución ---
@@ -519,6 +535,7 @@ pub fn cadena() -> Project {
         (contacto, [ORIGEN_E + 272.0, ORIGEN_N + 160.0, 2515.2]),
         (reservorio, [ORIGEN_E + 292.0, ORIGEN_N + 160.0, 2514.8]),
         250,
+        "PVC",
     );
 
     // Malla de distribución: seis calles de este a oeste con válvulas e hidrantes.
@@ -565,6 +582,7 @@ pub fn cadena() -> Project {
                 prev,
                 (val, [ORIGEN_E + x + 8.0, ORIGEN_N + y, z]),
                 150,
+                "PVC",
             );
             prev = (val, [ORIGEN_E + x + 8.0, ORIGEN_N + y, z]);
         }
@@ -596,6 +614,7 @@ pub fn cadena() -> Project {
                 prev,
                 (pozo, [ORIGEN_E + x, ORIGEN_N + y, z - 1.5]),
                 200,
+                "hormigon",
             );
         }
         prev_alc = Some((pozo, [ORIGEN_E + x, ORIGEN_N + y, z - 1.5]));
@@ -713,6 +732,7 @@ pub fn cadena() -> Project {
         ),
         (reja_ptar, [ORIGEN_E + 452.0, ORIGEN_N + 74.0, 2500.4]),
         250,
+        "hormigon",
     );
     let _ = tuberia(
         &mut p,
@@ -725,6 +745,7 @@ pub fn cadena() -> Project {
             [ORIGEN_E + 464.0, ORIGEN_N + 74.0, 2500.2],
         ),
         250,
+        "hormigon",
     );
     let _ = tuberia(
         &mut p,
@@ -737,6 +758,7 @@ pub fn cadena() -> Project {
         ),
         (reactor, [ORIGEN_E + 486.0, ORIGEN_N + 74.0, 2500.0]),
         250,
+        "hormigon",
     );
     let _ = tuberia(
         &mut p,
@@ -749,6 +771,7 @@ pub fn cadena() -> Project {
             [ORIGEN_E + 510.0, ORIGEN_N + 74.0, 2499.8],
         ),
         250,
+        "hormigon",
     );
     let _ = tuberia(
         &mut p,
@@ -761,6 +784,7 @@ pub fn cadena() -> Project {
         ),
         (laguna, [ORIGEN_E + 540.0, ORIGEN_N + 74.0, 2499.4]),
         300,
+        "hormigon",
     );
     let _ = tuberia(
         &mut p,
@@ -770,6 +794,7 @@ pub fn cadena() -> Project {
         (laguna, [ORIGEN_E + 560.0, ORIGEN_N + 74.0, 2498.6]),
         (descarga, [ORIGEN_E + 570.0, ORIGEN_N + 74.0, 2498.0]),
         300,
+        "hormigon",
     );
 
     let _ = aforador;

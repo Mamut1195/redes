@@ -18276,7 +18276,8 @@
       ],
       "d_mm": 200,
       "attrs": {
-        "diametro_nominal": 200.0
+        "diametro_nominal": 200.0,
+        "material": "PVC"
       },
       "datos": {},
       "estado": "pendiente",
@@ -18317,7 +18318,8 @@
       ],
       "d_mm": 200,
       "attrs": {
-        "diametro_nominal": 200.0
+        "diametro_nominal": 200.0,
+        "material": "PVC"
       },
       "datos": {},
       "estado": "pendiente",
@@ -18358,7 +18360,8 @@
       ],
       "d_mm": 250,
       "attrs": {
-        "diametro_nominal": 250.0
+        "diametro_nominal": 250.0,
+        "material": "PVC"
       },
       "datos": {},
       "estado": "pendiente",
@@ -18399,7 +18402,8 @@
       ],
       "d_mm": 250,
       "attrs": {
-        "diametro_nominal": 250.0
+        "diametro_nominal": 250.0,
+        "material": "PVC"
       },
       "datos": {},
       "estado": "pendiente",
@@ -18440,7 +18444,8 @@
       ],
       "d_mm": 250,
       "attrs": {
-        "diametro_nominal": 250.0
+        "diametro_nominal": 250.0,
+        "material": "PVC"
       },
       "datos": {},
       "estado": "pendiente",
@@ -18481,7 +18486,8 @@
       ],
       "d_mm": 250,
       "attrs": {
-        "diametro_nominal": 250.0
+        "diametro_nominal": 250.0,
+        "material": "PVC"
       },
       "datos": {},
       "estado": "pendiente",
@@ -18522,7 +18528,8 @@
       ],
       "d_mm": 250,
       "attrs": {
-        "diametro_nominal": 250.0
+        "diametro_nominal": 250.0,
+        "material": "PVC"
       },
       "datos": {},
       "estado": "pendiente",
@@ -18563,7 +18570,8 @@
       ],
       "d_mm": 250,
       "attrs": {
-        "diametro_nominal": 250.0
+        "diametro_nominal": 250.0,
+        "material": "PVC"
       },
       "datos": {},
       "estado": "pendiente",
@@ -18604,7 +18612,8 @@
       ],
       "d_mm": 250,
       "attrs": {
-        "diametro_nominal": 250.0
+        "diametro_nominal": 250.0,
+        "material": "PVC"
       },
       "datos": {},
       "estado": "pendiente",
@@ -18645,7 +18654,8 @@
       ],
       "d_mm": 250,
       "attrs": {
-        "diametro_nominal": 250.0
+        "diametro_nominal": 250.0,
+        "material": "PVC"
       },
       "datos": {},
       "estado": "pendiente",
@@ -18686,7 +18696,8 @@
       ],
       "d_mm": 250,
       "attrs": {
-        "diametro_nominal": 250.0
+        "diametro_nominal": 250.0,
+        "material": "PVC"
       },
       "datos": {},
       "estado": "pendiente",
@@ -18727,7 +18738,8 @@
       ],
       "d_mm": 250,
       "attrs": {
-        "diametro_nominal": 250.0
+        "diametro_nominal": 250.0,
+        "material": "PVC"
       },
       "datos": {},
       "estado": "pendiente",
@@ -18768,7 +18780,8 @@
       ],
       "d_mm": 250,
       "attrs": {
-        "diametro_nominal": 250.0
+        "diametro_nominal": 250.0,
+        "material": "PVC"
       },
       "datos": {},
       "estado": "pendiente",
@@ -18809,7 +18822,8 @@
       ],
       "d_mm": 150,
       "attrs": {
-        "diametro_nominal": 150.0
+        "diametro_nominal": 150.0,
+        "material": "PVC"
       },
       "datos": {},
       "estado": "pendiente",
@@ -18850,7 +18864,8 @@
       ],
       "d_mm": 150,
       "attrs": {
-        "diametro_nominal": 150.0
+        "diametro_nominal": 150.0,
+        "material": "PVC"
       },
       "datos": {},
       "estado": "pendiente",
@@ -18891,7 +18906,8 @@
       ],
       "d_mm": 150,
       "attrs": {
-        "diametro_nominal": 150.0
+        "diametro_nominal": 150.0,
+        "material": "PVC"
       },
       "datos": {},
       "estado": "pendiente",
@@ -18932,7 +18948,8 @@
       ],
       "d_mm": 150,
       "attrs": {
-        "diametro_nominal": 150.0
+        "diametro_nominal": 150.0,
+        "material": "PVC"
       },
       "datos": {},
       "estado": "pendiente",
@@ -18973,7 +18990,8 @@
       ],
       "d_mm": 150,
       "attrs": {
-        "diametro_nominal": 150.0
+        "diametro_nominal": 150.0,
+        "material": "PVC"
       },
       "datos": {},
       "estado": "pendiente",
@@ -19014,7 +19032,8 @@
       ],
       "d_mm": 150,
       "attrs": {
-        "diametro_nominal": 150.0
+        "diametro_nominal": 150.0,
+        "material": "PVC"
       },
       "datos": {},
       "estado": "pendiente",
@@ -19055,7 +19074,8 @@
       ],
       "d_mm": 150,
       "attrs": {
-        "diametro_nominal": 150.0
+        "diametro_nominal": 150.0,
+        "material": "PVC"
       },
       "datos": {},
       "estado": "pendiente",
@@ -19096,7 +19116,8 @@
       ],
       "d_mm": 150,
       "attrs": {
-        "diametro_nominal": 150.0
+        "diametro_nominal": 150.0,
+        "material": "PVC"
       },
       "datos": {},
       "estado": "pendiente",
@@ -19137,7 +19158,8 @@
       ],
       "d_mm": 150,
       "attrs": {
-        "diametro_nominal": 150.0
+        "diametro_nominal": 150.0,
+        "material": "PVC"
       },
       "datos": {},
       "estado": "pendiente",
@@ -19178,7 +19200,8 @@
       ],
       "d_mm": 150,
       "attrs": {
-        "diametro_nominal": 150.0
+        "diametro_nominal": 150.0,
+        "material": "PVC"
       },
       "datos": {},
       "estado": "pendiente",
@@ -19219,7 +19242,8 @@
       ],
       "d_mm": 150,
       "attrs": {
-        "diametro_nominal": 150.0
+        "diametro_nominal": 150.0,
+        "material": "PVC"
       },
       "datos": {},
       "estado": "pendiente",
@@ -19260,7 +19284,8 @@
       ],
       "d_mm": 150,
       "attrs": {
-        "diametro_nominal": 150.0
+        "diametro_nominal": 150.0,
+        "material": "PVC"
       },
       "datos": {},
       "estado": "pendiente",
@@ -19301,7 +19326,8 @@
       ],
       "d_mm": 200,
       "attrs": {
-        "diametro_nominal": 200.0
+        "diametro_nominal": 200.0,
+        "material": "hormigon"
       },
       "datos": {},
       "estado": "pendiente",
@@ -19342,7 +19368,8 @@
       ],
       "d_mm": 200,
       "attrs": {
-        "diametro_nominal": 200.0
+        "diametro_nominal": 200.0,
+        "material": "hormigon"
       },
       "datos": {},
       "estado": "pendiente",
@@ -19383,7 +19410,8 @@
       ],
       "d_mm": 200,
       "attrs": {
-        "diametro_nominal": 200.0
+        "diametro_nominal": 200.0,
+        "material": "hormigon"
       },
       "datos": {},
       "estado": "pendiente",
@@ -19424,7 +19452,8 @@
       ],
       "d_mm": 200,
       "attrs": {
-        "diametro_nominal": 200.0
+        "diametro_nominal": 200.0,
+        "material": "hormigon"
       },
       "datos": {},
       "estado": "pendiente",
@@ -19465,7 +19494,8 @@
       ],
       "d_mm": 200,
       "attrs": {
-        "diametro_nominal": 200.0
+        "diametro_nominal": 200.0,
+        "material": "hormigon"
       },
       "datos": {},
       "estado": "pendiente",
@@ -19506,7 +19536,8 @@
       ],
       "d_mm": 250,
       "attrs": {
-        "diametro_nominal": 250.0
+        "diametro_nominal": 250.0,
+        "material": "hormigon"
       },
       "datos": {},
       "estado": "pendiente",
@@ -19547,7 +19578,8 @@
       ],
       "d_mm": 250,
       "attrs": {
-        "diametro_nominal": 250.0
+        "diametro_nominal": 250.0,
+        "material": "hormigon"
       },
       "datos": {},
       "estado": "pendiente",
@@ -19588,7 +19620,8 @@
       ],
       "d_mm": 250,
       "attrs": {
-        "diametro_nominal": 250.0
+        "diametro_nominal": 250.0,
+        "material": "hormigon"
       },
       "datos": {},
       "estado": "pendiente",
@@ -19629,7 +19662,8 @@
       ],
       "d_mm": 250,
       "attrs": {
-        "diametro_nominal": 250.0
+        "diametro_nominal": 250.0,
+        "material": "hormigon"
       },
       "datos": {},
       "estado": "pendiente",
@@ -19670,7 +19704,8 @@
       ],
       "d_mm": 300,
       "attrs": {
-        "diametro_nominal": 300.0
+        "diametro_nominal": 300.0,
+        "material": "hormigon"
       },
       "datos": {},
       "estado": "pendiente",
@@ -19711,7 +19746,8 @@
       ],
       "d_mm": 300,
       "attrs": {
-        "diametro_nominal": 300.0
+        "diametro_nominal": 300.0,
+        "material": "hormigon"
       },
       "datos": {},
       "estado": "pendiente",

@@ -15,6 +15,7 @@
 //! ```
 
 pub mod biblioteca;
+pub mod cantidades;
 pub mod city;
 pub mod demo;
 pub mod demo_cadena;
