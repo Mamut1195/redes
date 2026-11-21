@@ -255,7 +255,7 @@ pub fn ciudad() -> Project {
         let id = p
             .add_node(Node {
                 id: ElementId::new(0, 0),
-                family: "saneamiento.camara".into(),
+                family: "agua.camara".into(),
                 ty: "valvulas".into(),
                 code: String::new(),
                 pos: P2::new(ORIGEN_E + x, ORIGEN_N + AVENIDAS[2]),

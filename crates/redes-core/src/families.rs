@@ -254,7 +254,7 @@ impl AttrDef {
 }
 
 /// Constructor de atributo.
-pub fn attr(
+pub(crate) fn attr(
     key: &'static str,
     label: &'static str,
     unit: Unit,
@@ -340,7 +340,11 @@ pub struct TypeDef {
     pub presets: Vec<(&'static str, Value)>,
 }
 
-pub fn subtype(key: &'static str, label: &'static str, required: &[&'static str]) -> TypeDef {
+pub(crate) fn subtype(
+    key: &'static str,
+    label: &'static str,
+    required: &[&'static str],
+) -> TypeDef {
     TypeDef {
         key,
         label,
@@ -505,7 +509,7 @@ pub fn by_category(c: Category) -> impl Iterator<Item = &'static FamilyDef> {
 }
 
 fn build() -> Vec<FamilyDef> {
-    vec![
+    let mut catalogo = vec![
         FamilyDef {
             key: "saneamiento.pozo",
             code_prefix: "PZ",
@@ -8441,7 +8445,10 @@ fn build() -> Vec<FamilyDef> {
                 subtype("lodos", "De lodos", &["profundidad", "numero_celdas"]),
             ],
         },
-    ]
+    ];
+    // Huecos y retiros del registro (docs/20 §4 y §5).
+    crate::families_extra::aplicar(&mut catalogo);
+    catalogo
 }
 
 #[cfg(test)]

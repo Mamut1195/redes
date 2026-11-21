@@ -165,7 +165,7 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
             } else {
                 codigo.clone()
             };
-            let node = Node {
+            let mut node = Node {
                 id: ElementId::new(0, 0),
                 family: familia.clone(),
                 ty: if subtipo.is_empty() {
@@ -451,7 +451,7 @@ pub fn import_dxf(p: &mut Project, path: &Path, tolerance: f64) -> Result<Import
             .as_ref()
             .and_then(|t| t.z_at(*pos))
             .unwrap_or(if rim.is_finite() { rim } else { *z });
-        let node = Node {
+        let mut node = Node {
             id: ElementId::new(0, 0),
             family: fam.to_string(),
             ty: default_subtype(fam),
@@ -466,6 +466,15 @@ pub fn import_dxf(p: &mut Project, path: &Path, tolerance: f64) -> Result<Import
             nota: None,
             deleted: false,
         };
+        // Si la clave viene de una familia retirada, se traduce a su destino (nunca en silencio).
+        if let Some((nf, nt)) = crate::families_extra::alias(&node.family, &node.ty) {
+            rep.descartados.push(format!(
+                "{}:{} renombrado a {nf}:{nt}",
+                node.family, node.ty
+            ));
+            node.family = nf.to_string();
+            node.ty = nt.to_string();
+        }
         match p.add_node(node) {
             Ok(id) => {
                 node_ids.push((id, *pos));

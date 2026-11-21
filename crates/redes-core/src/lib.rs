@@ -23,6 +23,7 @@ pub mod demo_city;
 pub mod envelope;
 pub mod export;
 pub mod families;
+pub mod families_extra;
 pub mod geom;
 pub mod gltf;
 pub mod ingest;

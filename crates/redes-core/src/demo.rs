@@ -295,7 +295,7 @@ pub fn project() -> Project {
         let id = p
             .add_node(Node {
                 id: ElementId::new(0, 0),
-                family: "saneamiento.camara".into(),
+                family: "agua.camara".into(),
                 ty: "valvulas".into(),
                 code: String::new(),
                 pos: P2::new(e, n),

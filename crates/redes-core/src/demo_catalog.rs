@@ -153,7 +153,7 @@ pub fn catalogo() -> Project {
             BTreeMap::from([("diametro_nominal".to_string(), Value::Int(25))]),
         ),
         (
-            "saneamiento.camara",
+            "agua.camara",
             "valvulas",
             150,
             BTreeMap::from([("diametro_interior".to_string(), Value::Num(1.5))]),
