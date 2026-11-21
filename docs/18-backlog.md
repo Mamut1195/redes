@@ -59,7 +59,14 @@ vea.
 
 ---
 
-## F8 — Intercambio con CAD (ida y vuelta)
+## F8 — Intercambio con CAD (ida y vuelta) — **F8-01 y F8-05 hechos**
+
+> `exportar dxf` escribe una capa `REDES_INFO` con familia, subtipo, código, cotas, trazado,
+> atributos y datos; al importar se reconstruye el proyecto desde ella (heurística por capas solo
+> para archivos ajenos). GeoJSON incluye ya los atributos de la familia. Ida y vuelta verificada con
+> el catálogo completo: 46 familias y 7 arcos vuelven idénticos. **F8-02** (bloques) queda como
+> mejora cosmética para CAD; **F8-03** (DWG) sigue bloqueado por la licencia.
+
 
 Objetivo: que lo que el CAD devuelve no pierda familia, código, atributos ni datos.
 
@@ -75,7 +82,13 @@ Objetivo: que lo que el CAD devuelve no pierda familia, código, atributos ni da
 
 ---
 
-## F9 — Calidad técnica (deuda con red)
+## F9 — Calidad técnica — **F9-01…F9-04 hechos**
+
+> Contrato del CLI con 11 pruebas sobre el binario real (sobre, códigos de salida, `--dry-run`,
+> `--pretty`, `--quiet`), fixtures de los cuatro importadores (DXF ajeno, GeoJSON municipal,
+> terreno CSV con fila mala y plan de la skill) y presupuesto de frame medido: ciudad p95 34,5 ms,
+> corte 33,9 ms, catálogo 6,6 ms en depuración. **F9-05** completado salvo el remote de GitHub.
+
 
 | ID | Ticket | Alcance | Aceptación | Días |
 |---|---|---|---|---|

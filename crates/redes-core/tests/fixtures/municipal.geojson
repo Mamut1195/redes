@@ -1,0 +1,62 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          758010.0,
+          9797010.0
+        ]
+      },
+      "properties": {
+        "codigo": "PZ-900",
+        "familia": "saneamiento.pozo",
+        "subtipo": "inspeccion",
+        "diametro_interior": 1.5,
+        "cota_clave": 2498.4
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          758040.0,
+          9797012.0
+        ]
+      },
+      "properties": {
+        "codigo": "PZ-901",
+        "familia": "saneamiento.pozo",
+        "subtipo": "inspeccion",
+        "diametro_interior": 1.2,
+        "cota_clave": 2497.9
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            758010.0,
+            9797010.0
+          ],
+          [
+            758040.0,
+            9797012.0
+          ]
+        ]
+      },
+      "properties": {
+        "codigo": "CL-900",
+        "familia": "saneamiento.tuberia",
+        "subtipo": "colector_sanitario",
+        "diametro_mm": 200,
+        "material": "hormigon"
+      }
+    }
+  ]
+}

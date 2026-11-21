@@ -804,6 +804,67 @@ fn importar_de_capa_info(
     Some(rep.clone())
 }
 
+/// Vuelca las propiedades de un GeoJSON en los atributos de la familia y en los datos.
+///
+/// Una propiedad que la familia declara como atributo entra como atributo (así vuelve la ida y
+/// vuelta); una que venga con `{valor, unidad, fuente}` entra como dato con su procedencia.
+fn propiedades_a_atributos(
+    familia: &str,
+    props: &serde_json::Value,
+    attrs: &mut BTreeMap<String, Value>,
+    datos: &mut BTreeMap<String, Dato>,
+) {
+    let Some(obj) = props.as_object() else { return };
+    let familia_def = crate::families::family(familia);
+    for (k, v) in obj {
+        if matches!(
+            k.as_str(),
+            "codigo" | "codigo_id" | "family" | "familia" | "subtipo" | "estado" | "nota"
+        ) {
+            continue;
+        }
+        if let Some(d) = v.as_object()
+            && d.contains_key("valor")
+        {
+            if let Some(valor) = d.get("valor").and_then(|x| x.as_f64()) {
+                datos.insert(
+                    k.clone(),
+                    Dato {
+                        valor,
+                        unidad: d
+                            .get("unidad")
+                            .and_then(|x| x.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        fuente: d
+                            .get("fuente")
+                            .and_then(|x| x.as_str())
+                            .unwrap_or("geojson")
+                            .to_string(),
+                    },
+                );
+            }
+            continue;
+        }
+        if familia_def.is_some_and(|f| f.attr(k).is_some()) {
+            let val = if let Some(n) = v.as_f64() {
+                // Un entero declarado como entero se respeta.
+                match familia_def.and_then(|f| f.attr(k)).map(|a| a.ty.key()) {
+                    Some("int") => Value::Int(n as i64),
+                    _ => Value::Num(n),
+                }
+            } else if let Some(s) = v.as_str() {
+                Value::Text(s.to_string())
+            } else if let Some(b) = v.as_bool() {
+                Value::Bool(b)
+            } else {
+                continue;
+            };
+            attrs.insert(k.clone(), val);
+        }
+    }
+}
+
 /// Interpreta el texto de un atributo exportado: número, entero, booleano o texto.
 fn parse_valor(v: &str) -> Value {
     if let Ok(n) = v.parse::<f64>() {
@@ -946,6 +1007,7 @@ pub fn import_geojson(p: &mut Project, path: &Path) -> Result<ImportReport, Stri
                 modelo: None,
                 deleted: false,
             };
+            propiedades_a_atributos(&fam, &props, &mut node.attrs, &mut node.datos);
             // Clave retirada: se traduce a su destino y se anota (nunca en silencio).
             if let Some((nf, nt)) = crate::families_extra::alias(&node.family, &node.ty) {
                 rep.renombrados
