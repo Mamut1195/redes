@@ -160,7 +160,7 @@ Objetivo: que lo que el CAD devuelve no pierda familia, código, atributos ni da
 > F13-01, F14-01…03, F15-01, F16-01, F16-02) son bloqueantes para v1.
 > Prioridad: **P0** bloquea v1 · **P1** importante para v1 · **P2** después de v1.
 
-## F12 — Corrección de dominio (P0)
+## F12 — Corrección de dominio (P0) — **cerrada (25/11/2026)**
 
 Objetivo: un revisor nunca ve una cota, un diámetro o un sentido de flujo que no venga del origen o
 que esté mal interpretado.
@@ -171,7 +171,13 @@ que esté mal interpretado.
 > `ingest.rs` y la lleva a la skill; F12-13 valida el CRS que declara el plan. F12-03 queda en Rust:
 > `import_plan` no rellena nada que el plan no traiga.
 >
-> **Hecho:** F12-01, F12-02, F12-06, F12-07, F12-11, F12-14; F12-04/05 como código (se reconvierten).
+> **Cerrada.** Las 15 hechas. Resumen:
+> - Clave y solera separadas; el tramo lleva sus soleras (`cota_solera_inicio/fin`) y el tubo se dibuja sobre ellas.
+> - Nada se inventa: lo ausente queda en `sin_dato`, se ve como `—` o gris, y no se exporta como dato.
+> - La skill de ingesta es guiada (D5): SKILL.md + referencias SWMM, EPANET, DXF Civil 3D, SIG y tablas; sin scripts. La app solo importa plan, su DXF (`REDES_INFO`) y terreno.
+> - El plan se valida entero: `--dry-run` real, `E_FMT_CAMPO` con sugerencia, `E_CRS`, DI y secciones, vértices 2D, dispositivos conectados con `desde`/`hasta`, `cota_eje`; `esquema` lista los valores admitidos.
+> - Contrapendiente como aviso sin invertir el sentido; aprobar exige cero observados; DXF para el dibujante (capas con color, metros, rótulos, observaciones); pozo con cono excéntrico; juntas por material; longitud 3D.
+> - Pruebas: 125 → 170+ en verde.
 
 | ID | P | Ticket | Alcance | Aceptación | Días |
 |---|---|---|---|---|---|
@@ -189,8 +195,9 @@ que esté mal interpretado.
 | F12-12 · [MAM-1096](https://linear.app/mamutsystems/issue/MAM-1096) | P1 | **Recubrimiento bien definido** | `demo_city.rs:568` llama recubrimiento a tapa − solera (es profundidad); recubrimiento = rasante − (clave + espesor) | nombre y fórmula corregidos donde aparezca | 0,5 |
 | F12-13 · [MAM-1097](https://linear.app/mamutsystems/issue/MAM-1097) | P1 | **Sistema de coordenadas controlado** | EPSG:32717 fijo (`ingest.rs:67`): admitir 17S/18S; comparar `Terrain.epsg` con `Project.crs`; detectar GeoJSON en lon/lat | GeoJSON en grados → error `E_CRS` legible; terreno en otra zona → aviso | 1,5 |
 | F12-14 · [MAM-1098](https://linear.app/mamutsystems/issue/MAM-1098) | P2 | **Longitud 3D en cantidades** | `cantidades.rs:92` mide en planta; añadir longitud inclinada | conducción con 20 % de pendiente reporta ambas longitudes | 0,5 |
+| F12-15 | P0 | **Contrato del plan sólido** (surge de D5) | `--dry-run` que valida; campos desconocidos = error con sugerencia; unidades coherentes; DI y secciones no circulares; vértices sin Z; dispositivos conectados; `cota_eje`; `esquema` con valores de listas; ida y vuelta DXF de soleras y enlaces | cada punto con prueba; fixtures SWMM/EPANET importan | 2 |
 
-**Total F12: 23 días.**
+**Total F12: 25 días.**
 
 ---
 

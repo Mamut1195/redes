@@ -18,16 +18,25 @@ Documento de traspaso: qué está hecho, qué falta y por dónde seguir. Las cif
 
 ## Lo que falta (por orden de valor)
 
-| # | Tarea | Dónde | Notas |
-|---|---|---|---|
-| 1 | **F6-05, segunda mitad**: usar el proxy al dibujar | `view.rs` / `main.rs` | `modelos::proxy` ya decima y está probado; falta que el pintor dibuje esa silueta cuando no hay `--gpu3d` |
-| 2 | **«Vertedero» y «pozo profundo»** | `docs/22-decisiones.md` | Decisión de dominio del usuario; afecta a mapeos de la skill, no al motor |
-| 3 | Avisos de clippy de estilo | varios | Correctness en cero; quedan ~9 de estilo propios y los de `vendor/` |
+Revisión para v1 del 25/11/2026 (nota 5,5/10): el plan está en `docs/18-backlog.md`, fases **F12–F16**,
+y en Linear (MAM-1085…MAM-1139). Se trabaja **por fases en orden**; no se abre una fase sin cerrar la anterior.
+
+| Fase | Estado |
+|---|---|
+| F12 — Corrección de dominio | **cerrada** (F12-01…F12-15). Ingesta por skill guiada (D5) |
+| F13 — Herramientas del revisor | **siguiente**: `redes validar` (P0), perfil longitudinal, observaciones con historial, acta |
+| F14 — Rendimiento con redes reales | pendiente (índices, cámara 3D sin regenerar, LOD/instanciado) |
+| F15 — Arquitectura | pendiente (migración de formato P0, agregado, catálogo como datos, errores tipados) |
+| F16 — Release v1 | pendiente (F16-01 ya cerrada por F12-09) |
+
+Decisiones abiertas del usuario: A1 (vertedero), A2 (pozo profundo), sumideros de la topología
+(`is_sink` en `topology.rs`: descarga, cuerpo receptor, reactor, laguna, sedimentador).
+Sin validar en CAD real: el DXF de F12-08 (no hubo `ezdxf`); abrir una demo exportada en AutoCAD/BricsCAD.
 
 ## Cómo retomar
 
 ```powershell
-cargo test --workspace                       # 125 pruebas
+cargo test --workspace                       # 170+ pruebas
 powershell -File scripts/mutar.ps1           # 5 mutaciones
 powershell -File scripts/empaquetar.ps1      # zip portable
 gh run list --limit 3                        # CI
