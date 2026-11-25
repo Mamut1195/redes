@@ -327,3 +327,36 @@ fn una_familia_inexistente_no_rompe_el_esquema() {
             .is_some_and(|f| !f.is_empty())
     );
 }
+
+#[test]
+fn aprobar_el_proyecto_con_observados_devuelve_e_state_observed() {
+    let d = tempdir("aprobar-obs");
+    let ruta = d.join("cad.redes");
+    let r = ruta.to_str().unwrap();
+    corre(&["proyecto", "cadena", "--salida", r, "--quiet"], &d);
+    let lista = sobre(&corre(&["-p", r, "objeto", "lista"], &d));
+    let codigos: Vec<String> = lista["data"]["items"]
+        .as_array()
+        .expect("items")
+        .iter()
+        .map(|i| i["codigo"].as_str().unwrap().to_string())
+        .collect();
+    assert!(codigos.len() > 1);
+    for (i, c) in codigos.iter().enumerate() {
+        let verbo = if i == 0 { "observar" } else { "aprobar" };
+        let j = sobre(&corre(&["-p", r, "objeto", verbo, "--codigo", c], &d));
+        assert_eq!(j["ok"], true, "{verbo} {c}: {j}");
+    }
+    let s = corre(&["-p", r, "proyecto", "aprobar"], &d);
+    let j = sobre(&s);
+    assert_eq!(j["ok"], false, "{j}");
+    assert_eq!(j["diagnostics"][0]["code"], "E_STATE_OBSERVED");
+    assert_eq!(s.codigo, 3);
+    // Resuelto el observado, el proyecto sí se aprueba.
+    corre(&["-p", r, "objeto", "aprobar", "--codigo", &codigos[0]], &d);
+    let j = sobre(&corre(&["-p", r, "proyecto", "aprobar"], &d));
+    assert_eq!(j["ok"], true, "{j}");
+    // El diario anota qué objeto se aprobó.
+    let guardado = std::fs::read_to_string(r).unwrap();
+    assert!(guardado.contains(&format!("objeto.aprobar {}", codigos[1])));
+}

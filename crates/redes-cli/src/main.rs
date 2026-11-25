@@ -486,6 +486,7 @@ fn run(cli: Cli, t0: Instant) -> i32 {
                         "unidad": f.unidad,
                         "cantidad": round(f.cantidad, 3),
                         "fuente": f.fuente,
+                        "cantidad_3d": f.cantidad_3d.map(|v| round(v, 3)),
                     })).collect::<Vec<_>>(),
                     "totales": totales,
                     "discrepancias": discrepancias.iter().map(|d| json!({
@@ -591,8 +592,22 @@ fn run(cli: Cli, t0: Instant) -> i32 {
         Cmd::Proyecto {
             cmd: ProyectoCmd::Aprobar,
         } => {
-            let (pnd, _, _) = p.revision_counts();
-            if pnd > 0 {
+            let (pnd, _, obs) = p.revision_counts();
+            if pnd == 0 && obs > 0 {
+                Envelope::fail(
+                    "proyecto.aprobar",
+                    vec![
+                        Diagnostic::new(
+                            "E_STATE_OBSERVED",
+                            Severity::Error,
+                            format!("Quedan {obs} objetos observados sin resolver."),
+                        )
+                        .hint(
+                            "Use `redes objeto lista --estado observado`; resuélvalos y apruébelos, o reábralos con `objeto reabrir`.",
+                        ),
+                    ],
+                )
+            } else if pnd > 0 {
                 Envelope::fail(
                     "proyecto.aprobar",
                     vec![
@@ -1129,6 +1144,11 @@ const CODIGOS: &[(&str, &str, i32)] = &[
     ("E_STATE_DUPLICATE_NAME", "código duplicado", 3),
     ("E_STATE_PENDING", "quedan objetos sin revisar", 3),
     (
+        "E_STATE_OBSERVED",
+        "quedan objetos observados sin resolver",
+        3,
+    ),
+    (
         "E_STATE_REFERENCED",
         "borrar dejaría referencias colgando",
         3,
@@ -1348,7 +1368,7 @@ fn cambiar_estado(
         l.estado = nuevo;
         l.nota = nota.map(|s| s.to_string());
     }
-    p.commit(cmd);
+    p.commit(&format!("{cmd} {codigo}"));
     let (pnd, ok, obs) = p.revision_counts();
     Envelope::ok(cmd).with_data(json!({
         "codigo": codigo, "estado": nuevo.key(), "nota": nota,
