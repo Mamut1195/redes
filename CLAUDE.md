@@ -2,7 +2,7 @@
 
 ## Qué es
 - App de escritorio Rust + Rune (`redes-app`) y CLI `redes` (sobre JSON `redes.envelope/1`, pensada para agentes) para **ver, revisar y aprobar en 3D** redes ya diseñadas en otras apps (Civil 3D, EPANET, SWMM, Excel, SIG) y devolverlas al CAD en DXF.
-- Entrada: skill `skills/redes-ingesta` → `redes.plan/1`, DXF o GeoJSON. Salida: DXF, GeoJSON, glTF, CSV de cantidades.
+- Entrada: `redes.plan/1` (lo escribe un agente con la skill `skills/redes-ingesta`, D5), el DXF propio de ida y vuelta (capa `REDES_INFO`) y terreno. Salida: DXF, GeoJSON, glTF, CSV de cantidades.
 - Windows 10/11 x64 con DX12. Idioma del producto, del código y de los docs: español.
 
 ## Límites duros (no los cruces ni "ayudando")
@@ -16,7 +16,7 @@
   - `model` (objetos, `Dato`), `families`/`families_extra`/`parts`/`parts_cadena` (registro de familias y subtipos + geometría paramétrica), `topology`, `terrain` (TIN), `geom`, `view` (vista, pintor, corte, etiquetas), `ingest` (plan/DXF/GeoJSON/terreno), `export` (DXF, GeoJSON), `gltf`, `biblioteca` (modelos .glb), `cantidades`, `project_io` (`*.redes`), `envelope`, `city`, `demo*` (proyectos de demostración).
 - `crates/redes-cli`: binario `redes`. `src/main.rs` concentra todos los comandos (clap); `src/svg.rs` genera la vista SVG.
 - `crates/redes-app`: visor Rune. `main.rs` (ventana, inspector, revisión), `gpu3d.rs` (pase 3D con profundidad, `--gpu3d`), `modelos.rs` (caché de mallas, proxy).
-- `skills/redes-ingesta/`: SKILL.md, `references/mapeos.md`, scripts Python.
+- `skills/redes-ingesta/`: skill guiada (D5): `SKILL.md` + `references/` por formato (plan, SWMM, EPANET, DXF Civil 3D, SIG, tablas). Sin scripts: NO añadas adaptadores por programa ni en Python ni en Rust; mejora las referencias y el contrato del plan.
 - `docs/`: documentación numerada `NN-nombre.md`. `docs/consejo/` es contexto histórico (el alcance con cálculos quedó descartado), NO el alcance vigente.
 - `scripts/`: `mutar.ps1`, `empaquetar.ps1`, `traer-rune.ps1`.
 - `vendor/rune`: copia fijada de Rune. `spike/`: pruebas técnicas aparte. `demo/`: proyectos de ejemplo. `out/`: salida generada (ignorada).
@@ -24,7 +24,7 @@
 ## Comandos (PowerShell; los mismos que usa el CI)
 - Formato: `cargo fmt -p redes-core -p redes-cli -p redes-app --check` (NUNCA `cargo fmt --all`: alcanza vendor/rune).
 - Clippy: `cargo clippy -p redes-core -p redes-cli -p redes-app --all-targets -- -D clippy::correctness`
-- Pruebas: `cargo test --workspace` y `python -m unittest discover -s skills/redes-ingesta/scripts/tests` (skill de ingesta)
+- Pruebas: `cargo test --workspace`
 - Release: `cargo build --release -p redes-app -p redes-cli`
 - Mutación: `powershell -NoProfile -File scripts/mutar.ps1`. Debe salir con 0: si sobrevive una mutación, la suite está floja.
 - Paquete portable: `powershell -File scripts/empaquetar.ps1` (`-SinCompilar` para no recompilar).
