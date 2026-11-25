@@ -14,6 +14,7 @@
 //! assert!(pendientes + aprobados + observados == proyecto.count());
 //! ```
 
+pub mod acta;
 pub mod biblioteca;
 pub mod cantidades;
 pub mod city;
