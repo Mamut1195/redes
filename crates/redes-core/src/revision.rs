@@ -41,8 +41,7 @@ impl EstadoObservacion {
 pub struct Observacion {
     /// Correlativo dentro del objeto (1, 2, 3…); no se reutiliza.
     pub id: u32,
-    /// Cuándo se abrió (UTC, `YYYY-MM-DDTHH:MM:SSZ`). `None` en las migradas de una `nota` vieja
-    /// cuya fecha no se conoce.
+    /// Cuándo se abrió (UTC, `YYYY-MM-DDTHH:MM:SSZ`). `None` si el reloj del sistema no la da.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fecha_utc: Option<String>,
     pub texto: String,
@@ -68,9 +67,6 @@ pub struct Observacion {
     /// Usuario del sistema que la cerró; solo con `REDES_JOURNAL_USUARIO=1` (D2).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub autor_cierre: Option<String>,
-    /// Viene de la `nota` única de un `.redes` anterior a F13-03.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub migrada: bool,
 }
 
 impl Observacion {
@@ -248,7 +244,6 @@ impl Project {
             ubicacion,
             autor: usuario_del_sistema(),
             autor_cierre: None,
-            migrada: false,
         });
         *r.estado = EstadoObjeto::Observado;
         let codigo = r.codigo;
@@ -328,58 +323,6 @@ impl Project {
         let codigo = r.codigo;
         self.commit(&format!("objeto.reabrir {codigo}"));
         Ok(())
-    }
-
-    /// Migra la `nota` única de un `.redes` anterior a F13-03 (`notas`: código → texto) y deja el
-    /// estado coherente con las observaciones. Decisión de migración:
-    ///
-    /// - objeto **observado** → una observación **abierta** con el texto de la nota (o «Observado
-    ///   sin nota» si no la tenía);
-    /// - **aprobado o pendiente** con nota → una observación **cerrada**, con cierre «Cerrada al
-    ///   migrar: el objeto estaba aprobado/pendiente». No reabre nada ni se pierde el texto.
-    ///
-    /// Las migradas llevan `migrada: true`, la revisión del proyecto y sin fecha (no se conoce).
-    /// Un objeto que ya tiene observaciones no se toca.
-    pub fn migrar_observaciones(&mut self, notas: &std::collections::HashMap<String, String>) {
-        let revision = self.revision;
-        let migrar = |codigo: &str, estado: &mut EstadoObjeto, obs: &mut Vec<Observacion>| {
-            if obs.is_empty() {
-                let nota = notas
-                    .get(codigo)
-                    .map(|s| s.trim())
-                    .filter(|s| !s.is_empty());
-                let abierta = *estado == EstadoObjeto::Observado;
-                if abierta || nota.is_some() {
-                    obs.push(Observacion {
-                        id: 1,
-                        fecha_utc: None,
-                        texto: nota.unwrap_or("Observado sin nota").to_string(),
-                        estado: if abierta {
-                            EstadoObservacion::Abierta
-                        } else {
-                            EstadoObservacion::Cerrada
-                        },
-                        cerrada_utc: None,
-                        cierre: (!abierta).then(|| {
-                            format!("Cerrada al migrar: el objeto estaba {}", estado.key())
-                        }),
-                        revision,
-                        revision_cierre: (!abierta).then_some(revision),
-                        ubicacion: None,
-                        autor: None,
-                        autor_cierre: None,
-                        migrada: true,
-                    });
-                }
-            }
-            *estado = estado_derivado(*estado, obs);
-        };
-        for n in &mut self.nodes {
-            migrar(&n.code, &mut n.estado, &mut n.observaciones);
-        }
-        for l in &mut self.links {
-            migrar(&l.code, &mut l.estado, &mut l.observaciones);
-        }
     }
 }
 
@@ -526,47 +469,5 @@ mod tests {
         let texto = serde_json::to_string(&p).unwrap();
         let q2: Project = serde_json::from_str(&texto).unwrap();
         assert_eq!(q2.observaciones_de(&c).unwrap()[0].ubicacion, Some(q));
-    }
-
-    #[test]
-    fn la_migracion_abre_las_observadas_y_cierra_las_demas() {
-        let (mut p, c) = proyecto();
-        let otros: Vec<String> = p
-            .nodes
-            .iter()
-            .skip(1)
-            .take(3)
-            .map(|n| n.code.clone())
-            .collect();
-        p.nodes.iter_mut().find(|n| n.code == c).unwrap().estado = EstadoObjeto::Observado;
-        p.nodes
-            .iter_mut()
-            .find(|n| n.code == otros[0])
-            .unwrap()
-            .estado = EstadoObjeto::Aprobado;
-        p.nodes
-            .iter_mut()
-            .find(|n| n.code == otros[1])
-            .unwrap()
-            .estado = EstadoObjeto::Observado;
-        let notas = std::collections::HashMap::from([
-            (c.clone(), "Revisar cota".to_string()),
-            (otros[0].clone(), "Cumple".to_string()),
-        ]);
-        p.migrar_observaciones(&notas);
-        let a = &p.observaciones_de(&c).unwrap()[0];
-        assert!(a.abierta() && a.migrada && a.texto == "Revisar cota");
-        let b = &p.observaciones_de(&otros[0]).unwrap()[0];
-        assert!(!b.abierta() && b.texto == "Cumple");
-        assert_eq!(
-            p.node_by_code(&otros[0]).unwrap().estado,
-            EstadoObjeto::Aprobado
-        );
-        let s = &p.observaciones_de(&otros[1]).unwrap()[0];
-        assert!(s.abierta() && s.texto == "Observado sin nota");
-        assert!(p.observaciones_de(&otros[2]).unwrap().is_empty());
-        // Idempotente: migrar otra vez no duplica.
-        p.migrar_observaciones(&notas);
-        assert_eq!(p.observaciones_de(&c).unwrap().len(), 1);
     }
 }

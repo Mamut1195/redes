@@ -135,7 +135,7 @@ pub struct Node {
     #[serde(default = "estado_pendiente")]
     pub estado: EstadoObjeto,
     /// Observaciones de la revisión, con historial (F13-03). Sustituyen a la antigua `nota`
-    /// única, que se migra al abrir ([`Project::migrar_observaciones`]).
+    /// única (sin conversión desde `redes.project/2`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub observaciones: Vec<Observacion>,
     #[serde(default)]
@@ -238,7 +238,7 @@ pub struct Link {
     #[serde(default = "estado_pendiente")]
     pub estado: EstadoObjeto,
     /// Observaciones de la revisión, con historial (F13-03). Sustituyen a la antigua `nota`
-    /// única, que se migra al abrir ([`Project::migrar_observaciones`]).
+    /// única (sin conversión desde `redes.project/2`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub observaciones: Vec<Observacion>,
     #[serde(default)]

@@ -91,14 +91,6 @@ $mutaciones = @(
         Reemplazo = 'if false {'
         Prueba = "cerrar_la_ultima_abierta_deja_pendiente"
         Que = "dejar de derivar observado de las observaciones abiertas (F13-03)"
-    },
-    @{
-        Nombre = "obs-migracion"
-        Archivo = "crates/redes-core/src/revision.rs"
-        Patron = 'let abierta = \*estado == EstadoObjeto::Observado;'
-        Reemplazo = 'let abierta = false;'
-        Prueba = "la_migracion_abre_las_observadas"
-        Que = "migrar la nota de un observado como observacion cerrada (F13-03)"
     }
 )
 

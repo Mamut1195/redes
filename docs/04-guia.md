@@ -213,12 +213,8 @@ el texto es obligatorio (`E_ARG_MISSING`).
   `objeto.aprobar CL-014 #2` (las que cerró).
 - **Sin autor (D2):** la observación solo guarda el usuario del sistema (`autor`, `autor_cierre`)
   si se arranca con `REDES_JOURNAL_USUARIO=1`, igual que el journal.
-- **Archivos anteriores** (`redes.project/2`, con una `nota` única): al abrirlos, un objeto
-  observado pasa a tener una observación **abierta** con el texto de la nota («Observado sin nota»
-  si no tenía); un aprobado o pendiente con nota, una observación **cerrada** con el cierre
-  «Cerrada al migrar: el objeto estaba …». Las migradas llevan `migrada: true` y no tienen fecha.
-  Al guardar, el archivo pasa a `redes.project/3`; una versión anterior de Redes lo rechaza
-  (`E_PROJ_SCHEMA_TOO_NEW`) en vez de perder las observaciones.
+- El proyecto se guarda como `redes.project/3`. La `nota` única de versiones anteriores no se
+  convierte: no hay archivos en producción que conservar.
 - En `objeto lista`, GeoJSON y la capa `OBSERVACIONES` del DXF, «nota» es el texto de la última
   observación abierta.
 

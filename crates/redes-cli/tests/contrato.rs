@@ -500,12 +500,14 @@ fn aprobar_el_proyecto_con_observados_devuelve_e_state_observed() {
 #[test]
 fn las_observaciones_tienen_historial() {
     let d = tempdir("observaciones");
-    let ruta = d.join("v2.redes");
+    let ruta = d.join("obs.redes");
     let r = ruta.to_str().unwrap();
-    // Un `.redes` de la versión 2 con una `nota` (generado antes de F13-03).
-    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../redes-core/tests/fixtures/revision_v2.redes");
-    std::fs::copy(&fixture, &ruta).unwrap();
+    corre(&["proyecto", "demo", "--salida", r, "--quiet"], &d);
+    let p: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&ruta).unwrap()).unwrap();
+    let pz = p["nodes"][0]["code"].as_str().unwrap().to_string();
+    let cl = p["links"][0]["code"].as_str().unwrap().to_string();
+    let (pz, cl) = (pz.as_str(), cl.as_str());
     let ok = |args: &[&str]| {
         let mut v = vec!["-p", r, "objeto"];
         v.extend_from_slice(args);
@@ -525,8 +527,16 @@ fn las_observaciones_tienen_historial() {
         assert_eq!(s.codigo, salida, "{j}");
     };
 
-    // La nota vieja es la observación #1, abierta.
-    let j = ok(&["observaciones", "--codigo", "PZ-901"]);
+    // Dos objetos observados, cada uno con su observación #1 abierta.
+    ok(&[
+        "observar",
+        "--codigo",
+        pz,
+        "--texto",
+        "Tapa desplazada 0,5 m respecto al plano",
+    ]);
+    ok(&["observar", "--codigo", cl, "--texto", "Revisar pendiente"]);
+    let j = ok(&["observaciones", "--codigo", pz]);
     assert_eq!(j["data"]["abiertas"], 1);
     assert_eq!(
         j["data"]["observaciones"][0]["texto"],
@@ -536,30 +546,22 @@ fn las_observaciones_tienen_historial() {
     let j = ok(&[
         "observar",
         "--codigo",
-        "PZ-901",
+        pz,
         "--texto",
         "Falta escalera",
         "--ubicacion",
         "758010,9797010,2499.5",
     ]);
     assert_eq!(j["data"]["id"], 2);
-    falla(&["observar", "--codigo", "PZ-901"], "E_ARG_MISSING", 2);
+    falla(&["observar", "--codigo", pz], "E_ARG_MISSING", 2);
     // Aprobar con abiertas falla y no cambia nada.
-    falla(
-        &["aprobar", "--codigo", "PZ-901"],
-        "E_STATE_OBS_ABIERTAS",
-        3,
-    );
-    falla(
-        &["reabrir", "--codigo", "PZ-901"],
-        "E_STATE_OBS_ABIERTAS",
-        3,
-    );
+    falla(&["aprobar", "--codigo", pz], "E_STATE_OBS_ABIERTAS", 3);
+    falla(&["reabrir", "--codigo", pz], "E_STATE_OBS_ABIERTAS", 3);
     // Cerrar la #1; la #2 sigue abierta y el objeto, observado.
     let j = ok(&[
         "cerrar-observacion",
         "--codigo",
-        "PZ-901",
+        pz,
         "--id",
         "1",
         "--texto",
@@ -567,22 +569,22 @@ fn las_observaciones_tienen_historial() {
     ]);
     assert_eq!(j["data"]["estado"], "observado");
     falla(
-        &["cerrar-observacion", "--codigo", "PZ-901", "--id", "1"],
+        &["cerrar-observacion", "--codigo", pz, "--id", "1"],
         "E_STATE_OBS_CERRADA",
         3,
     );
     falla(
-        &["cerrar-observacion", "--codigo", "PZ-901", "--id", "9"],
+        &["cerrar-observacion", "--codigo", pz, "--id", "9"],
         "E_STATE_NOT_FOUND",
         4,
     );
     // Cerrar la última deja el objeto pendiente; después se aprueba.
-    let j = ok(&["cerrar-observacion", "--codigo", "PZ-901", "--id", "2"]);
+    let j = ok(&["cerrar-observacion", "--codigo", pz, "--id", "2"]);
     assert_eq!(j["data"]["estado"], "pendiente");
-    let j = ok(&["aprobar", "--codigo", "PZ-901"]);
+    let j = ok(&["aprobar", "--codigo", pz]);
     assert_eq!(j["data"]["estado"], "aprobado");
     // El historial conserva las dos, cerradas, con su cierre y la ubicación.
-    let j = ok(&["observaciones", "--codigo", "PZ-901"]);
+    let j = ok(&["observaciones", "--codigo", pz]);
     let obs = j["data"]["observaciones"].as_array().unwrap();
     assert_eq!(obs.len(), 2);
     assert!(obs.iter().all(|o| o["estado"] == "cerrada"), "{obs:?}");
@@ -590,20 +592,14 @@ fn las_observaciones_tienen_historial() {
     assert_eq!(obs[1]["ubicacion"]["z"], 2499.5);
     assert!(obs[1].get("autor").is_none(), "D2: sin autor por defecto");
     // Aprobar cerrando todas en el mismo acto.
-    let j = ok(&[
-        "aprobar",
-        "--codigo",
-        "CL-901",
-        "--cerrar-todas",
-        "Resuelto",
-    ]);
+    let j = ok(&["aprobar", "--codigo", cl, "--cerrar-todas", "Resuelto"]);
     assert_eq!(j["data"]["cerradas"], serde_json::json!([1]));
 
     let guardado = std::fs::read_to_string(&ruta).unwrap();
     assert!(guardado.contains("\"redes.project/3\""));
-    assert!(guardado.contains("objeto.observar PZ-901 #2"));
-    assert!(guardado.contains("objeto.cerrar_observacion PZ-901 #1"));
-    assert!(guardado.contains("objeto.aprobar CL-901 #1"));
+    assert!(guardado.contains(&format!("objeto.observar {pz} #2")));
+    assert!(guardado.contains(&format!("objeto.cerrar_observacion {pz} #1")));
+    assert!(guardado.contains(&format!("objeto.aprobar {cl} #1")));
     // Registrados en `redes esquema`.
     let e = sobre(&corre(&["esquema"], &d)).to_string();
     for c in [

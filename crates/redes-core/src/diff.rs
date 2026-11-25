@@ -1,4 +1,4 @@
-﻿//! Comparación de dos entregas de un proyecto (REV-08, F13-05).
+//! Comparación de dos entregas de un proyecto (REV-08, F13-05).
 //!
 //! Los objetos se emparejan por **código** (`PZ-001`), no por [`crate::model::ElementId`], que
 //! cambia de una entrega a otra. Se reportan altas, bajas y cambios por objeto con el detalle por

@@ -1,4 +1,4 @@
-﻿//! `redes validar` (F13-01): cada regla con un caso que la dispara, uno que no y uno «no
+//! `redes validar` (F13-01): cada regla con un caso que la dispara, uno que no y uno «no
 //! evaluable» (falta un dato). Más el fixture de proyecto pequeño que usa también la CLI.
 #![allow(clippy::too_many_arguments)]
 
