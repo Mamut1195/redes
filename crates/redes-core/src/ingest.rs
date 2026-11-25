@@ -1194,6 +1194,27 @@ fn importar_de_capa_info(
         }
     }
 
+    // Dispositivos de enlace (F12-15): `REDES|1|E|dispositivo|desde|hasta`. Un DXF anterior no
+    // trae estas líneas y abre igual.
+    for t in textos {
+        let Some(resto) = t.strip_prefix("REDES|1|E|") else {
+            continue;
+        };
+        let campos: Vec<&str> = resto.split('|').collect();
+        let id = |i: usize| campos.get(i).and_then(|c| ids.get(c.trim())).copied();
+        let Some(disp) = id(0) else {
+            continue;
+        };
+        let (desde, hasta) = (id(1), id(2));
+        if desde.is_some() || hasta.is_some() {
+            p.enlaces.push(crate::model::Enlace {
+                dispositivo: disp,
+                desde,
+                hasta,
+            });
+        }
+    }
+
     if nodos_creados == 0 && arcos_creados == 0 {
         return Err(
             "E_FMT_NOT_REDES: la capa REDES_INFO no trae ningún objeto legible (REDES|1|N/L)"

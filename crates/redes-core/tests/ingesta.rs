@@ -844,6 +844,52 @@ fn un_tramo_sin_soleras_vuelve_del_dxf_sin_soleras() {
     assert_eq!(tramo(&d, "C2").cotas_trazado(), Some((2497.0, 2496.5)));
 }
 
+/// Una caída (solera del tramo ≠ solera del pozo) y una bomba con desde/hasta vuelven iguales por
+/// el DXF de Redes (campos 7 y 8 de `REDES|1|L` y líneas `REDES|1|E`).
+#[test]
+fn la_caida_y_los_enlaces_vuelven_del_dxf() {
+    let (p, _) = plan_en_memoria(
+        "vuelta-caida",
+        plan_con(
+            serde_json::json!([
+                { "tipo": "nodo", "codigo": "P1", "familia": "saneamiento.pozo", "e": 760000.0, "n": 9796000.0, "cota": 2500.0, "cota_terreno": 2503.0 },
+                { "tipo": "nodo", "codigo": "P2", "familia": "saneamiento.pozo", "e": 760050.0, "n": 9796000.0, "cota": 2499.0, "cota_terreno": 2502.0 },
+                { "tipo": "nodo", "codigo": "P3", "familia": "saneamiento.pozo", "e": 760050.0, "n": 9796050.0, "cota": 2498.0, "cota_terreno": 2502.0 },
+                { "tipo": "nodo", "codigo": "B1", "familia": "saneamiento.bombeo", "e": 760050.0, "n": 9796001.0, "cota": 2498.5, "cota_terreno": 2502.0, "desde": "P2", "hasta": "P3" },
+                { "tipo": "arco", "codigo": "C1", "familia": "saneamiento.tuberia", "desde": "P1", "hasta": "P2", "diametro_mm": 300,
+                  "cota_solera_inicio": 2500.0, "cota_solera_fin": 2499.6 }
+            ]),
+            serde_json::json!([]),
+        ),
+    );
+    assert_eq!(p.enlaces.len(), 1);
+    let ruta = std::env::temp_dir().join(format!("redes-vuelta-caida-{}.dxf", std::process::id()));
+    redes_core::export::export_dxf(&p, &ruta).unwrap();
+    let mut d = Project::new("vuelta", "EPSG:32717");
+    redes_core::ingest::import_dxf(&mut d, &ruta, 0.5).unwrap();
+    let _ = std::fs::remove_file(&ruta);
+    let (a, b) = (tramo(&p, "C1"), tramo(&d, "C1"));
+    assert_eq!(b.cota_solera_inicio, a.cota_solera_inicio);
+    assert_eq!(b.cota_solera_fin, Some(2499.6), "la caída no se pierde");
+    assert_eq!(b.cotas_trazado(), a.cotas_trazado());
+    let code = |pr: &Project, id| pr.node(id).unwrap().code.clone();
+    let enlaces = |pr: &Project| {
+        pr.enlaces
+            .iter()
+            .map(|e| {
+                (
+                    code(pr, e.dispositivo),
+                    e.desde.map(|x| code(pr, x)),
+                    e.hasta.map(|x| code(pr, x)),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(enlaces(&d), enlaces(&p));
+    let topo = redes_core::topology::Topology::build(&d);
+    assert_eq!(topo.components.len(), 1, "{:?}", topo.components);
+}
+
 #[test]
 fn la_cota_del_eje_ubica_el_nudo_sin_ser_solera() {
     let o = serde_json::json!([
