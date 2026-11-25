@@ -909,3 +909,36 @@ fn la_cota_del_eje_ubica_el_nudo_sin_ser_solera() {
     assert_eq!(eje.fuente, "EPANET 2.2 (red.inp)");
     assert!(rep.descartados.is_empty());
 }
+
+// ---------------------------------------------------------------------------------------------
+// D11: nodos y tramos vivos comparten un único espacio de códigos.
+
+/// Un plan cuyo tramo repite el código de un nodo no deja un proyecto que no abre: el tramo se
+/// descarta con `E_STATE_DUPLICATE_NAME` y el informe lo dice (sin pánico).
+#[test]
+fn un_tramo_con_el_codigo_de_un_nodo_se_descarta_y_el_proyecto_abre() {
+    let plan = r#"{"schema":"redes.plan/1","proyecto":{"nombre":"Choque","crs":"EPSG:32717"},"objetos":[
+        {"tipo":"nodo","codigo":"PZ-1","familia":"saneamiento.pozo","subtipo":"inspeccion","e":758000,"n":9797000,"cota":2500,"cota_terreno":2502},
+        {"tipo":"nodo","codigo":"PZ-2","familia":"saneamiento.pozo","subtipo":"inspeccion","e":758030,"n":9797000,"cota":2499,"cota_terreno":2501},
+        {"tipo":"arco","codigo":"PZ-1","familia":"saneamiento.tuberia","subtipo":"colector_sanitario","desde":"PZ-1","hasta":"PZ-2","diametro_mm":200}
+    ]}"#;
+    let dir = std::env::temp_dir();
+    let ruta = dir.join(format!("redes-d11-plan-{}.json", std::process::id()));
+    let guardado = dir.join(format!("redes-d11-plan-{}.redes", std::process::id()));
+    std::fs::write(&ruta, plan).unwrap();
+    let mut p = Project::new("choque", "EPSG:32717");
+    let rep = redes_core::ingest::import_plan(&mut p, &ruta).expect("importa");
+    let _ = std::fs::remove_file(&ruta);
+    assert_eq!((rep.nodos, rep.arcos), (2, 0), "{:?}", rep.descartados);
+    assert!(
+        rep.descartados
+            .iter()
+            .any(|d| d.starts_with("arco PZ-1") && d.contains("E_STATE_DUPLICATE_NAME")),
+        "{:?}",
+        rep.descartados
+    );
+    redes_core::project_io::save(&p, &guardado).expect("guarda");
+    let abierto = redes_core::project_io::load(&guardado);
+    let _ = std::fs::remove_file(&guardado);
+    abierto.expect("el proyecto importado siempre abre");
+}

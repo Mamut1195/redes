@@ -476,7 +476,23 @@ impl Project {
         }
     }
 
-    /// Añade un nodo. Solo valida estructura: familia, subtipo y código único.
+    /// D11: nodos y tramos vivos comparten un único espacio de códigos (la CLI direcciona por
+    /// `--codigo` sin tipo y `project_io` exige la unicidad entre ambos al abrir). Un código dado
+    /// de baja sí se puede reutilizar.
+    fn codigo_libre(&self, code: &str) -> Result<(), String> {
+        let usa = if self.node_by_code(code).is_some() {
+            "un nodo"
+        } else if self.link_by_code(code).is_some() {
+            "un tramo"
+        } else {
+            return Ok(());
+        };
+        Err(format!(
+            "E_STATE_DUPLICATE_NAME: código duplicado {code} (ya lo usa {usa})"
+        ))
+    }
+
+    /// Añade un nodo. Solo valida estructura: familia, subtipo y código único (D11).
     pub fn add_node(&mut self, mut node: Node) -> Result<ElementId, String> {
         let def =
             family(&node.family).ok_or_else(|| format!("familia desconocida: {}", node.family))?;
@@ -490,12 +506,7 @@ impl Project {
         if node.code.is_empty() {
             node.code = self.next_code(&node.family);
         }
-        if self.node_by_code(&node.code).is_some() {
-            return Err(format!(
-                "E_STATE_DUPLICATE_NAME: código duplicado {}",
-                node.code
-            ));
-        }
+        self.codigo_libre(&node.code)?;
         node.id = self.alloc();
         let id = node.id;
         self.indice.alta_nodo(self.nodes.len(), &node);
@@ -523,12 +534,7 @@ impl Project {
         if link.code.is_empty() {
             link.code = self.next_code(&link.family);
         }
-        if self.link_by_code(&link.code).is_some() {
-            return Err(format!(
-                "E_STATE_DUPLICATE_NAME: código duplicado {}",
-                link.code
-            ));
-        }
+        self.codigo_libre(&link.code)?;
         link.id = self.alloc();
         let id = link.id;
         self.indice.alta_tramo(self.links.len(), &link);
@@ -756,6 +762,56 @@ mod tests {
         let cuando = e.cuando.clone().expect("fecha");
         assert_eq!(cuando.len(), 20, "formato UTC: {cuando}");
         assert!(cuando.ends_with('Z') && cuando.contains('T'), "{cuando}");
+    }
+
+    fn tramo(code: &str, from: ElementId, to: ElementId) -> Link {
+        Link {
+            id: ElementId::new(0, 0),
+            family: "saneamiento.tuberia".into(),
+            ty: "colector_sanitario".into(),
+            code: code.into(),
+            from,
+            to,
+            path: vec![P3::new(0.0, 0.0, 100.0), P3::new(10.0, 0.0, 99.0)],
+            d_mm: 200,
+            attrs: BTreeMap::new(),
+            datos: BTreeMap::new(),
+            estado: EstadoObjeto::Pendiente,
+            observaciones: Vec::new(),
+            cota_solera_inicio: None,
+            cota_solera_fin: None,
+            deleted: false,
+            sin_dato: Vec::new(),
+        }
+    }
+
+    /// D11: un nodo y un tramo vivos no comparten código, porque el proyecto no volvería a abrir.
+    #[test]
+    fn nodos_y_tramos_comparten_un_espacio_de_codigos() {
+        let mut p = Project::new("d11", "EPSG:32717");
+        let a = pozo(&mut p, 0.0, 0.0, 100.0);
+        let b = pozo(&mut p, 10.0, 0.0, 99.0);
+        let err = p.add_link(tramo("PZ-001", a, b)).unwrap_err();
+        assert!(err.starts_with("E_STATE_DUPLICATE_NAME"), "{err}");
+        assert!(err.contains("nodo"), "{err}");
+        // Sin distinguir mayúsculas, como el resto de búsquedas por código.
+        assert!(p.add_link(tramo("pz-002", a, b)).is_err());
+        let t = p.add_link(tramo("CL-001", a, b)).unwrap();
+        let mut n = p.node(a).unwrap().clone();
+        n.code = "CL-001".into();
+        let err = p.add_node(n.clone()).unwrap_err();
+        assert!(err.starts_with("E_STATE_DUPLICATE_NAME"), "{err}");
+        assert!(err.contains("tramo"), "{err}");
+        // Dado de baja el tramo, su código queda libre para un nodo.
+        p.links.iter_mut().find(|l| l.id == t).unwrap().deleted = true;
+        p.add_node(n).expect("código de un tramo borrado");
+
+        // Lo que se da de alta siempre se guarda y se vuelve a abrir.
+        let ruta = std::env::temp_dir().join(format!("redes-d11-{}.redes", std::process::id()));
+        crate::project_io::save(&p, &ruta).expect("guarda");
+        let abierto = crate::project_io::load(&ruta);
+        let _ = std::fs::remove_file(&ruta);
+        abierto.expect("abre");
     }
 
     #[test]

@@ -237,6 +237,11 @@ redes objeto aprobar --codigo CL-014 --cerrar-todas "Corregido en origen"
 redes objeto reabrir --codigo PZ-001                  # aprobado → pendiente
 ```
 
+`--codigo` no distingue nodo de tramo: **un código vivo es de un solo objeto** (D11). Dar de alta un
+nodo o un tramo con un código que ya usa otro objeto vivo, sea nodo o tramo, falla con
+`E_STATE_DUPLICATE_NAME`; en una importación ese objeto se descarta y aparece en
+`detalle_descartes`.
+
 **Observaciones con historial (F13-03).** Cada objeto guarda una lista de observaciones que no se
 sobrescriben: `observar` añade una nueva (`#1`, `#2`…) con fecha UTC, revisión del proyecto en que
 se abrió y, si se da, el punto (`--ubicacion`). `--nota` sigue valiendo como alias de `--texto`;

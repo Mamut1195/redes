@@ -48,7 +48,7 @@ Derivado de `crates/redes-core/src/ingest.rs` (`Plan`, `PlanProyecto`, `PlanObje
 
 | Campo | Tipo | Va a | Regla |
 |---|---|---|---|
-| `codigo` | texto | código | el del origen, tal cual. Vacío → el registro pone uno correlativo |
+| `codigo` | texto | código | el del origen, tal cual. Vacío → el registro pone uno correlativo. **Único entre nodos y tramos** (D11): un tramo no puede llevar el código de un nodo ni al revés; si el origen los repite (p. ej. SWMM permite un nodo y un conducto `C1`), desambígualo y anótalo |
 | `familia` | texto | familia | **obligatorio**; clave de `redes esquema` |
 | `subtipo` | texto | subtipo | si falta, el primero del registro: **no lo dejes vacío**, pregunta |
 | `e`, `n` | número | planta | **obligatorios**, en metros del CRS. Sin planta no hay nodo: se lista |
@@ -220,7 +220,7 @@ redes -p out\prueba.redes vista --salida out\vista.svg
   p. ej. `e` o `familia`), `E_FMT_CAMPO` (campo que no es del contrato), `E_FMT_UNSUPPORTED`
   (esquema), `E_CRS`, `E_IO_NOT_FOUND`.
 - Motivos de descarte típicos: `familia desconocida`, `subtipo … no existe en …`, `código
-  duplicado`, `extremo inexistente (A → B)`, `E_TOPO_SELF_LOOP`, `sin ninguna cota`,
+  duplicado` (también entre un nodo y un tramo, D11), `extremo inexistente (A → B)`, `E_TOPO_SELF_LOOP`, `sin ninguna cota`,
   `seccion «x» no está en la lista`, vértices mezclados.
 
 ## 7. Ejemplos trabajados
