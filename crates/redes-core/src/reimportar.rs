@@ -211,7 +211,7 @@ pub fn preparar(
     let mut emparejados = 0usize;
 
     for n in entrega.nodes.iter_mut().filter(|n| !n.deleted) {
-        let Some(viejo) = p.nodes.iter().find(|v| !v.deleted && v.code == n.code) else {
+        let Some(viejo) = p.nodo_codigo_exacto(&n.code) else {
             continue;
         };
         emparejados += 1;
@@ -226,7 +226,7 @@ pub fn preparar(
         cambiados.extend(c);
     }
     for l in entrega.links.iter_mut().filter(|l| !l.deleted) {
-        let Some(viejo) = p.links.iter().find(|v| !v.deleted && v.code == l.code) else {
+        let Some(viejo) = p.tramo_codigo_exacto(&l.code) else {
             continue;
         };
         emparejados += 1;
@@ -275,6 +275,8 @@ pub fn preparar(
     nuevo.name = entrega.name;
     nuevo.crs = entrega.crs;
     nuevo.fuentes.extend(entrega.fuentes);
+    // Los vectores son otros: el índice del proyecto actual ya no les corresponde (F14-01).
+    nuevo.reindexar();
 
     let mut informe = Informe {
         formato: formato.key(),

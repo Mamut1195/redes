@@ -118,6 +118,8 @@ pub fn load(path: &Path) -> Result<Project, String> {
     if let Some(t) = p.terrain.as_mut() {
         t.reindexar();
     }
+    // Tampoco los de búsqueda del proyecto (F14-01).
+    p.reindexar();
     Ok(p)
 }
 

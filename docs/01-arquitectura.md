@@ -81,6 +81,7 @@ crates/
 | `terrain` | Nube de puntos → TIN (Delaunay), cota interpolada, curvas, aligerado para dibujo | `geom` |
 | `families` | Registro de las 17 familias: atributos, unidades, subtipos, capacidades | — |
 | `model` | `Project`, `Node`, `Link`, `Dato`, estados de revisión, identidad | `geom`, `families` |
+| `indice` | Índices de `Project` por id, por código y nodo → tramos (no se guardan) | `model` |
 | `topology` | Grafo derivado: incidencia, grados, componentes, sentido de flujo | `model` |
 | `ingest` | Plan JSON, DXF, GeoJSON, terreno CSV → `Project` | `model`, `terrain` |
 | `export` | DXF (una capa por familia) y GeoJSON | `model` |
@@ -149,6 +150,14 @@ capacidades, no por nombres.
 - `datos: BTreeMap<String, Dato>`: números del origen, con unidad y app.
 - `fuentes: Vec<Fuente>`: qué archivos y apps entraron y cuándo.
 - `estado: EstadoObjeto` por objeto; `estado: EstadoProyecto` global.
+- Índices (F14-01, `redes_core::indice`): `node`/`link`/`node_by_code`/`link_by_code` en O(1) y
+  `tramos_de(nodo)` en O(grado). Guardan posiciones en `nodes`/`links`, **borrados incluidos**
+  (una baja no los toca: se filtra al leer). No se serializan: `project_io::load` y la reimportación
+  llaman a `reindexar()`; las altas (`add_node`/`add_link`) los mantienen y un clon (deshacer) los
+  copia válidos. Si `nodes`/`links` se cambian a mano, el índice se sabe desfasado (cuenta y último
+  id) y las búsquedas vuelven al recorrido lineal hasta la siguiente alta, baja o `reindexar()`.
+  Reescribir en su sitio el id, el código o los extremos de un objeto exige `reindexar()` (F15-02
+  cerrará los campos).
 
 ---
 

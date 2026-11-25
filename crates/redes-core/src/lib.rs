@@ -29,6 +29,7 @@ pub mod families;
 pub mod families_extra;
 pub mod geom;
 pub mod gltf;
+pub mod indice;
 pub mod ingest;
 pub mod model;
 pub mod parts;

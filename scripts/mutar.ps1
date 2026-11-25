@@ -136,6 +136,15 @@ $mutaciones = @(
         Destino = "reimportar"
         Prueba = "las_bajas_con_revision_no_se_pierden_en_silencio"
         Que = "dar de baja en silencio objetos con revision (F13-06)"
+    },
+    @{
+        Nombre = "indice-adyacencia"
+        Archivo = "crates/redes-core/src/indice.rs"
+        Patron = 'if l\.to != l\.from \{'
+        Reemplazo = 'if false {'
+        Destino = "indices"
+        Prueba = "el_indice_coincide_con_el_recorrido_lineal_tras_cualquier_secuencia"
+        Que = "olvidar el nodo final al indexar los tramos de cada nodo (F14-01)"
     }
 )
 
