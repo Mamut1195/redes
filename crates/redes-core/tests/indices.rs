@@ -358,15 +358,9 @@ fn el_indice_coincide_con_el_recorrido_lineal_tras_cualquier_secuencia() {
                 // Guardar y abrir.
                 85..=89 => {
                     redes_core::project_io::save(&p, &archivo).expect("guarda");
-                    // La carga rechaza un código repetido aunque uno de los dos esté borrado
-                    // (`validar_identidad`): ajeno al índice, esa vuelta se salta.
-                    match redes_core::project_io::load(&archivo) {
-                        Ok(abierto) => {
-                            p = abierto;
-                            assert!(p.indice_al_dia(), "al abrir se reconstruye el índice");
-                        }
-                        Err(e) => assert!(e.starts_with("E_STATE_DUPLICATE_NAME"), "{e}"),
-                    }
+                    // Un código dado de baja y vuelto a dar de alta no impide abrir.
+                    p = redes_core::project_io::load(&archivo).expect("abre lo que guardó");
+                    assert!(p.indice_al_dia(), "al abrir se reconstruye el índice");
                     "guardar_abrir"
                 }
                 // Edición a mano de los vectores (campos públicos): el índice debe saberse

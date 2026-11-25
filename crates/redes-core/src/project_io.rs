@@ -188,21 +188,26 @@ fn validar_tin(p: &Project) -> Result<(), String> {
 /// Repara `next_slot` y rechaza identificadores o códigos duplicados.
 ///
 /// Un `ElementId` repetido hace que se apruebe el objeto equivocado; un código repetido deja un
-/// objeto inalcanzable y bloquea `proyecto aprobar` para siempre.
+/// objeto inalcanzable y bloquea `proyecto aprobar` para siempre. Los ids son únicos entre todos
+/// los objetos, borrados incluidos; los códigos, solo entre los vivos: un código dado de baja se
+/// puede volver a usar (las búsquedas por código ya ignoran los borrados).
 fn validar_identidad(p: &mut Project) -> Result<(), String> {
     use std::collections::HashSet;
 
     let mut ids: HashSet<(u32, u32)> = HashSet::new();
-    let mut codigos: HashSet<String> = HashSet::new();
+    let mut codigos: HashSet<&str> = HashSet::new();
     let mut max_slot = 0u32;
 
-    for (que, n) in p
+    for (que, id, code, borrado) in p
         .nodes
         .iter()
-        .map(|n| ("nodo", (n.id, n.code.clone())))
-        .chain(p.links.iter().map(|l| ("arco", (l.id, l.code.clone()))))
+        .map(|n| ("nodo", n.id, n.code.as_str(), n.deleted))
+        .chain(
+            p.links
+                .iter()
+                .map(|l| ("arco", l.id, l.code.as_str(), l.deleted)),
+        )
     {
-        let (id, code) = n;
         max_slot = max_slot.max(id.slot);
         if !ids.insert((id.slot, id.generation)) {
             return Err(format!(
@@ -210,7 +215,7 @@ fn validar_identidad(p: &mut Project) -> Result<(), String> {
                 id.slot, id.generation
             ));
         }
-        if !codigos.insert(code.clone()) {
+        if !borrado && !codigos.insert(code) {
             return Err(format!("E_STATE_DUPLICATE_NAME: código duplicado {code}"));
         }
     }
@@ -384,6 +389,43 @@ mod tests {
         let ruta = escribir_temporal("codigos", &v);
         let err = crate::project_io::load(&ruta).unwrap_err();
         assert!(err.starts_with("E_STATE_DUPLICATE_NAME"), "{err}");
+        let _ = std::fs::remove_file(&ruta);
+    }
+
+    /// Borrar `PZ-001`, dar de alta otro `PZ-001` y guardar: el archivo vuelve a abrir y la
+    /// búsqueda por código devuelve el vivo.
+    #[test]
+    fn un_codigo_dado_de_baja_se_puede_reutilizar() {
+        let mut p = crate::demo_catalog::catalogo();
+        let viejo = p
+            .nodes
+            .iter()
+            .find(|n| !n.deleted && p.tramos_de(n.id).next().is_none())
+            .cloned()
+            .expect("un nodo sin tramos");
+        p.remove(viejo.id).expect("baja");
+        let mut nuevo = viejo.clone();
+        nuevo.pos.x += 5.0;
+        let id_nuevo = p.add_node(nuevo).expect("re-alta con el mismo código");
+        assert_ne!(id_nuevo, viejo.id);
+        let ruta = std::env::temp_dir().join(format!("redes-realta-{}.redes", std::process::id()));
+        crate::project_io::save(&p, &ruta).expect("guarda");
+        let q = crate::project_io::load(&ruta).expect("abre con el código reutilizado");
+        let _ = std::fs::remove_file(&ruta);
+        assert_eq!(q.node_by_code(&viejo.code).map(|n| n.id), Some(id_nuevo));
+        assert!(q.node(viejo.id).is_none(), "el borrado sigue borrado");
+    }
+
+    /// Los ids sí son únicos entre todos los objetos, también los borrados.
+    #[test]
+    fn rechaza_un_id_repetido_aunque_este_borrado() {
+        let mut v = serde_json::to_value(crate::demo_catalog::catalogo()).unwrap();
+        let id = v["nodes"][0]["id"].clone();
+        v["nodes"][1]["id"] = id;
+        v["nodes"][1]["deleted"] = serde_json::json!(true);
+        let ruta = escribir_temporal("id-borrado", &v);
+        let err = crate::project_io::load(&ruta).unwrap_err();
+        assert!(err.starts_with("E_STATE_DUPLICATE_ID"), "{err}");
         let _ = std::fs::remove_file(&ruta);
     }
 

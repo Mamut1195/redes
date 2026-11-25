@@ -508,7 +508,7 @@ descarta con su motivo. Sin planta no hay 3D.
 | «E_CRS» al importar | El plan no declara CRS, no es UTM sur (`32617` es 17**N**), no coincide con el proyecto o trae grados lon/lat | Declarar `EPSG:32717` (17S) o `EPSG:32718` (18S) y coordenadas UTM en metros; reproyectar en origen |
 | Todo apilado en un punto | El origen no traía coordenadas | Pasar `--coords` a la skill |
 | «E_TOPO_ORPHAN_LINK» | Un arco apunta a un nodo que no entró | Revisar `desde`/`hasta` en el plan |
-| «E_STATE_DUPLICATE_NAME» | Código repetido | Renombrar en el origen |
+| «E_STATE_DUPLICATE_NAME» | Código repetido entre objetos vivos (uno dado de baja se puede reutilizar) | Renombrar en el origen |
 | El pozo sale como un disco gris plano | Falta la solera, o faltan a la vez tapa y terreno | Declarar `cota` (solera) y `cota_terreno`/`cota_tapa` en el plan, o el TIN |
 | El tramo sale como una línea gris fina | Le falta el DN o la cota de solera (ni la suya ni la de los pozos) | Declarar `diametro_mm` y `cota_solera_inicio/fin` |
 | El inspector muestra `—` | El origen no traía ese dato | Es correcto: no se inventa |
