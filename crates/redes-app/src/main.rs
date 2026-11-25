@@ -97,6 +97,9 @@ const ERR: Color = Color {
 // ---------------------------------------------------------------------------------------------
 // Estado
 
+/// Rejilla (m) del proxy de los modelos de biblioteca sin pase 3D (F6-05).
+const PASO_PROXY: f32 = 0.05;
+
 struct State {
     project: Arc<Project>,
     cam: Camera,
@@ -131,8 +134,11 @@ struct State {
     canvas_rect: [f32; 4],
     /// Caché de mallas de la biblioteca (un `.glb` se lee una vez).
     modelos: modelos::Cache,
-    /// Manifiesto del proyecto y su carpeta, si declara biblioteca.
-    bib: Option<(std::path::PathBuf, redes_core::biblioteca::Biblioteca)>,
+    /// Mallas paramétricas por pieza (F14-06): una pieza sin cambios no se vuelve a generar.
+    piezas: redes_core::mallas::CachePiezas,
+    /// Manifiesto del proyecto y su carpeta, si declara biblioteca. En `Arc`: se comparte, no se
+    /// clona en cada reconstrucción (F14-06).
+    bib: Option<(std::path::PathBuf, Arc<redes_core::biblioteca::Biblioteca>)>,
     /// Aviso de política de dibujo (modelos pesados sin `--gpu3d`).
     aviso_modelos: Option<String>,
     /// Perfil longitudinal abierto desde el inspector de un tramo (F13-02).
@@ -212,6 +218,7 @@ impl State {
             // paneles de 214 y 292 pt. `on_layout` la sustituye por el rectángulo real.
             canvas_rect: [230.0, 51.0, 742.0, 714.0],
             modelos: modelos::Cache::default(),
+            piezas: Default::default(),
             bib: None,
             aviso_modelos: None,
             perfil: None,
@@ -321,7 +328,7 @@ impl State {
             };
             if let Ok(mut g) = self.geom.lock() {
                 if let Some(instancias) = instancias {
-                    g.cargar_con_modelos(&self.project, self.layers, &instancias);
+                    g.cargar_con_modelos(&self.project, self.layers, &instancias, &mut self.piezas);
                     self.clave_malla = Some(clave);
                 }
                 g.fijar_camara(&self.cam);
@@ -431,6 +438,8 @@ impl State {
 
     /// Sin pase 3D, dibuja una silueta decimada del modelo (proxy) en lugar de nada.
     ///
+    /// La biblioteca se comparte por `Arc` y el proxy sale de la caché (F14-06).
+    ///
     /// El pase 3D dibuja la malla real; aquí basta con que el objeto se reconozca cuando la GPU
     /// está apagada. Los triángulos entran como polígonos del pintor, con su profundidad.
     fn anadir_proxies(&mut self) {
@@ -455,13 +464,13 @@ impl State {
         let k = self.cam.z_scale;
         let mut extra: Vec<Prim> = Vec::new();
         for (x, y, z, modelo) in objetos {
-            let Some(pieza) = bib.piezas.iter().find(|p| p.id == modelo).cloned() else {
+            let Some(pieza) = bib.piezas.iter().find(|p| p.id == modelo) else {
                 continue;
             };
-            let Some(malla) = self.modelos.malla(&carpeta, &pieza) else {
+            // El proxy se calcula una vez por pieza, no por instancia ni por reconstrucción.
+            let Some(dec) = self.modelos.proxy(&carpeta, pieza, PASO_PROXY) else {
                 continue;
             };
-            let dec = modelos::proxy(&malla, 0.05);
             for tri in dec.chunks_exact(3) {
                 let mut pts: Vec<[f32; 2]> = Vec::with_capacity(3);
                 let mut prof = 0.0f64;

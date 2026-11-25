@@ -61,6 +61,15 @@ el `Arc` solo si la generación es nueva (`Geometria::tomar`), sin copiar la mal
 tomado. En la ciudad (release): 6,0 ms → 0,008 ms por cambio de cámara y 3,6 MB copiados por
 frame → 0. La barra de estado cuenta, en `--gpu3d`, los triángulos que dibuja la GPU.
 
+**Caché de mallas de pieza (F14-06).** La malla paramétrica de un nodo sale de
+`redes_core::mallas::CachePiezas`, con clave `ClavePieza` = familia, subtipo, atributos (DN,
+diámetros, ángulos…), bits de `z_rim − z_invert`, falta de altura y nivel de detalle; la posición no
+entra (la malla es local). La caché vive en el estado de la app entre reconstrucciones: apagar una
+capa o editar un objeto regenera la malla de la escena, pero solo genera las piezas cuya clave
+cambió (`CachePiezas::generadas`, prueba `la_segunda_reconstruccion_no_genera_piezas`). Cada
+pasada poda lo que no usó, así que no crece con las ediciones. `triangulos_exportables` (glTF)
+usa una caché efímera: dos nodos iguales comparten la malla también al exportar.
+
 **Por qué importa** (medido por la revisión de pruebas, release, p95 por frame):
 
 | Escena | 2D (pintor) | 3D (`--gpu3d`) |

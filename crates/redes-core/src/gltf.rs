@@ -52,7 +52,18 @@ pub struct Malla {
 /// Es la fuente única del `.glb` y del pase 3D con profundidad: así el visor externo y el interno
 /// dibujan exactamente la misma malla.
 pub fn triangulos_exportables(p: &Project, con_terreno: bool) -> Malla {
+    triangulos_con_cache(p, con_terreno, &mut crate::mallas::CachePiezas::default())
+}
+
+/// Igual que [`triangulos_exportables`], pero toma las mallas de pieza de una caché que vive
+/// entre reconstrucciones (F14-06): las piezas que no cambiaron no se vuelven a generar.
+pub fn triangulos_con_cache(
+    p: &Project,
+    con_terreno: bool,
+    cache: &mut crate::mallas::CachePiezas,
+) -> Malla {
     let mut out = Malla::default();
+    cache.iniciar_pasada();
     let mut indice: BTreeMap<String, u16> = BTreeMap::new();
     let mut familia = |nombre: &str| -> u16 {
         if let Some(i) = indice.get(nombre) {
@@ -72,7 +83,7 @@ pub fn triangulos_exportables(p: &Project, con_terreno: bool) -> Malla {
     };
 
     for n in p.nodes.iter().filter(|n| !n.deleted) {
-        let malla = crate::view::pieza_para_exportar(n);
+        let malla = cache.pieza(n, 2);
         for tri in &malla.tris {
             let pos = tri.p.map(|v| {
                 a_local(P3::new(
@@ -89,6 +100,7 @@ pub fn triangulos_exportables(p: &Project, con_terreno: bool) -> Malla {
             });
         }
     }
+    cache.podar();
 
     for l in p.links.iter().filter(|l| !l.deleted) {
         if l.path.len() < 2 {

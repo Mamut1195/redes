@@ -80,7 +80,7 @@ impl Geometria {
     /// Recalcula la malla a partir del proyecto (solo cuando algo cambia).
     #[cfg(test)]
     pub fn cargar(&mut self, p: &redes_core::model::Project, capas: redes_core::view::Layers) {
-        self.cargar_con_modelos(p, capas, &[]);
+        self.cargar_con_modelos(p, capas, &[], &mut Default::default());
     }
 
     /// Solo la cámara: matriz vista-proyección con la exageración vertical alrededor de la cota
@@ -100,8 +100,11 @@ impl Geometria {
         p: &redes_core::model::Project,
         capas: redes_core::view::Layers,
         instancias: &[crate::modelos::Instancia],
+        piezas: &mut redes_core::mallas::CachePiezas,
     ) {
-        let malla = redes_core::gltf::triangulos_exportables(p, capas.terreno);
+        // Las piezas salen de la caché (F14-06): regenerar por una capa o una edición no vuelve a
+        // generar las que no cambiaron.
+        let malla = redes_core::gltf::triangulos_con_cache(p, capas.terreno, piezas);
         // Se respetan las capas de la interfaz: apagar «Edificios» también los apaga aquí.
         let visibles: Vec<u16> = malla
             .familias
@@ -542,6 +545,26 @@ mod tests {
             todo.vertices
         );
         assert_eq!(parte.bytes.len() as u32, parte.vertices * 36);
+    }
+
+    /// Reconstruir la malla sin cambios en las piezas no genera ninguna (F14-06): apagar una capa
+    /// regenera la malla, pero las piezas salen de la caché.
+    #[test]
+    fn la_segunda_reconstruccion_no_genera_piezas() {
+        let p = redes_core::demo_city::ciudad();
+        let mut piezas = redes_core::mallas::CachePiezas::default();
+        let mut g = Geometria::default();
+        g.cargar_con_modelos(&p, Layers::default(), &[], &mut piezas);
+        let primera = piezas.generadas();
+        assert!(primera > 0, "la primera reconstrucción genera las piezas");
+        let capas = Layers {
+            edificios: false,
+            ..Default::default()
+        };
+        g.cargar_con_modelos(&p, capas, &[], &mut piezas);
+        g.cargar_con_modelos(&p, Layers::default(), &[], &mut piezas);
+        assert_eq!(piezas.generadas(), primera, "0 mallas nuevas");
+        assert!(g.vertices > 0);
     }
 
     /// Con la escena quieta el compositor no copia ni sube nada (F14-03): la primera toma trae

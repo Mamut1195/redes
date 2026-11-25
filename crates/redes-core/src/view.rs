@@ -1296,6 +1296,12 @@ pub fn pieza_para_exportar(n: &crate::model::Node) -> crate::parts::Mesh {
     pieza_local(n, 2)
 }
 
+/// Malla de una pieza con el nivel de detalle pedido (1 simple, 2 completo), para la caché de
+/// mallas del pase 3D (F14-06).
+pub fn pieza_con_detalle(n: &crate::model::Node, lod: u8) -> crate::parts::Mesh {
+    pieza_local(n, lod.min(2))
+}
+
 /// Gris de lo que se dibuja sin dato: no es un material, es un aviso.
 pub const COLOR_SIN_DATO: [f32; 3] = [0.56, 0.56, 0.58];
 

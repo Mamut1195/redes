@@ -31,6 +31,7 @@ pub mod geom;
 pub mod gltf;
 pub mod indice;
 pub mod ingest;
+pub mod mallas;
 pub mod model;
 pub mod parts;
 pub mod parts_cadena;

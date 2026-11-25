@@ -20,9 +20,31 @@ pub struct Cache {
     mallas: HashMap<String, Malla>,
     fallos: HashSet<String>,
     cargas: usize,
+    /// Proxies por pieza y paso de rejilla (bits del `f32`): se calculan una vez (F14-06).
+    proxies: HashMap<(String, u32), Malla>,
+    proxies_calculados: usize,
 }
 
 impl Cache {
+    /// Proxy de la malla de una pieza (ver [`proxy`]), calculado una sola vez por pieza y paso.
+    pub fn proxy(&mut self, carpeta: &Path, pieza: &Entrada, paso: f32) -> Option<Malla> {
+        let clave = (pieza.id.clone(), paso.to_bits());
+        if let Some(m) = self.proxies.get(&clave) {
+            return Some(Arc::clone(m));
+        }
+        let malla = self.malla(carpeta, pieza)?;
+        let dec = Arc::new(proxy(&malla, paso));
+        self.proxies_calculados += 1;
+        self.proxies.insert(clave, Arc::clone(&dec));
+        Some(dec)
+    }
+
+    /// Cuántos proxies se han calculado (para las pruebas).
+    #[allow(dead_code)]
+    pub fn proxies_calculados(&self) -> usize {
+        self.proxies_calculados
+    }
+
     /// Carga (o devuelve de la caché) la malla de una pieza del manifiesto.
     pub fn malla(&mut self, carpeta: &Path, pieza: &Entrada) -> Option<Malla> {
         if let Some(m) = self.mallas.get(&pieza.id) {
@@ -89,14 +111,16 @@ pub struct Instancia {
 }
 
 /// Manifiesto del proyecto, si lo tiene declarado.
-pub fn biblioteca_del_proyecto(p: &Project, dir: &Path) -> Option<(PathBuf, Biblioteca)> {
+pub fn biblioteca_del_proyecto(p: &Project, dir: &Path) -> Option<(PathBuf, Arc<Biblioteca>)> {
     let ruta = p.biblioteca.as_ref()?;
     let base = dir.join(ruta);
     let carpeta = base
         .parent()
         .map(|d| d.to_path_buf())
         .unwrap_or_else(|| dir.to_path_buf());
-    Biblioteca::cargar(&base).ok().map(|b| (carpeta, b))
+    Biblioteca::cargar(&base)
+        .ok()
+        .map(|b| (carpeta, Arc::new(b)))
 }
 
 /// Resuelve qué malla toca a cada objeto y la coloca en su cota.
@@ -241,6 +265,24 @@ mod tests {
         let inst = instancias(&p, &dir, &bib, &mut cache);
         assert_eq!(inst.len(), 2, "dos objetos con el mismo modelo");
         assert_eq!(cache.cargas(), 1, "el .glb se lee una vez");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// El proxy se calcula una vez por pieza: dos objetos y dos reconstrucciones no lo repiten.
+    #[test]
+    fn el_proxy_se_calcula_una_vez_por_pieza() {
+        let dir = std::env::temp_dir().join(format!("redes-modelos4-{}", std::process::id()));
+        let bib = biblioteca_temporal(&dir);
+        let mut cache = Cache::default();
+        let a = cache.proxy(&dir, &bib.piezas[0], 0.05).expect("proxy");
+        for _ in 0..3 {
+            let b = cache.proxy(&dir, &bib.piezas[0], 0.05).expect("proxy");
+            assert!(Arc::ptr_eq(&a, &b), "el mismo proxy, sin recalcular");
+        }
+        assert_eq!(cache.proxies_calculados(), 1);
+        assert_eq!(cache.cargas(), 1, "el .glb se leyó una vez");
+        cache.proxy(&dir, &bib.piezas[0], 0.25).expect("otro paso");
+        assert_eq!(cache.proxies_calculados(), 2, "otro paso es otro proxy");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

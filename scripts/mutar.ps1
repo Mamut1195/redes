@@ -172,6 +172,23 @@ $mutaciones = @(
         Paquete = "redes-app"
         Prueba = "la_escena_quieta_no_se_vuelve_a_subir"
         Que = "volver a subir la malla en cada frame con la escena quieta (F14-03)"
+    },
+    @{
+        Nombre = "cache-piezas-sin-acierto"
+        Archivo = "crates/redes-core/src/mallas.rs"
+        Patron = 'if let Some\(e\) = self\.mapa\.get_mut\(&clave\) \{'
+        Reemplazo = 'if let Some(e) = None::<&mut Entrada> {'
+        Prueba = "la_segunda_pasada_no_genera"
+        Que = "regenerar todas las piezas en cada reconstruccion (F14-06)"
+    },
+    @{
+        Nombre = "proxy-por-instancia"
+        Archivo = "crates/redes-app/src/modelos.rs"
+        Patron = 'if let Some\(m\) = self\.proxies\.get\(&clave\) \{'
+        Reemplazo = 'if let Some(m) = None::<&Malla> {'
+        Paquete = "redes-app"
+        Prueba = "el_proxy_se_calcula_una_vez_por_pieza"
+        Que = "recalcular el proxy por instancia (F14-06)"
     }
 )
 

@@ -139,6 +139,9 @@ Resultado medido con un `.glb` de ejemplo de 7 032 triángulos: base `z = 0`, ce
 3. **Camino de dibujo**: el renderer 2D (pintor) **no aguanta** mallas de decenas de miles de
    triángulos; el pase 3D (`--gpu3d`) sí. O se exige `--gpu3d` con modelos, o se genera un
    **proxy decimado** (≈300 triángulos) para el 2D.
+   Hoy (F14-06): el manifiesto se comparte en un `Arc` (no se clona en cada reconstrucción) y el
+   proxy se calcula una vez por pieza y paso de rejilla (`modelos::Cache::proxy`), no por
+   instancia ni por reconstrucción.
 4. **Anclas de conexión**: puntos con nombre y diámetro, para que la tubería sepa dónde llega.
 5. **Regla de convivencia** (decidida con el cliente): el modelo cambia la apariencia; los datos
    siguen saliendo de los parámetros (ver §6).
