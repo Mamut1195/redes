@@ -3,6 +3,7 @@
 //! No calcula ingeniería. Importa lo que producen otras aplicaciones, lo deja revisar y aprobar,
 //! y lo devuelve al CAD. Toda salida es un sobre JSON `redes.envelope/1`.
 
+mod diff;
 mod svg;
 
 use std::collections::BTreeMap;
@@ -160,6 +161,24 @@ enum ProyectoCmd {
     },
     /// Resumen del proyecto.
     Info,
+    /// Compara dos entregas: altas, bajas y cambios por objeto (emparejados por código).
+    Diff {
+        /// Entrega anterior.
+        #[arg(long = "a")]
+        a: PathBuf,
+        /// Entrega nueva.
+        #[arg(long = "b")]
+        b: PathBuf,
+        /// Movimiento en planta que se ignora (m).
+        #[arg(long, default_value_t = 0.01)]
+        tolerancia_pos: f64,
+        /// Solo cambios de `diseno` o de `revision` (estado, nota).
+        #[arg(long)]
+        solo: Option<String>,
+        /// Escribe una fila por cambio en CSV (BOM y `;`).
+        #[arg(long)]
+        salida: Option<PathBuf>,
+    },
     /// Cierra la revisión: exige que no queden objetos pendientes.
     Aprobar,
 }
@@ -341,6 +360,23 @@ fn run(cli: Cli, t0: Instant) -> i32 {
         }
         Cmd::Capacidades => return emit(esquema(None).within(elapsed(t0)), pretty, quiet),
         Cmd::Proyecto { cmd } => match cmd {
+            ProyectoCmd::Diff {
+                a,
+                b,
+                tolerancia_pos,
+                solo,
+                salida,
+            } => {
+                let env = diff::ejecutar(
+                    a,
+                    b,
+                    *tolerancia_pos,
+                    solo.as_deref(),
+                    salida.as_deref(),
+                    dry,
+                );
+                return emit(env.within(elapsed(t0)), pretty, quiet);
+            }
             ProyectoCmd::Nuevo {
                 nombre,
                 crs,
@@ -997,6 +1033,7 @@ fn command_id(c: &Cmd) -> &'static str {
             ProyectoCmd::CatalogoTotal { .. } => "proyecto.catalogo_total",
             ProyectoCmd::Catalogo { .. } => "proyecto.catalogo",
             ProyectoCmd::Info => "proyecto.info",
+            ProyectoCmd::Diff { .. } => "proyecto.diff",
             ProyectoCmd::Aprobar => "proyecto.aprobar",
         },
         Cmd::Importar { cmd } => match cmd {
@@ -1136,6 +1173,11 @@ fn about(c: &clap::Command) -> String {
 
 const CODIGOS: &[(&str, &str, i32)] = &[
     ("E_ARG_MISSING", "falta un argumento requerido", 2),
+    (
+        "E_STATE_CRS_DISTINTO",
+        "las dos entregas usan CRS distinto: no se comparan",
+        3,
+    ),
     ("E_PROJ_NOT_FOUND", "no hay proyecto resoluble", 4),
     ("E_STATE_NOT_FOUND", "el objeto no existe", 4),
     ("E_STATE_DUPLICATE_NAME", "código duplicado", 3),

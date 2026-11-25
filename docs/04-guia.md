@@ -198,6 +198,28 @@ redes objeto reabrir --codigo CL-014
 La nota se guarda con el objeto y se ve en el inspector de la app. Lo mismo se puede hacer
 desde el visor: seleccionar y pulsar **Aprobar** u **Observar**, y luego **Guardar**.
 
+#### Comparar dos entregas (`proyecto diff`)
+
+```powershell
+redes proyecto diff --a entrega-1.redes --b entrega-2.redes
+redes proyecto diff --a entrega-1.redes --b entrega-2.redes --tolerancia-pos 0.05 --solo diseno --salida diff.csv
+```
+
+Empareja los objetos por **código** (el `ElementId` cambia entre entregas) y reporta altas, bajas y,
+por objeto, los campos que cambiaron: familia y subtipo, posición, cotas (tolerancia 0,001 m), DN,
+atributos, datos (valor, unidad y fuente), tramo (desde, hasta y vértices) y los datos ausentes:
+un dato que aparece o desaparece (`—`) es un cambio. Un movimiento en planta menor que
+`--tolerancia-pos` (0,01 m por defecto) no se reporta.
+
+Los campos de revisión (estado, nota y, si el proyecto las trae, observaciones) llevan
+`clase: "revision"`; el resto es `clase: "diseno"`. `--solo diseno|revision` filtra por clase. Dos
+proyectos con CRS distinto dan `E_STATE_CRS_DISTINTO` (código de salida 3).
+
+El sobre `redes.envelope/1` trae `data.resumen` (altas, bajas, objetos modificados, cambios por clase
+y `por_familia`) y el detalle en `data.altas`, `data.bajas` y `data.modificados[].cambios[]`
+(`campo`, `antes`, `despues`, `clase`), en orden determinista (nodos antes que tramos, por código).
+`--salida` escribe un CSV con BOM y `;`, una fila por cambio, alta o baja.
+
 ### 5.4 Grabar una demo (o una prueba de interfaz)
 
 No hace falta Playwright: la app se graba a sí misma. Un guion de eventos y la bandera `--video`:
