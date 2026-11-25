@@ -504,6 +504,19 @@ fn estado() -> AttrDef {
 // ---------------------------------------------------------------------------------------------
 // El registro
 
+/// Formas de sección de un conducto (F12-10). Una lista, no un número.
+pub const SECCIONES: &[&str] = &[
+    "circular",
+    "ovoide",
+    "herradura",
+    "rectangular",
+    "cajon",
+    "arco",
+    "trapezoidal",
+    "elipse",
+    "otra",
+];
+
 /// Todas las familias del producto, en orden estable.
 pub static FAMILIES: LazyLock<Vec<FamilyDef>> = LazyLock::new(build);
 
@@ -898,6 +911,24 @@ fn build() -> Vec<FamilyDef> {
                     Group::Material,
                 )
                 .num(0.008),
+                attr(
+                    "diametro_interior",
+                    "Diámetro interior",
+                    Unit::Mm,
+                    AttrType::Num,
+                    false,
+                    Group::Hidraulico,
+                )
+                .positive(),
+                attr(
+                    "sdr",
+                    "SDR (DE / espesor)",
+                    Unit::None,
+                    AttrType::Num,
+                    false,
+                    Group::Material,
+                )
+                .bounds(6.0, 80.0),
                 material(),
                 attr(
                     "clase_tuberia",
@@ -1003,32 +1034,16 @@ fn build() -> Vec<FamilyDef> {
                     Group::Operacion,
                 ),
                 attr(
-                    "diametro_nominal",
-                    "Diametro nominal",
-                    Unit::Mm,
-                    AttrType::Num,
-                    false,
-                    Group::General,
-                ),
-                attr(
                     "seccion",
-                    "Seccion",
+                    "Forma de la sección",
                     Unit::None,
-                    AttrType::Num,
+                    AttrType::Enum(SECCIONES),
                     false,
-                    Group::General,
+                    Group::Geometrico,
                 ),
                 attr(
                     "clase_presion",
                     "Clase presion",
-                    Unit::None,
-                    AttrType::Text,
-                    false,
-                    Group::General,
-                ),
-                attr(
-                    "material",
-                    "Material",
                     Unit::None,
                     AttrType::Text,
                     false,
@@ -1116,6 +1131,24 @@ fn build() -> Vec<FamilyDef> {
                     Group::Material,
                 )
                 .num(0.008),
+                attr(
+                    "diametro_interior",
+                    "Diámetro interior",
+                    Unit::Mm,
+                    AttrType::Num,
+                    false,
+                    Group::Hidraulico,
+                )
+                .positive(),
+                attr(
+                    "sdr",
+                    "SDR (DE / espesor)",
+                    Unit::None,
+                    AttrType::Num,
+                    false,
+                    Group::Material,
+                )
+                .bounds(6.0, 80.0),
                 material(),
                 attr(
                     "clase_tuberia",
@@ -1201,14 +1234,6 @@ fn build() -> Vec<FamilyDef> {
                     AttrType::Text,
                     false,
                     Group::Operacion,
-                ),
-                attr(
-                    "diametro_nominal",
-                    "Diametro nominal",
-                    Unit::Mm,
-                    AttrType::Num,
-                    false,
-                    Group::General,
                 ),
                 attr(
                     "clase_presion",
@@ -1926,14 +1951,6 @@ fn build() -> Vec<FamilyDef> {
                     Group::General,
                 ),
                 attr(
-                    "diametro_nominal",
-                    "Diametro nominal",
-                    Unit::Mm,
-                    AttrType::Num,
-                    false,
-                    Group::General,
-                ),
-                attr(
                     "profundidad",
                     "Profundidad",
                     Unit::M,
@@ -2193,14 +2210,6 @@ fn build() -> Vec<FamilyDef> {
                 ),
                 estado(),
                 attr(
-                    "diametro_nominal",
-                    "Diametro nominal",
-                    Unit::Mm,
-                    AttrType::Num,
-                    false,
-                    Group::General,
-                ),
-                attr(
                     "longitud_total",
                     "Longitud total",
                     Unit::M,
@@ -2315,14 +2324,6 @@ fn build() -> Vec<FamilyDef> {
                     Group::Hidraulico,
                 ),
                 estado(),
-                attr(
-                    "diametro_nominal",
-                    "Diametro nominal",
-                    Unit::Mm,
-                    AttrType::Num,
-                    false,
-                    Group::General,
-                ),
                 attr(
                     "pendiente",
                     "Pendiente",
@@ -3973,14 +3974,6 @@ fn build() -> Vec<FamilyDef> {
                     Group::General,
                 ),
                 attr(
-                    "diametro_nominal",
-                    "Diametro nominal",
-                    Unit::Mm,
-                    AttrType::Num,
-                    false,
-                    Group::General,
-                ),
-                attr(
                     "diametro_tapa",
                     "Diametro tapa",
                     Unit::Mm,
@@ -4606,14 +4599,6 @@ fn build() -> Vec<FamilyDef> {
                     Group::General,
                 ),
                 attr(
-                    "diametro_nominal",
-                    "Diametro nominal",
-                    Unit::Mm,
-                    AttrType::Num,
-                    false,
-                    Group::General,
-                ),
-                attr(
                     "angulo",
                     "Angulo",
                     Unit::Deg,
@@ -4681,14 +4666,6 @@ fn build() -> Vec<FamilyDef> {
                     Group::Hidraulico,
                 ),
                 estado(),
-                attr(
-                    "diametro_nominal",
-                    "Diametro nominal",
-                    Unit::Mm,
-                    AttrType::Num,
-                    false,
-                    Group::General,
-                ),
                 attr(
                     "medidor",
                     "Medidor",
@@ -8461,6 +8438,43 @@ fn build() -> Vec<FamilyDef> {
 mod tests {
     use super::*;
     use std::collections::HashSet;
+
+    #[test]
+    fn ninguna_familia_repite_un_atributo() {
+        let mut repetidos = Vec::new();
+        for f in families() {
+            let mut vistos = HashSet::new();
+            for a in &f.attrs {
+                if !vistos.insert(a.key) {
+                    repetidos.push(format!("{}.{}", f.key, a.key));
+                }
+            }
+        }
+        assert!(repetidos.is_empty(), "atributos repetidos: {repetidos:?}");
+    }
+
+    #[test]
+    fn las_tuberias_declaran_di_de_espesor_y_sdr() {
+        for k in ["saneamiento.tuberia", "agua.tuberia"] {
+            let f = family(k).unwrap();
+            for a in [
+                "diametro_nominal",
+                "diametro_interior",
+                "diametro_exterior",
+                "espesor_pared",
+                "sdr",
+                "clase_presion",
+                "material",
+            ] {
+                assert!(f.attr(a).is_some(), "{k} no declara {a}");
+            }
+        }
+        let sec = family("saneamiento.tuberia")
+            .unwrap()
+            .attr("seccion")
+            .unwrap();
+        assert!(sec.ty.options().contains(&"herradura"));
+    }
 
     #[test]
     fn claves_y_prefijos_unicos() {

@@ -1226,8 +1226,29 @@ pub fn canal(a: P3, b: P3, ancho: f32, alto: f32) -> Mesh {
     m
 }
 
-/// Tubería entre dos puntos con juntas cada `paso` metros. Se genera en coordenadas de mundo.
+/// Separación entre juntas (m) según el material (`attrs.material`). Es una convención de
+/// dibujo: PVC/PEAD 6 m, hormigón 2,5 m, hierro dúctil 6 m, acero 12 m; otro, 6 m.
+pub fn separacion_juntas(material: &str) -> f32 {
+    let m = material.to_lowercase();
+    if m.contains("hormig") || m.contains("concret") || m.contains("cemento") || m == "hc" {
+        2.5
+    } else if m.contains("acero") || m.contains("steel") || m == "ac" {
+        12.0
+    } else {
+        // PVC, PEAD, hierro dúctil y cualquier otro: 6 m.
+        6.0
+    }
+}
+
+/// Tubería con juntas cada 6 m (material desconocido). Ver [`tuberia_de_material`].
 pub fn tuberia(a: P3, b: P3, d_ext: f32, lod: u8, m: Material) -> Mesh {
+    tuberia_de_material(a, b, d_ext, lod, m, "")
+}
+
+/// Tubería entre dos puntos con juntas cada [`separacion_juntas`]`(material)` metros. Se genera
+/// en coordenadas de mundo.
+pub fn tuberia_de_material(a: P3, b: P3, d_ext: f32, lod: u8, m: Material, material: &str) -> Mesh {
+    let paso = separacion_juntas(material);
     let caras = if lod >= 2 { 12 } else { 6 };
     let direccion = [b.x - a.x, b.y - a.y, b.z - a.z];
     let largo =
@@ -1241,10 +1262,10 @@ pub fn tuberia(a: P3, b: P3, d_ext: f32, lod: u8, m: Material) -> Mesh {
     let mut mesh = Mesh::default();
     mesh.extend(barra(p0, p1, d_ext * 0.5, caras, m));
     if lod >= 2 {
-        // Campanas cada 6 m: anillos cortos y algo más gruesos.
-        let n = (largo / 6.0).floor() as usize;
+        // Campanas cada `paso` m: anillos cortos y algo más gruesos.
+        let n = (largo as f32 / paso).floor() as usize;
         for k in 1..=n {
-            let t = k as f32 * 6.0 / largo as f32;
+            let t = k as f32 * paso / largo as f32;
             if t >= 1.0 {
                 break;
             }
@@ -1267,6 +1288,21 @@ pub fn tuberia(a: P3, b: P3, d_ext: f32, lod: u8, m: Material) -> Mesh {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn las_juntas_dependen_del_material() {
+        assert_eq!(separacion_juntas("PVC"), 6.0);
+        assert_eq!(separacion_juntas("PEAD"), 6.0);
+        assert_eq!(separacion_juntas("Hormigón"), 2.5);
+        assert_eq!(separacion_juntas("hierro dúctil"), 6.0);
+        assert_eq!(separacion_juntas("Acero"), 12.0);
+        assert_eq!(separacion_juntas(""), 6.0);
+        let (a, b) = (P3::new(0.0, 0.0, 0.0), P3::new(30.0, 0.0, 0.0));
+        let m = Material::new(0.5, 0.5, 0.5);
+        let pvc = tuberia_de_material(a, b, 0.3, 2, m, "PVC").len();
+        let hormigon = tuberia_de_material(a, b, 0.3, 2, m, "hormigón").len();
+        assert!(hormigon > pvc);
+    }
 
     #[test]
     fn las_piezas_generan_triangulos() {
