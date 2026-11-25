@@ -131,6 +131,8 @@
       "desde": "J1",
       "hasta": "J2",
       "diametro_mm": 600,
+      "cota_solera_inicio": 2510.5,
+      "cota_solera_fin": 2510.05,
       "vertices": [
         [
           760000.0,
@@ -157,16 +159,6 @@
           "unidad": "m",
           "fuente": "SWMM (swmm_si_cms.inp)"
         },
-        "cota_solera_inicio": {
-          "valor": 2510.5,
-          "unidad": "m",
-          "fuente": "SWMM (swmm_si_cms.inp)"
-        },
-        "cota_solera_fin": {
-          "valor": 2510.05,
-          "unidad": "m",
-          "fuente": "SWMM (swmm_si_cms.inp)"
-        },
         "desfase_salida": {
           "valor": 0.25,
           "unidad": "m",
@@ -182,22 +174,14 @@
       "desde": "J2",
       "hasta": "J3",
       "diametro_mm": 800,
+      "cota_solera_inicio": 2509.8,
+      "cota_solera_fin": 2508.9,
       "attrs": {
         "rugosidad_n": 0.013
       },
       "datos": {
         "longitud_origen": {
           "valor": 80.2,
-          "unidad": "m",
-          "fuente": "SWMM (swmm_si_cms.inp)"
-        },
-        "cota_solera_inicio": {
-          "valor": 2509.8,
-          "unidad": "m",
-          "fuente": "SWMM (swmm_si_cms.inp)"
-        },
-        "cota_solera_fin": {
-          "valor": 2508.9,
           "unidad": "m",
           "fuente": "SWMM (swmm_si_cms.inp)"
         }
@@ -210,6 +194,8 @@
       "subtipo": "box_culvert",
       "desde": "J3",
       "hasta": "J4",
+      "cota_solera_inicio": 2509.2,
+      "cota_solera_fin": 2508.2,
       "vertices": [
         [
           760160.0,
@@ -235,18 +221,8 @@
           "unidad": "m",
           "fuente": "SWMM (swmm_si_cms.inp)"
         },
-        "cota_solera_inicio": {
-          "valor": 2509.2,
-          "unidad": "m",
-          "fuente": "SWMM (swmm_si_cms.inp)"
-        },
         "desfase_entrada": {
           "valor": 0.3,
-          "unidad": "m",
-          "fuente": "SWMM (swmm_si_cms.inp)"
-        },
-        "cota_solera_fin": {
-          "valor": 2508.2,
           "unidad": "m",
           "fuente": "SWMM (swmm_si_cms.inp)"
         }
@@ -259,6 +235,8 @@
       "subtipo": "trapezoidal",
       "desde": "J4",
       "hasta": "OF1",
+      "cota_solera_inicio": 2508.2,
+      "cota_solera_fin": 2505.0,
       "vertices": [
         [
           760240.0,
@@ -287,16 +265,6 @@
       "datos": {
         "longitud_origen": {
           "valor": 80.2,
-          "unidad": "m",
-          "fuente": "SWMM (swmm_si_cms.inp)"
-        },
-        "cota_solera_inicio": {
-          "valor": 2508.2,
-          "unidad": "m",
-          "fuente": "SWMM (swmm_si_cms.inp)"
-        },
-        "cota_solera_fin": {
-          "valor": 2505.0,
           "unidad": "m",
           "fuente": "SWMM (swmm_si_cms.inp)"
         }

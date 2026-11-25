@@ -204,7 +204,7 @@
       "tipo": "arco",
       "codigo": "T1",
       "familia": "agua.tuberia",
-      "subtipo": "distribucion_primaria",
+      "subtipo": "impulsion",
       "desde": "NB",
       "hasta": "TQ1",
       "diametro_mm": 160,

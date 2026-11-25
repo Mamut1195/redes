@@ -141,6 +141,8 @@
       "desde": "MH1",
       "hasta": "MH2",
       "diametro_mm": 305,
+      "cota_solera_inicio": 249.936,
+      "cota_solera_fin": 248.793,
       "vertices": [
         [
           761000.0,
@@ -162,16 +164,6 @@
           "unidad": "m",
           "fuente": "SWMM (swmm_us_cfs.inp)"
         },
-        "cota_solera_inicio": {
-          "valor": 249.936,
-          "unidad": "m",
-          "fuente": "SWMM (swmm_us_cfs.inp)"
-        },
-        "cota_solera_fin": {
-          "valor": 248.793,
-          "unidad": "m",
-          "fuente": "SWMM (swmm_us_cfs.inp)"
-        },
         "desfase_salida": {
           "valor": 0.2286,
           "unidad": "m",
@@ -187,6 +179,8 @@
       "desde": "MH2",
       "hasta": "MH3",
       "diametro_mm": 381,
+      "cota_solera_inicio": 248.5644,
+      "cota_solera_fin": 247.4976,
       "vertices": [
         [
           761090.0,
@@ -217,16 +211,6 @@
           "valor": 76.2,
           "unidad": "m",
           "fuente": "SWMM (swmm_us_cfs.inp)"
-        },
-        "cota_solera_inicio": {
-          "valor": 248.5644,
-          "unidad": "m",
-          "fuente": "SWMM (swmm_us_cfs.inp)"
-        },
-        "cota_solera_fin": {
-          "valor": 247.4976,
-          "unidad": "m",
-          "fuente": "SWMM (swmm_us_cfs.inp)"
         }
       }
     },
@@ -238,6 +222,8 @@
       "desde": "MH3",
       "hasta": "WW1",
       "diametro_mm": 457,
+      "cota_solera_inicio": 247.4976,
+      "cota_solera_fin": 244.602,
       "vertices": [
         [
           761160.0,
@@ -259,16 +245,6 @@
           "unidad": "m",
           "fuente": "SWMM (swmm_us_cfs.inp)"
         },
-        "cota_solera_inicio": {
-          "valor": 247.4976,
-          "unidad": "m",
-          "fuente": "SWMM (swmm_us_cfs.inp)"
-        },
-        "cota_solera_fin": {
-          "valor": 244.602,
-          "unidad": "m",
-          "fuente": "SWMM (swmm_us_cfs.inp)"
-        },
         "desfase_salida": {
           "valor": 0.762,
           "unidad": "m",
@@ -284,6 +260,8 @@
       "desde": "PJ1",
       "hasta": "MH4",
       "diametro_mm": 152,
+      "cota_solera_inicio": 244.1448,
+      "cota_solera_fin": 252.984,
       "vertices": [
         [
           761215.0,
@@ -310,16 +288,6 @@
           "valor": 182.88,
           "unidad": "m",
           "fuente": "SWMM (swmm_us_cfs.inp)"
-        },
-        "cota_solera_inicio": {
-          "valor": 244.1448,
-          "unidad": "m",
-          "fuente": "SWMM (swmm_us_cfs.inp)"
-        },
-        "cota_solera_fin": {
-          "valor": 252.984,
-          "unidad": "m",
-          "fuente": "SWMM (swmm_us_cfs.inp)"
         }
       }
     },
@@ -330,6 +298,8 @@
       "subtipo": "colector_sanitario",
       "desde": "MH4",
       "hasta": "OUT1",
+      "cota_solera_inicio": 252.984,
+      "cota_solera_fin": 242.6208,
       "vertices": [
         [
           761390.0,
@@ -348,16 +318,6 @@
       "datos": {
         "longitud_origen": {
           "valor": 121.92,
-          "unidad": "m",
-          "fuente": "SWMM (swmm_us_cfs.inp)"
-        },
-        "cota_solera_inicio": {
-          "valor": 252.984,
-          "unidad": "m",
-          "fuente": "SWMM (swmm_us_cfs.inp)"
-        },
-        "cota_solera_fin": {
-          "valor": 242.6208,
           "unidad": "m",
           "fuente": "SWMM (swmm_us_cfs.inp)"
         },

@@ -1,125 +1,109 @@
 # 03 — La skill de ingesta
 
-> La skill vive en `skills/redes-ingesta/` (`SKILL.md` + `references/mapeos.md` +
-> `scripts/inp_to_plan.py`). Este documento explica **por qué** existe y **cómo** encaja en el
-> producto. Para el procedimiento paso a paso, abrir `SKILL.md`.
+> La skill vive en `skills/redes-ingesta/`: `SKILL.md` (flujo y reglas) y `references/` (contrato
+> del plan y una referencia por formato). Este documento explica **por qué** existe y **cómo**
+> encaja en el producto. Para el procedimiento, abrir `SKILL.md`.
 
 ---
 
 ## 1. El problema que resuelve
 
-Redes no diseña: recibe. Pero cada aplicación exporta a su manera:
+Redes no diseña: recibe. Cada aplicación exporta a su manera:
 
 | Origen | Lo que da | Lo que le falta |
 |---|---|---|
-| Civil 3D | DXF con capas, bloques, *proxies* AECC | Nada, si el delineante explota los *proxies* |
-| SWMM | `.inp` con topología, cotas, planta (`[COORDINATES]`, `[VERTICES]`) y secciones | Cota de terreno cuando `MaxDepth = 0`; forma constructiva de pozos y descargas |
-| EPANET | `.inp` con topología, cotas, planta (`[COORDINATES]`, `[VERTICES]`) y diámetros | Cota de terreno (la cota del nudo es hidráulica); qué es cada `RESERVOIR`; si un tanque es apoyado o elevado |
-| Excel | Inventario tabulado | Geometría 3D |
-| SIG | GeoJSON con planta | Cotas y jerarquía de familias |
+| Civil 3D | DXF con capas, bloques con atributos, polilíneas 3D; mejor aún LandXML o informes | Cotas y diámetros suelen estar solo en etiquetas; los objetos AECC no salen en DXF |
+| SWMM | `.inp` con topología, soleras, desfases, secciones y planta (`[COORDINATES]`, `[VERTICES]`) | Terreno cuando `MaxDepth = 0`; forma constructiva de pozos y descargas; sistema si no hay `[DWF]` ni subcuencas |
+| EPANET | `.inp` con topología, cotas de nudo, diámetros y planta (`[COORDINATES]`, `[VERTICES]`) | Terreno (la cota del nudo es hidráulica); qué es cada `RESERVOIR`; si un tanque es apoyado o elevado; si una tubería es conducción o distribución |
+| Excel | Cuadros de tramos y pozos con cotas | Planta (a veces); qué columna es clave y cuál solera |
+| SIG | GeoJSON/Shapefile con planta y atributos | CRS proyectado (a menudo viene en lon/lat); cotas fiables |
 
-Sin una capa de conversión, cada proyecto acaba con un script distinto, escrito a mano, que
-nadie documenta y que se rompe en la siguiente entrega. La skill es esa capa, pero **escrita una
-vez, versionada y verificable**.
-
-## 2. La decisión: un contrato, no un conversor monolítico
+## 2. La decisión: una skill guiada, no adaptadores (D5)
 
 ```
-   DXF ────────────────►┐
-   SWMM ──(script)─────►│
-   EPANET ─(script)────►├──► redes.plan/1  ──► CLI `redes importar plan`
-   Excel ──(plantilla)─►│        (JSON)            │
-   GeoJSON ────────────►┘                          ▼
-                                            documento `*.redes`
+   SWMM, EPANET, DXF/LandXML ajeno,     agente + skill        CLI
+   GeoJSON/Shapefile, Excel/CSV   ──►   (lee, entiende,  ──►  redes importar plan
+                                         pregunta, mapea)     (valida, informa)
+                                              │                     │
+                                              ▼                     ▼
+                                        redes.plan/1           documento *.redes
+
+   DXF escrito por Redes (REDES_INFO) ──► redes importar dxf
+   Terreno E,N,Z (CSV)                ──► redes importar terreno
 ```
 
-- **Un solo formato de entrada** (`redes.plan/1`) para todos los orígenes.
-- La conversión de cada origen vive **fuera del binario**: un script, una plantilla o una
-  persona con un LLM, pero siempre produciendo el mismo contrato.
-- El contrato se valida al importar: familia conocida, subtipo existente, códigos únicos,
-  extremos existentes, coordenadas presentes.
+- **Un solo formato de entrada** para orígenes ajenos: `redes.plan/1`.
+- **No hay un conversor por programa.** Los scripts `inp_to_plan.py` y `plan_desde_tabla.py`
+  y la heurística de capas de `ingest.rs` se retiran: cada origen real trae variantes que un
+  mapeo fijo resuelve adivinando. Un agente que **lee** el archivo con la referencia del formato
+  delante puede detectar la ambigüedad y **preguntar**.
+- La skill es **conocimiento**, no código: columnas, unidades, qué significa cada cota, trampas
+  conocidas y qué no se inventa. Un formato nuevo es una referencia nueva, no una versión nueva
+  del binario.
+- La CLI es la que **valida**: familia y subtipo existentes, códigos únicos, extremos existentes,
+  esquema conocido. El agente corrige según sus diagnósticos.
 
-**Consecuencias buenas:**
+**Consecuencias buenas:** un origen nuevo no exige recompilar; las decisiones dudosas (sistema,
+subtipo, CRS, DN o DI) las toma el usuario y quedan en el informe; los ejemplos trabajados
+muestran línea a línea cómo se lee un `.inp`.
 
-- Un origen nuevo no exige recompilar nada.
-- Un agente puede escribir el JSON directamente, sin ejecutar código nuestro.
-- Los errores son del archivo, no del motor: el importador dice qué objeto y por qué.
-- El contrato se puede versionar (`redes.plan/2`) sin tocar el modelo.
+**Consecuencias malas (asumidas):** la conversión depende de un agente que siga las reglas; no es
+determinista como un script. Se mitiga con reglas duras en `SKILL.md`, con los ejemplos de
+`crates/redes-core/tests/fixtures/` (su importación está probada en `tests/ingesta.rs`) y con la
+validación de la CLI.
 
-**Consecuencia mala (asumida):** el usuario necesita un paso intermedio. Se mitiga con los
-atajos ya implementados (`importar dxf|geojson|terreno`) y con el script de SWMM/EPANET.
-
-## 3. Qué garantiza el importador
+## 3. Qué garantiza el importador del plan
 
 | Garantía | Cómo |
 |---|---|
-| No inventa datos | Un campo ausente queda ausente; el inspector muestra `—` |
 | No calcula | Los números del origen se copian a `Dato { valor, unidad, fuente }` |
-| No pierde objetos en silencio | Informe con `nodos`, `arcos`, `descartados` y el motivo de cada descarte |
-| No duplica | Código único por proyecto; conflicto → `E_STATE_DUPLICATE_NAME` |
-| No acepta modelos rotos | Arco sin extremos → `E_TOPO_ORPHAN_LINK`; mismo nodo en ambos extremos → `E_TOPO_SELF_LOOP` |
+| No pierde objetos en silencio | Informe con `nodos`, `arcos`, `detalle_descartes` (motivo de cada uno) y `renombrados` |
+| No duplica | Código repetido → descarte con motivo |
+| No acepta modelos rotos | Extremo inexistente → descarte; mismo nodo en ambos extremos → `E_TOPO_SELF_LOOP` |
 | Deja rastro | `fuentes[]` con app, archivo, formato y fecha |
 
-### Cotas: solera y clave no son lo mismo (F12-01)
+Pendiente (F12-03): hoy `import_plan` todavía rellena huecos (terreno = solera, solera =
+terreno − 1,5, DN 200, subtipo por defecto). Por eso la skill obliga a listar los ausentes en el
+informe. Pendiente también: que `--dry-run` valide el plan sin escribir (hoy solo comprueba el
+archivo); la skill valida importando en un proyecto de prueba.
 
-| Cota | Qué es | Dónde vive |
+### Cotas: solera y clave no son lo mismo (F12-01, F12-02)
+
+| Cota | Qué es | En el plan |
 |---|---|---|
-| Solera (invert) | Fondo interior del tubo o del pozo | nodo: `cota` del plan → `z_invert`; tramo: `cota_solera_inicio`/`cota_solera_fin` |
+| Solera (invert) | Fondo interior del tubo o del pozo | nodo: `cota` → `z_invert`; tramo: `cota_solera_inicio`/`cota_solera_fin` y Z de `vertices` |
 | Clave | Punto más alto del interior del tubo: clave = solera + DI | tramo: `attrs.cota_clave` (inicio) y `attrs.cota_clave_fin` |
-| Tapa / rasante | Boca del pozo | `z_rim` |
+| Rasante / tapa | Superficie / boca del pozo | `cota_terreno` (→ `z_terrain` y `z_rim`); tapa distinta: `attrs.cota_tapa` |
+| Recubrimiento | rasante − (clave + espesor) | solo si el origen lo declara |
 
-Una columna de clave nunca se copia como solera. En `plan_desde_tabla.py`, un tramo que trae
-solo la clave y declara `diametro_interior` (mm) entra con solera = clave − DI y un aviso; sin DI
-la solera queda sin dato. El GeoJSON exportado escribe `cota_solera` en los nodos.
+Una clave nunca se copia como solera; solera = clave − DI solo con el DI declarado.
 
-## 4. Los tres niveles de la skill
+## 4. Estructura de la skill
 
-1. **Nivel 1 — atajo.** El origen ya está en un formato que el binario entiende:
-   `redes importar dxf --archivo x.dxf`. Cero código.
-2. **Nivel 2 — script.** El origen es texto estructurado (`.inp`, CSV raro, export de Excel):
-   se usa `scripts/inp_to_plan.py` o se adapta en 30 líneas.
-3. **Nivel 3 — agente.** Un LLM lee el archivo, aplica `references/mapeos.md` y escribe el JSON.
-   Es el camino para formatos que aparecen una sola vez (un inventario en PDF, un DWG con
-   bloques raros).
-
-Los tres producen el mismo contrato y se validan igual. Eso es lo importante.
-
-### 4.1 El script de SWMM y EPANET (F12-03/04/05)
-
-`inp_to_plan.py` lee las columnas según los manuales de SWMM 5 y EPANET 2.2 y convierte unidades
-US → SI (`FLOW_UNITS` en SWMM; `Units` en EPANET; pies, pulgadas, psi y hp). Reglas que no se
-negocian:
-
-- **Nada por defecto.** Sin `MaxDepth` no hay cota de terreno; sin coordenadas el nodo se descarta
-  (antes quedaba en (0,0)); EPANET no da volumen útil de tanque y no se escribe.
-- **Lo que no se puede decidir, se pregunta.** Si un SWMM no dice si es pluvial, sanitario o
-  combinado (ni `[SUBCATCHMENTS]`, ni `[DWF]`, ni el título), el script falla y pide `--sistema`.
-  Un `RESERVOIR` de EPANET se descarta salvo que `--reservorio familia:subtipo` diga qué es.
-- **Saltos en pozo.** `InOffset`/`OutOffset` (modo `DEPTH` o `ELEVATION`) fijan la cota del tubo
-  en cada extremo y se guardan como `datos.desfase_entrada/salida`.
-- **Dispositivos de enlace** (bombas, válvulas, vertederos): en Redes son objetos puntuales; se
-  ubican en el nodo de entrada con su cota y la conexión se anota como aviso.
-- Avisos y descartes salen por stderr y, con `--informe x.json`, a un archivo.
-
-El mapeo completo está en `skills/redes-ingesta/references/mapeos.md` §2 y §3.
+| Archivo | Contenido |
+|---|---|
+| `SKILL.md` | cuándo usarla, flujo (identificar → leer referencia → plan → `--dry-run` → corregir → importar → informe), reglas duras, qué preguntar |
+| `references/plan.md` | contrato `redes.plan/1` derivado de `ingest.rs`, trampas del contrato, cotas, cómo consultar el registro (`redes esquema --familia`) y validar |
+| `references/swmm.md` | SWMM 5: secciones, columnas, `FLOW_UNITS`, `LINK_OFFSETS`, `XSECTIONS`, mapeo, ejemplos y trampas |
+| `references/epanet.md` | EPANET 2.2: secciones, `Units`, `Headloss`, `TANKS`, `RESERVOIRS`, válvulas, mapeo, ejemplos y trampas |
+| `references/dxf-civil3d.md` | DXF de terceros: códigos de grupo, `INSERT`+`ATTRIB`, polilíneas 3D, capas NCS y en español, ajuste de extremos; LandXML |
+| `references/geojson-sig.md` | GeoJSON/Shapefile: CRS, campos típicos, extremos |
+| `references/tablas.md` | Excel/CSV e informes de Civil 3D: columnas, clave → solera |
 
 ## 5. Cómo se prueba
 
 | Prueba | Qué verifica |
 |---|---|
-| `cargo test -p redes-core` | El importador de plan rechaza duplicados y huérfanos; el DXF de ida y vuelta conserva los 44 objetos |
-| `python -m unittest discover -s skills/redes-ingesta/scripts/tests` | El conversor SWMM/EPANET lee las columnas oficiales, convierte US → SI, no inventa terreno ni volúmenes y descarta con motivo |
-| `cargo test -p redes-core --test ingesta` | Los planes generados de cuatro `.inp` reales (SWMM CFS y CMS, EPANET GPM y LPS, en `crates/redes-core/tests/fixtures`) entran sin descartes |
-| `redes exportar dxf` → `redes importar dxf` | La geometría sobrevive el viaje de vuelta |
+| `cargo test -p redes-core --test ingesta` | Los planes de ejemplo de cuatro `.inp` (SWMM CFS y CMS, EPANET GPM y LPS) entran sin descartes y con las cotas, diámetros y familias esperadas |
+| `cargo test -p redes-core --test cotas_tramo` | La solera declarada del tramo manda y el tubo se dibuja sobre ella |
+| `redes importar plan` en un proyecto de prueba | Los descartes y renombrados del plan concreto |
 | `redes vista --salida x.svg` | Lo que entró se ve (una imagen que un agente puede mirar) |
 
 ## 6. Lo que la skill **no** hará nunca
 
-- Rellenar caudales, presiones o volúmenes «faltantes».
-- Convertir un modelo hidráulico en un diseño.
-- Decidir si un diámetro cumple norma.
-- Inventar coordenadas: si el origen no trae planta, se piden (`--coords`); mientras tanto, el
-  nodo se descarta con su motivo.
+- Rellenar caudales, presiones, volúmenes, terrenos o coordenadas «faltantes».
+- Convertir un modelo hidráulico en un diseño, ni decidir si un diámetro cumple norma.
+- Elegir por el usuario lo que el origen no dice (sistema, CRS, subtipo): lo pregunta.
 
 Si un proyecto no se puede representar sin calcular algo, es que el origen no traía el dato y
 hay que volver a la aplicación que lo produce.

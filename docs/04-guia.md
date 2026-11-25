@@ -267,18 +267,24 @@ no. Un «aprobar todo» convierte la revisión en un trámite.
 
 ## 7. Entrada de datos desde otras aplicaciones
 
-| Origen | Camino | Documento |
+Los formatos ajenos los convierte un agente con la skill `skills/redes-ingesta` a un plan
+`redes.plan/1`, que se valida e importa con `redes importar plan` (D5). La skill tiene una
+referencia por formato en `skills/redes-ingesta/references/`:
+
+| Origen | Camino | Referencia |
 |---|---|---|
-| Civil 3D / AutoCAD | `redes importar dxf` (mapeo por capa) | `skills/redes-ingesta/references/mapeos.md` §1 |
-| SWMM | `python skills/redes-ingesta/scripts/inp_to_plan.py --tipo swmm` → `importar plan` | §2 |
-| EPANET | ídem `--tipo epanet` | §3 |
-| Excel / CSV | plan JSON escrito a mano o con un agente | §4 |
-| SIG | `redes importar geojson` | §5 |
+| DXF escrito por Redes (capa `REDES_INFO`) | `redes importar dxf` | — |
+| Civil 3D / AutoCAD (DXF ajeno, LandXML) | skill → `importar plan` | `dxf-civil3d.md` |
+| SWMM | skill → `importar plan` | `swmm.md` |
+| EPANET | skill → `importar plan` | `epanet.md` |
+| Excel / CSV / informes de Civil 3D | skill → `importar plan` | `tablas.md` |
+| SIG (GeoJSON, Shapefile) | skill → `importar plan` | `geojson-sig.md` |
+| Terreno `E,N,Z` | `redes importar terreno` | — |
 
-Detalle completo del contrato y del procedimiento: `skills/redes-ingesta/SKILL.md`.
+Contrato del plan: `references/plan.md`. Procedimiento y reglas: `skills/redes-ingesta/SKILL.md`.
 
-**Regla:** si el `.inp` no trae coordenadas (SWMM y EPANET no las guardan), hay que pasar un CSV
-`codigo,E,N`. Sin planta no hay 3D.
+**Regla:** un nodo sin planta no se dibuja ni se coloca en (0,0): se pide la coordenada o se
+descarta con su motivo. Sin planta no hay 3D.
 
 ---
 
