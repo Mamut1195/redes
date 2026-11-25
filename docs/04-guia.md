@@ -104,7 +104,7 @@ En la ciudad de demostración (`redes proyecto ciudad`) las cotas no son decorat
 | Regla | Cómo se cumple | Prueba |
 |---|---|---|
 | La tapa sale a la calle | `z_rim` = cota del terreno en el eje de la calle | `la_tapa_del_pozo_esta_en_la_calle` (±0,35 m) |
-| La clave va enterrada | recubrimiento entre 1,1 y 6 m | `el_recubrimiento_es_razonable` |
+| La clave va enterrada | profundidad (tapa − solera) entre 1,1 y 6 m; recubrimiento del tubo (rasante − (solera + DI + espesor)) > 0,5 m | `la_profundidad_del_pozo_es_razonable`, `el_recubrimiento_del_tubo_es_positivo` |
 | Todo colector baja | clave decreciente; pendiente ≥ 0,4 % | `todos_los_colectores_bajan` |
 | Los laterales acometen al troncal | cada lateral termina en el pozo de su calle | sin arcos colgantes en la importación |
 

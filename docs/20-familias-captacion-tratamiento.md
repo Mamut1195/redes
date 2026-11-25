@@ -658,7 +658,7 @@ Efecto en los conteos: `saneamiento.camara` 11 → 5 (sigue cumpliendo el mínim
 | `agua.tuberia` | `cota_clave_fin` | m | Num | Geometrico | ● | sin ella no se puede revisar un perfil sin recalcular (H7) |
 | `agua.tuberia` | `regimen` | — | Enum | Hidraulico | ● | gravedad, bombeo, lámina libre: es atributo, no subtipo |
 | `agua.tuberia` | `tipo_junta` | — | Enum | Material | ○ | espiga-campana, bridada, soldada, electrofusión |
-| `agua.tuberia` | `recubrimiento` | m | Num | Geometrico | D | derivado de cotas; ya existe el patrón en `saneamiento.tuberia` |
+| `agua.tuberia` | `recubrimiento` | m | Num | Geometrico | D | derivado de cotas: rasante − (solera + DI + espesor); no es la profundidad (tapa − solera) |
 | `agua.tuberia` | `numero_tramos` | — | Int | General | ○ | conteo de tramos entre cámaras |
 | `agua.tanque` | `cota_rebose` | m | Num | Hidraulico | ● | el rebose es lo que más se revisa en una inspección (H10) |
 | `agua.tanque` | `cota_desague` | m | Num | Hidraulico | ○ | vaciado |

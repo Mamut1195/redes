@@ -3,7 +3,8 @@
 //!
 //! Reglas que se respetan (y que las pruebas verifican):
 //! - **La tapa del pozo sale a la calle**: `z_rim` es la cota del terreno en el eje de la calle.
-//! - **La clave va bajo tierra**: recubrimiento entre 1,2 y 6 m en todos los pozos.
+//! - **La clave va bajo tierra**: profundidad (tapa − solera) entre 1,2 y 6 m en todos los pozos y
+//!   recubrimiento del tubo (rasante − (solera + DI + espesor)) positivo en todos sus extremos.
 //! - **Todo colector baja**: la clave decrece en el sentido de flujo, con pendiente mínima 0,4 %.
 //! - Los laterales acometen al troncal en el pozo de su misma calle; no hay arcos colgantes.
 
@@ -388,7 +389,7 @@ fn pozo(p: &mut Project, e: f64, n: f64, tipo: &str, diametro: f64) -> ElementId
 }
 
 /// Diseña las claves del troncal en el sentido del flujo: cada pozo queda más bajo que el
-/// anterior al menos `pendiente`, y con recubrimiento entre `COVER_MIN` y `COVER_MAX`.
+/// anterior al menos `pendiente`, y con profundidad (tapa − solera) entre `COVER_MIN` y `COVER_MAX`.
 fn disenar_troncal(p: &mut Project, cadena: &[ElementId], pendiente: f64) {
     const COVER_MIN: f64 = 1.20;
     const COVER_MAX: f64 = 6.00;
@@ -562,20 +563,41 @@ mod tests {
     }
 
     #[test]
-    fn el_recubrimiento_es_razonable() {
+    fn la_profundidad_del_pozo_es_razonable() {
         let p = proyecto();
         for n in p
             .nodes
             .iter()
             .filter(|n| !n.deleted && n.family == "saneamiento.pozo")
         {
-            let recubrimiento = n.z_rim - n.z_invert;
+            // Profundidad = tapa − solera. No es el recubrimiento del tubo.
+            let profundidad = n.z_rim - n.z_invert;
             assert!(
-                (1.0..=6.2).contains(&recubrimiento),
-                "{}: recubrimiento {:.2} m",
+                (1.0..=6.2).contains(&profundidad),
+                "{}: profundidad {:.2} m",
                 n.code,
-                recubrimiento
+                profundidad
             );
+        }
+    }
+
+    #[test]
+    fn el_recubrimiento_del_tubo_es_positivo() {
+        let p = proyecto();
+        for l in p.links.iter().filter(|l| !l.deleted) {
+            // Recubrimiento = rasante − (clave + espesor) = rasante − (solera + DI + espesor).
+            for (id, q) in [(l.from, l.path.first()), (l.to, l.path.last())] {
+                let (Some(n), Some(q)) = (p.node(id), q) else {
+                    continue;
+                };
+                let recubrimiento = n.z_rim - (q.z + l.diametro_interior_m() + l.espesor_pared_m());
+                assert!(
+                    recubrimiento > 0.5,
+                    "{}: recubrimiento {:.2} m",
+                    l.code,
+                    recubrimiento
+                );
+            }
         }
     }
 
