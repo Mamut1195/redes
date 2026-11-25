@@ -1,157 +1,17 @@
 //! Índices del proyecto (F14-01): búsqueda por id y por código y adyacencia nodo → tramos sin
 //! recorrer todo el proyecto.
 //!
-//! Dos clases de prueba:
-//! - **coherencia**: tras secuencias aleatorias de altas, bajas, clonados (deshacer), guardado y
-//!   carga, cada búsqueda indexada da lo mismo que el recorrido lineal;
-//! - **escala**: una red sintética grande se importa y se dibuja en un tiempo que el recorrido
-//!   lineal no alcanza. En depuración el umbral es holgado: es un trinquete, no una medida fina.
-//!   Las cifras de release se sacan con `cargo test --release --test indices -- --nocapture`.
+//! Coherencia: tras secuencias aleatorias de altas, bajas, clonados (deshacer), guardado y carga,
+//! cada búsqueda indexada da lo mismo que el recorrido lineal. La escala (20k/50k tramos) está en
+//! `tests/banco.rs` (F14-10).
+
+mod comun;
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
-use std::time::Instant;
 
+use comun::{plan_sintetico, temporal};
 use redes_core::geom::{P2, P3};
 use redes_core::model::{ElementId, EstadoObjeto, Link, Node, Project};
-use redes_core::view::{Camera, Layers, Opciones, build_opts};
-
-// ---------------------------------------------------------------------------------------------
-// Red sintética
-
-/// Plan `redes.plan/1` de una red en peine: filas de pozos unidas por colectores, con soleras
-/// declaradas. `tramos` es aproximado (se redondea a filas completas).
-fn plan_sintetico(tramos: usize) -> String {
-    let por_fila = 200usize;
-    let filas = tramos.div_ceil(por_fila - 1).max(1);
-    let mut objetos = Vec::with_capacity(filas * por_fila * 2);
-    for f in 0..filas {
-        for c in 0..por_fila {
-            let cota = 2500.0 - c as f64 * 0.05;
-            objetos.push(format!(
-                r#"{{"tipo":"nodo","codigo":"PZ-{f}-{c}","familia":"saneamiento.pozo","subtipo":"inspeccion","e":{},"n":{},"cota":{cota},"cota_terreno":{}}}"#,
-                758000.0 + c as f64 * 30.0,
-                9797000.0 + f as f64 * 40.0,
-                cota + 2.0
-            ));
-        }
-        for c in 0..por_fila - 1 {
-            objetos.push(format!(
-                r#"{{"tipo":"arco","codigo":"CL-{f}-{c}","familia":"saneamiento.tuberia","subtipo":"colector_sanitario","desde":"PZ-{f}-{c}","hasta":"PZ-{f}-{}","diametro_mm":200,"cota_solera_inicio":{},"cota_solera_fin":{}}}"#,
-                c + 1,
-                2500.0 - c as f64 * 0.05,
-                2500.0 - (c + 1) as f64 * 0.05
-            ));
-        }
-    }
-    format!(
-        r#"{{"schema":"redes.plan/1","proyecto":{{"nombre":"Sintetica","crs":"EPSG:32717"}},"objetos":[{}]}}"#,
-        objetos.join(",")
-    )
-}
-
-fn temporal(nombre: &str) -> PathBuf {
-    std::env::temp_dir().join(format!("redes-indices-{nombre}-{}", std::process::id()))
-}
-
-fn ms(t0: Instant) -> f64 {
-    t0.elapsed().as_secs_f64() * 1000.0
-}
-
-/// Importa, dibuja, guarda, abre y reimporta una red de `tramos` tramos; devuelve los tiempos.
-fn banco(tramos: usize) -> BTreeMap<&'static str, f64> {
-    let ruta = temporal(&format!("plan-{tramos}.json"));
-    std::fs::write(&ruta, plan_sintetico(tramos)).unwrap();
-    let mut t = BTreeMap::new();
-
-    let mut p = Project::new("Sintetica", "EPSG:32717");
-    let t0 = Instant::now();
-    let rep = redes_core::ingest::import_plan(&mut p, &ruta).expect("importa");
-    t.insert("ingesta", ms(t0));
-    assert!(rep.descartados.is_empty(), "{:?}", rep.descartados);
-    let vivos = p.links.iter().filter(|l| !l.deleted).count();
-    assert!(vivos >= tramos, "{vivos} tramos");
-
-    let mut cam = Camera {
-        viewport: [900.0, 600.0],
-        ..Camera::default()
-    };
-    cam.fit(&p);
-    let mut escena = Vec::new();
-    for _ in 0..3 {
-        let t0 = Instant::now();
-        let e = build_opts(
-            &p,
-            p.terrain.as_ref(),
-            &cam,
-            Layers::default(),
-            None,
-            &Opciones::default(),
-        );
-        std::hint::black_box(&e);
-        escena.push(ms(t0));
-    }
-    escena.sort_by(f64::total_cmp);
-    t.insert("escena", escena[1]);
-
-    let t0 = Instant::now();
-    for l in p.links.iter().filter(|l| !l.deleted) {
-        std::hint::black_box(p.node_by_code(&l.code));
-        std::hint::black_box(p.link_by_code(&l.code));
-        std::hint::black_box(p.node(l.from));
-    }
-    t.insert("busquedas", ms(t0));
-
-    let archivo = temporal(&format!("{tramos}.redes"));
-    redes_core::project_io::save(&p, &archivo).expect("guarda");
-    let t0 = Instant::now();
-    let abierto = redes_core::project_io::load(&archivo).expect("abre");
-    t.insert("abrir", ms(t0));
-    assert_eq!(abierto.links.len(), p.links.len());
-
-    let t0 = Instant::now();
-    redes_core::reimportar::reimportar(
-        &mut p,
-        &ruta,
-        redes_core::reimportar::Formato::Plan,
-        &redes_core::diff::Opciones::default(),
-        false,
-    )
-    .expect("reimporta");
-    t.insert("reimportar", ms(t0));
-
-    let _ = std::fs::remove_file(&ruta);
-    let _ = std::fs::remove_file(&archivo);
-    t
-}
-
-/// Una red de 20 000 tramos se importa y se dibuja sin recorridos cuadráticos. Antes de F14-01
-/// la ingesta comprobaba códigos y extremos recorriendo todo el proyecto en cada alta.
-#[test]
-fn una_red_de_20k_tramos_se_importa_y_dibuja_sin_recorridos_cuadraticos() {
-    let t = banco(20_000);
-    println!("20k tramos: {t:?}");
-    // Umbrales holgados (también en depuración); la cifra de release va al informe.
-    assert!(t["ingesta"] < 8_000.0, "ingesta {:.0} ms", t["ingesta"]);
-    assert!(
-        t["busquedas"] < 1_000.0,
-        "búsquedas {:.0} ms",
-        t["busquedas"]
-    );
-    assert!(
-        t["reimportar"] < 15_000.0,
-        "reimportar {:.0} ms",
-        t["reimportar"]
-    );
-}
-
-/// Cifras de 50 000 tramos (criterio de F14-01). Ignorada por defecto: se corre en release.
-#[test]
-#[ignore]
-fn banco_50k() {
-    let t = banco(50_000);
-    println!("50k tramos: {t:?}");
-}
 
 // ---------------------------------------------------------------------------------------------
 // Coherencia: índice == recorrido lineal

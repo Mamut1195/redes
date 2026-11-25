@@ -156,6 +156,17 @@ $mutaciones = @(
         Que = "olvidar el nodo final al indexar los tramos de cada nodo (F14-01)"
     },
     @{
+        # Regresión de rendimiento, no de resultado: `node(id)` sigue siendo correcto pero recorre
+        # todos los nodos, y la escena y la ingesta se vuelven cuadráticas. Solo el banco lo ve.
+        Nombre = "banco-cuadratico"
+        Archivo = "crates/redes-core/src/indice.rs"
+        Patron = 'self\.indice\(\)\.map\(\|ix\| &ix\.nodo_por_id\)'
+        Reemplazo = 'None'
+        Destino = "banco"
+        Prueba = "banco_20k_tramos_dentro_del_umbral"
+        Que = "buscar nodos por id recorriendo el proyecto: escena cuadratica (F14-10)"
+    },
+    @{
         Nombre = "gpu3d-camara-regenera"
         Archivo = "crates/redes-app/src/main.rs"
         Patron = 'if self\.clave_malla != Some\(clave\) \{'

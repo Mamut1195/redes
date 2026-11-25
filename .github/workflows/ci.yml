@@ -35,6 +35,11 @@ jobs:
       - name: Release
         run: cargo build --release -p redes-app -p redes-cli
 
+      # F14-10: la red sintética de 20k tramos con los umbrales de release (tests/banco.rs).
+      # Reutiliza la biblioteca recién compilada en release: solo enlaza el binario de pruebas.
+      - name: Banco (20k tramos, release)
+        run: cargo test --release -p redes-core --test banco -- --nocapture
+
   mutacion:
     name: Mutación (la suite debe detectar el código roto)
     runs-on: windows-latest
