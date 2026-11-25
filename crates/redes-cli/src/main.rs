@@ -1020,11 +1020,19 @@ fn io_error(command: &str, msg: &str) -> Envelope {
     let code = msg.split(':').next().unwrap_or("E_IO_NOT_FOUND");
     Envelope::fail(
         command,
-        vec![
-            Diagnostic::new(code, Severity::Error, msg.to_string())
-                .hint("Verifique la ruta; use --dry-run para inspeccionar sin escribir."),
-        ],
+        vec![Diagnostic::new(code, Severity::Error, msg.to_string()).hint(pista_io(code))],
     )
+}
+
+/// Pista de un fallo al abrir o guardar un `.redes`.
+fn pista_io(code: &str) -> &'static str {
+    match code {
+        // D10: antes de v1 no hay migraciones; se regenera desde la entrega.
+        "E_PROJ_SCHEMA" => {
+            "Regenere el proyecto: `redes proyecto nuevo --nombre X --crs EPSG:327NN --salida x.redes` y `redes -p x.redes importar plan --archivo plan.json` (o `importar dxf`)."
+        }
+        _ => "Verifique la ruta; use --dry-run para inspeccionar sin escribir.",
+    }
 }
 
 fn command_id(c: &Cmd) -> &'static str {
@@ -1201,6 +1209,11 @@ const CODIGOS: &[(&str, &str, i32)] = &[
         3,
     ),
     ("E_PROJ_NOT_FOUND", "no hay proyecto resoluble", 4),
+    (
+        "E_PROJ_SCHEMA",
+        "el .redes no es de la versión vigente (redes.project/3): antes de v1 no se convierte; se regenera reimportando la entrega",
+        4,
+    ),
     ("E_STATE_NOT_FOUND", "el objeto no existe", 4),
     ("E_STATE_DUPLICATE_NAME", "código duplicado", 3),
     ("E_STATE_PENDING", "quedan objetos sin revisar", 3),
@@ -1232,6 +1245,11 @@ const CODIGOS: &[(&str, &str, i32)] = &[
     ),
     ("E_FMT_PARSE", "archivo ilegible", 7),
     ("E_FMT_UNSUPPORTED", "formato no soportado", 7),
+    (
+        "E_FMT_VERSION",
+        "el plan no es redes.plan/1 (otra versión, anterior o futura): no se importa",
+        7,
+    ),
     (
         "E_FMT_CAMPO",
         "el plan usa un campo que no es del contrato redes.plan/1 (se perdería); el mensaje sugiere el válido",
@@ -1329,6 +1347,9 @@ fn importar(p: &mut Project, cmd: ImportarCmd, dry: bool) -> Envelope {
             let pista = match code.as_str() {
                 "E_FMT_NOT_REDES" | "E_FMT_PARSE" if command == "importar.dxf" => {
                     "`importar dxf` solo lee DXF exportados por Redes (capa REDES_INFO). Un DXF de otra aplicación se adapta con la skill `skills/redes-ingesta`, que escribe un `redes.plan/1`; luego `redes importar plan --archivo plan.json`."
+                }
+                "E_FMT_VERSION" => {
+                    "La app solo importa `redes.plan/1`: reescriba el plan con la skill `skills/redes-ingesta` (references/plan.md)."
                 }
                 "E_FMT_CAMPO" => {
                     "Use solo los campos del contrato (skills/redes-ingesta/references/plan.md §2); el mensaje sugiere el nombre válido más parecido."

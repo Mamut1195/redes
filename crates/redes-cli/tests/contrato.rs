@@ -791,3 +791,99 @@ fn proyecto_diff_reporta_altas_bajas_y_cambios_y_escribe_csv() {
     let esq = corre(&["esquema"], &d).stdout;
     assert!(esq.contains("proyecto diff") && esq.contains("E_STATE_CRS_DISTINTO"));
 }
+
+/// D10 (F15-01): solo se abre `redes.project/3`; un `/2` da `E_PROJ_SCHEMA` (código 4) con la
+/// pista de regenerarlo, y un plan que no es `redes.plan/1` da `E_FMT_VERSION` (código 7).
+#[test]
+fn solo_abre_la_version_vigente_del_proyecto_y_del_plan() {
+    let d = tempdir("version");
+    let ruta = d.join("v2.redes");
+    let r = ruta.to_str().unwrap();
+    assert_eq!(
+        corre(&["proyecto", "catalogo", "--salida", r], &d).codigo,
+        0
+    );
+    let actual = std::fs::read_to_string(&ruta).unwrap();
+    assert!(actual.contains("\"redes.project/3\""));
+    std::fs::write(
+        &ruta,
+        actual.replacen("\"redes.project/3\"", "\"redes.project/2\"", 1),
+    )
+    .unwrap();
+    let s = corre(&["-p", r, "proyecto", "info"], &d);
+    let j = sobre(&s);
+    assert_eq!(j["ok"], false, "{j}");
+    assert_eq!(s.codigo, 4);
+    let diag = &j["diagnostics"][0];
+    assert_eq!(diag["code"], "E_PROJ_SCHEMA");
+    let msg = diag["message"].as_str().unwrap();
+    assert!(
+        msg.contains("redes.project/2") && msg.contains("redes.project/3"),
+        "{msg}"
+    );
+    assert!(
+        diag["hint"]
+            .as_str()
+            .is_some_and(|h| h.contains("importar")),
+        "{diag}"
+    );
+
+    // Plan /2 sobre un proyecto vigente: no se importa nada y el proyecto no se toca.
+    let ok = d.join("ok.redes");
+    let o = ok.to_str().unwrap();
+    let nuevo = ["proyecto", "nuevo", "--nombre", "x", "--salida", o];
+    assert_eq!(corre(&nuevo, &d).codigo, 0);
+    let antes = std::fs::read_to_string(&ok).unwrap();
+    let plan = d.join("plan.json");
+    std::fs::write(
+        &plan,
+        r#"{"schema":"redes.plan/2","proyecto":{"nombre":"x","crs":"EPSG:32717"},
+            "objetos":[{"tipo":"nodo","codigo":"P1","familia":"saneamiento.pozo","e":760000.0,"n":9796000.0,"cota":2500.0}]}"#,
+    )
+    .unwrap();
+    let p = plan.to_str().unwrap();
+    let s = corre(&["-p", o, "importar", "plan", "--archivo", p], &d);
+    let j = sobre(&s);
+    assert_eq!(j["ok"], false, "{j}");
+    assert_eq!(s.codigo, 7);
+    assert_eq!(j["diagnostics"][0]["code"], "E_FMT_VERSION");
+    assert!(
+        j["diagnostics"][0]["message"]
+            .as_str()
+            .is_some_and(|m| m.contains("redes.plan/2") && m.contains("redes.plan/1")),
+        "{j}"
+    );
+    assert_eq!(std::fs::read_to_string(&ok).unwrap(), antes);
+
+    // Ambos códigos están en `redes esquema`; el antiguo E_PROJ_SCHEMA_TOO_NEW se fundió.
+    let codigos = sobre(&corre(&["esquema"], &d))["data"]["codigos_error"].to_string();
+    assert!(codigos.contains("\"E_PROJ_SCHEMA\""), "{codigos}");
+    assert!(codigos.contains("\"E_FMT_VERSION\""), "{codigos}");
+    assert!(!codigos.contains("E_PROJ_SCHEMA_TOO_NEW"), "{codigos}");
+}
+
+/// Los proyectos versionados en `demo/` (y la copia de `docs/demo/`) son de la versión vigente
+/// y abren con el binario real.
+#[test]
+fn los_proyectos_de_demo_abren() {
+    let raiz = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let d = tempdir("demos");
+    let mut vistos = 0;
+    for carpeta in ["demo", "docs/demo"] {
+        for e in std::fs::read_dir(raiz.join(carpeta)).unwrap().flatten() {
+            let ruta = e.path();
+            if ruta.extension().is_none_or(|x| x != "redes") {
+                continue;
+            }
+            let s = corre(&["-p", ruta.to_str().unwrap(), "proyecto", "info"], &d);
+            let j = sobre(&s);
+            assert_eq!(j["ok"], true, "{}: {j}", ruta.display());
+            assert_eq!(s.codigo, 0);
+            vistos += 1;
+        }
+    }
+    assert!(
+        vistos >= 5,
+        "se esperaban los 5 .redes de demo; hubo {vistos}"
+    );
+}

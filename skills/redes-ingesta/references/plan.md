@@ -36,7 +36,7 @@ Derivado de `crates/redes-core/src/ingest.rs` (`Plan`, `PlanProyecto`, `PlanObje
 
 | Campo | Tipo | Si falta | Regla |
 |---|---|---|---|
-| `schema` | texto | `redes.plan/1` | debe empezar por `redes.plan/`; otro → `E_FMT_UNSUPPORTED` |
+| `schema` | texto | `redes.plan/1` | exactamente `redes.plan/1` (D10); otra versión de `redes.plan/*` → `E_FMT_VERSION`; algo que no es un plan → `E_FMT_UNSUPPORTED`; si falta, se toma `/1` |
 | `proyecto.nombre` | texto | **obligatorio** (puede ser `""`) | si no está vacío, renombra el proyecto |
 | `proyecto.crs` | texto | `EPSG:32717` | **Pregúntalo** si el origen no lo declara. Ecuador continental: `EPSG:32717` (17S) o `EPSG:32718` (18S). `32617` es 17N: desplaza 10 000 km |
 | `proyecto.fuente_app` | texto | `"plan"` | app y versión de origen (`"EPANET 2.2"`) |

@@ -5,8 +5,9 @@
 //! - inspeccionable por un agente sin herramientas,
 //! - sin dependencias C.
 //!
-//! SQLite entra cuando el tamaño lo exija (>50 MB o guardado incremental); el contrato de
-//! `schema` ya está versionado para migrar sin romper archivos.
+//! SQLite entra cuando el tamaño lo exija (>50 MB o guardado incremental). El `schema` está
+//! versionado; antes de v1 solo se abre la versión vigente (D10) y las migraciones empiezan al
+//! congelar el formato.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -97,23 +98,39 @@ pub fn validar_finito(p: &Project) -> Result<(), String> {
 
 /// Versión de esquema que entiende esta compilación.
 ///
-/// - 3: `observaciones` con historial (F13-03). Sin conversión desde versiones anteriores: no hay
-///   archivos en producción que conservar.
+/// Antes de v1 solo se abre esta versión exacta (D10): no hay archivos en producción que
+/// conservar y un `.redes` se regenera reimportando la entrega. Las migraciones
+/// (`migrar_vN→vN+1`) empiezan cuando el formato se congele en v1.
+///
+/// - 3: `observaciones` con historial (F13-03).
 pub const SCHEMA_VERSION: u32 = 3;
+
+/// Solo el campo `schema`: se mira antes de deserializar el resto, para que un archivo de otra
+/// versión dé `E_PROJ_SCHEMA` y no un `E_FMT_PARSE` confuso sobre un campo que cambió.
+#[derive(serde::Deserialize)]
+struct Cabecera {
+    #[serde(default)]
+    schema: Option<serde_json::Value>,
+}
 
 /// Carga un proyecto y lo valida antes de devolverlo.
 ///
-/// Un archivo de disco no es de fiar: puede venir de una versión futura, de una edición manual o
+/// Un archivo de disco no es de fiar: puede venir de otra versión, de una edición manual o
 /// de un proceso interrumpido. Aquí se rechaza lo irrecuperable con un código estable en vez de
 /// reventar más adelante (revisión adversarial D-03, D-04, D-07, D-08).
 pub fn load(path: &Path) -> Result<Project, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("E_IO_NOT_FOUND: {e}"))?;
+    let cabecera: Cabecera =
+        serde_json::from_str(&text).map_err(|e| format!("E_FMT_PARSE: {e}"))?;
+    let schema = match cabecera.schema {
+        Some(serde_json::Value::String(s)) => s,
+        Some(otro) => otro.to_string(),
+        None => String::new(),
+    };
+    validar_esquema(&schema)?;
     let mut p: Project = serde_json::from_str(&text).map_err(|e| format!("E_FMT_PARSE: {e}"))?;
-    validar_esquema(&p.schema)?;
     validar_tin(&p)?;
     validar_identidad(&mut p)?;
-    p.migrar_cotas();
-    p.schema = format!("redes.project/{SCHEMA_VERSION}");
     // El índice espacial del TIN no se serializa: se reconstruye al abrir.
     if let Some(t) = p.terrain.as_mut() {
         t.reindexar();
@@ -121,18 +138,21 @@ pub fn load(path: &Path) -> Result<Project, String> {
     Ok(p)
 }
 
-/// Acepta versiones hasta [`SCHEMA_VERSION`]; una futura se rechaza en vez de perder datos.
+/// Acepta **solo** `redes.project/{SCHEMA_VERSION}` (D10). Una versión anterior, futura o
+/// desconocida se rechaza con `E_PROJ_SCHEMA`: antes de v1 no hay migraciones.
 pub fn validar_esquema(schema: &str) -> Result<(), String> {
-    let version = schema
-        .strip_prefix("redes.project/")
-        .and_then(|v| v.parse::<u32>().ok())
-        .ok_or_else(|| format!("E_PROJ_SCHEMA: esquema desconocido {schema}"))?;
-    if version > SCHEMA_VERSION {
-        return Err(format!(
-            "E_PROJ_SCHEMA_TOO_NEW: el archivo usa la versión {version} y esta app entiende hasta la {SCHEMA_VERSION}; ábralo con una versión más nueva"
-        ));
+    let vigente = format!("redes.project/{SCHEMA_VERSION}");
+    if schema == vigente {
+        return Ok(());
     }
-    Ok(())
+    let trae = if schema.is_empty() {
+        "no declara versión (falta `schema`)".to_string()
+    } else {
+        format!("es `{schema}`")
+    };
+    Err(format!(
+        "E_PROJ_SCHEMA: el archivo {trae} y esta app solo abre `{vigente}`. Antes de v1 no se convierten versiones: regenere el .redes reimportando la entrega (`redes importar plan --archivo plan.json` o `redes importar dxf --archivo entrega.dxf` sobre un proyecto nuevo de `redes proyecto nuevo`)"
+    ))
 }
 
 /// Comprueba que la triangulación del terreno no tenga índices fuera de rango.
@@ -273,14 +293,60 @@ mod tests {
         let _ = std::fs::remove_file(&ruta);
     }
 
+    /// Carga el catálogo con otro `schema` y devuelve el error.
+    fn error_con_esquema(nombre: &str, schema: Option<serde_json::Value>) -> String {
+        let mut v = serde_json::to_value(crate::demo_catalog::catalogo()).unwrap();
+        match schema {
+            Some(s) => v["schema"] = s,
+            None => {
+                v.as_object_mut().unwrap().remove("schema");
+            }
+        }
+        let ruta = escribir_temporal(nombre, &v);
+        let err = crate::project_io::load(&ruta).unwrap_err();
+        let _ = std::fs::remove_file(&ruta);
+        err
+    }
+
     #[test]
     fn rechaza_un_esquema_futuro() {
-        let mut v = serde_json::to_value(crate::demo_catalog::catalogo()).unwrap();
-        v["schema"] = serde_json::json!("redes.project/99");
-        let ruta = escribir_temporal("futuro", &v);
+        let err = error_con_esquema("futuro", Some(serde_json::json!("redes.project/99")));
+        assert!(err.starts_with("E_PROJ_SCHEMA:"), "{err}");
+        assert!(
+            err.contains("redes.project/99"),
+            "dice qué versión trae: {err}"
+        );
+        assert!(err.contains("redes.project/3"), "dice cuál entiende: {err}");
+    }
+
+    /// D10: antes de v1 no hay migraciones; un `/2` no abre y el mensaje dice cómo regenerarlo.
+    #[test]
+    fn rechaza_un_esquema_anterior_sin_migrar() {
+        for (nombre, schema) in [
+            ("v2", serde_json::json!("redes.project/2")),
+            ("v1", serde_json::json!("redes.project/1")),
+            ("ajeno", serde_json::json!("otra.cosa/3")),
+            ("numero", serde_json::json!(3)),
+        ] {
+            let err = error_con_esquema(nombre, Some(schema));
+            assert!(err.starts_with("E_PROJ_SCHEMA:"), "{nombre}: {err}");
+            assert!(err.contains("redes importar"), "sugiere reimportar: {err}");
+        }
+        let err = error_con_esquema("sin", None);
+        assert!(err.starts_with("E_PROJ_SCHEMA:"), "sin schema: {err}");
+    }
+
+    /// Un `/2` cuyo contenido ya no deserializa como `Project` da `E_PROJ_SCHEMA`, no
+    /// `E_FMT_PARSE`: la versión se mira antes que los campos.
+    #[test]
+    fn la_version_se_comprueba_antes_que_los_campos() {
+        let ruta = escribir_temporal(
+            "v2-roto",
+            &serde_json::json!({"schema": "redes.project/2", "nodes": "no es una lista"}),
+        );
         let err = crate::project_io::load(&ruta).unwrap_err();
-        assert!(err.starts_with("E_PROJ_SCHEMA_TOO_NEW"), "{err}");
         let _ = std::fs::remove_file(&ruta);
+        assert!(err.starts_with("E_PROJ_SCHEMA:"), "{err}");
     }
 
     #[test]

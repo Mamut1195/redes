@@ -1,5 +1,5 @@
 {
-  "schema": "redes.project/2",
+  "schema": "redes.project/3",
   "id": "prj_8961c4a1",
   "name": "Catálogo de piezas",
   "crs": "EPSG:32717",
@@ -5666,7 +5666,7 @@
       "z_invert": 2498.15,
       "attrs": {
         "altura_caida": 0.0,
-        "cota_clave": 2498.15,
+        "cota_solera": 2498.15,
         "cota_tapa": 2500.35,
         "diametro_interior": 1.2
       },
@@ -5691,7 +5691,7 @@
       "z_invert": 2498.5350000000003,
       "attrs": {
         "altura_caida": 0.8,
-        "cota_clave": 2498.5350000000003,
+        "cota_solera": 2498.5350000000003,
         "cota_tapa": 2500.735,
         "diametro_interior": 1.5
       },
@@ -5716,7 +5716,7 @@
       "z_invert": 2498.92,
       "attrs": {
         "altura_caida": 0.0,
-        "cota_clave": 2498.92,
+        "cota_solera": 2498.92,
         "cota_tapa": 2501.12,
         "diametro_interior": 1.5
       },
@@ -5741,7 +5741,7 @@
       "z_invert": 2499.3050000000003,
       "attrs": {
         "altura_caida": 0.0,
-        "cota_clave": 2499.3050000000003,
+        "cota_solera": 2499.3050000000003,
         "cota_tapa": 2501.505,
         "diametro_interior": 1.5
       },
@@ -5766,7 +5766,7 @@
       "z_invert": 2499.69,
       "attrs": {
         "altura_caida": 0.0,
-        "cota_clave": 2499.69,
+        "cota_solera": 2499.69,
         "cota_tapa": 2501.89,
         "diametro_interior": 1.5
       },
@@ -5791,7 +5791,7 @@
       "z_invert": 2500.0750000000003,
       "attrs": {
         "altura_caida": 0.0,
-        "cota_clave": 2500.0750000000003,
+        "cota_solera": 2500.0750000000003,
         "cota_tapa": 2502.275,
         "diametro_interior": 1.5
       },
@@ -5936,9 +5936,9 @@
         "slot": 18,
         "generation": 1
       },
-      "family": "saneamiento.camara",
+      "family": "agua.camara",
       "ty": "valvulas",
-      "code": "CM-001",
+      "code": "CA-001",
       "pos": {
         "x": 758059.0,
         "y": 9797014.0
@@ -6346,7 +6346,7 @@
       },
       "family": "saneamiento.camara",
       "ty": "reunion",
-      "code": "CM-002",
+      "code": "CM-001",
       "pos": {
         "x": 758008.0,
         "y": 9797045.0
@@ -6355,7 +6355,7 @@
       "z_rim": 2500.28,
       "z_invert": 2499.0800000000004,
       "attrs": {
-        "cota_clave": 2499.0800000000004,
+        "cota_solera": 2499.0800000000004,
         "diametro_interior": 1.2
       },
       "datos": {},
@@ -6369,7 +6369,7 @@
       },
       "family": "saneamiento.camara",
       "ty": "reunion",
-      "code": "CM-003",
+      "code": "CM-002",
       "pos": {
         "x": 758017.0,
         "y": 9797045.0
@@ -6378,7 +6378,7 @@
       "z_rim": 2500.595,
       "z_invert": 2499.395,
       "attrs": {
-        "cota_clave": 2499.395,
+        "cota_solera": 2499.395,
         "diametro_interior": 1.2
       },
       "datos": {},
@@ -6392,7 +6392,7 @@
       },
       "family": "saneamiento.camara",
       "ty": "reunion",
-      "code": "CM-004",
+      "code": "CM-003",
       "pos": {
         "x": 758026.0,
         "y": 9797045.0
@@ -6401,7 +6401,7 @@
       "z_rim": 2500.91,
       "z_invert": 2499.71,
       "attrs": {
-        "cota_clave": 2499.71,
+        "cota_solera": 2499.71,
         "diametro_interior": 1.2
       },
       "datos": {},
@@ -6415,7 +6415,7 @@
       },
       "family": "saneamiento.camara",
       "ty": "reunion",
-      "code": "CM-005",
+      "code": "CM-004",
       "pos": {
         "x": 758035.0,
         "y": 9797045.0
@@ -6424,7 +6424,7 @@
       "z_rim": 2501.225,
       "z_invert": 2500.025,
       "attrs": {
-        "cota_clave": 2500.025,
+        "cota_solera": 2500.025,
         "diametro_interior": 1.2
       },
       "datos": {},
@@ -6438,7 +6438,7 @@
       },
       "family": "saneamiento.camara",
       "ty": "reunion",
-      "code": "CM-006",
+      "code": "CM-005",
       "pos": {
         "x": 758044.0,
         "y": 9797045.0
@@ -6447,7 +6447,7 @@
       "z_rim": 2501.54,
       "z_invert": 2500.34,
       "attrs": {
-        "cota_clave": 2500.34,
+        "cota_solera": 2500.34,
         "diametro_interior": 1.2
       },
       "datos": {},
@@ -6461,7 +6461,7 @@
       },
       "family": "saneamiento.camara",
       "ty": "reunion",
-      "code": "CM-007",
+      "code": "CM-006",
       "pos": {
         "x": 758053.0,
         "y": 9797045.0
@@ -6470,7 +6470,7 @@
       "z_rim": 2501.855,
       "z_invert": 2500.655,
       "attrs": {
-        "cota_clave": 2500.655,
+        "cota_solera": 2500.655,
         "diametro_interior": 1.2
       },
       "datos": {},
@@ -6484,7 +6484,7 @@
       },
       "family": "saneamiento.camara",
       "ty": "reunion",
-      "code": "CM-008",
+      "code": "CM-007",
       "pos": {
         "x": 758062.0,
         "y": 9797045.0
@@ -6493,7 +6493,7 @@
       "z_rim": 2502.17,
       "z_invert": 2500.9700000000003,
       "attrs": {
-        "cota_clave": 2500.9700000000003,
+        "cota_solera": 2500.9700000000003,
         "diametro_interior": 1.2
       },
       "datos": {},
@@ -6961,7 +6961,8 @@
   "journal": [
     {
       "revision": 1,
-      "command": "demo catalogo"
+      "command": "demo catalogo",
+      "cuando": "2026-11-25T22:05:58Z"
     }
   ]
 }

@@ -252,8 +252,10 @@ el texto es obligatorio (`E_ARG_MISSING`).
   `objeto.aprobar CL-014 #2` (las que cerró).
 - **Sin autor (D2):** la observación solo guarda el usuario del sistema (`autor`, `autor_cierre`)
   si se arranca con `REDES_JOURNAL_USUARIO=1`, igual que el journal.
-- El proyecto se guarda como `redes.project/3`. La `nota` única de versiones anteriores no se
-  convierte: no hay archivos en producción que conservar.
+- El proyecto se guarda como `redes.project/3`, la única versión que abre la app antes de v1
+  (D10): un `.redes` de otra versión falla con `E_PROJ_SCHEMA` y se regenera reimportando la
+  entrega (`redes proyecto nuevo` + `redes importar plan|dxf`). Un plan que no sea `redes.plan/1`
+  falla con `E_FMT_VERSION`.
 - En `objeto lista`, GeoJSON y la capa `OBSERVACIONES` del DXF, «nota» es el texto de la última
   observación abierta.
 
