@@ -1951,8 +1951,10 @@ mod tests {
             .rev()
             .find(|n| !n.deleted)
             .map(|n| n.code.clone());
-        let mut sin_agua = Layers::default();
-        sin_agua.agua = false;
+        let sin_agua = Layers {
+            agua: false,
+            ..Layers::default()
+        };
         let mut casos = 0;
         for capas in [Layers::default(), sin_agua] {
             for sel in [None, lejos.as_deref()] {
