@@ -152,6 +152,126 @@ Objetivo: que lo que el CAD devuelve no pierda familia, código, atributos ni da
 
 ---
 
+# Revisión para v1 (25/11/2026)
+
+> Revisión independiente en cuatro frentes: arquitectura (6,5/10), dominio (5/10), rendimiento
+> (4/10) y calidad/release (7/10). **Nota global para una v1: 5,5/10.** Lista como demo o piloto
+> interno; no lista para aprobar redes reales. Lo que falta está en F12–F16. Los **P0** (F12-01…08,
+> F13-01, F14-01…03, F15-01, F16-01, F16-02) son bloqueantes para v1.
+> Prioridad: **P0** bloquea v1 · **P1** importante para v1 · **P2** después de v1.
+
+## F12 — Corrección de dominio (P0)
+
+Objetivo: un revisor nunca ve una cota, un diámetro o un sentido de flujo que no venga del origen o
+que esté mal interpretado.
+
+| ID | P | Ticket | Alcance | Aceptación | Días |
+|---|---|---|---|---|---|
+| F12-01 · [MAM-1085](https://linear.app/mamutsystems/issue/MAM-1085) | P0 | **Clave ≠ solera** | `families.rs:443` rotula `cota_clave` como «(invert)»; `export.rs:284` escribe `cota_clave` con `z_invert`; `plan_desde_tabla.py` convierte clave en `cota` (solera). Separar `cota_solera` y `cota_clave` en todo el flujo | un Excel con cotas de clave entra con solera = clave − DI; el GeoJSON exporta `cota_solera` | 1,5 |
+| F12-02 · [MAM-1086](https://linear.app/mamutsystems/issue/MAM-1086) | P0 | **Cota explícita del tramo** | `Link` con `cota_solera_inicio/fin` declaradas (hoy `model.rs:172` dice «eje o clave», `ingest.rs:233` toma la solera del pozo y `view.rs:710` centra el tubo en ella). Dibujar el tubo con el fondo en la solera; DN ≠ diámetro exterior | prueba: un tramo con solera 100,00 y DI 0,30 dibuja el eje en 100,15 + espesor | 2 |
+| F12-03 · [MAM-1087](https://linear.app/mamutsystems/issue/MAM-1087) | P0 | **No inventar datos (D4)** | quitar los valores por defecto silenciosos: terreno = solera / solera = terreno − 1,5 (`ingest.rs:158-162`), tapa = terreno (`:183`), DN 200 (`:254`), nodos DXF con cota 0 (`:586`), SWMM terreno = solera + 1,5 y tanques con volumen 100 en `inp_to_plan.py` | dato ausente → `—` en la vista y entrada en el informe de descartes/avisos; prueba por cada caso | 2 |
+| F12-04 · [MAM-1088](https://linear.app/mamutsystems/issue/MAM-1088) | P0 | **Lector SWMM correcto** | `[CONDUITS]` col. 6–7 son InOffset/OutOffset (no diámetros); leer `FLOW_UNITS`, `XSECTIONS.shape`, `OUTFALLS`, `STORAGE`, `PUMPS`, `WEIRS`, `ORIFICES`, `VERTICES`; distinguir pluvial y sanitario | fixture SWMM real (unidades en CFS y CMS) en `tests/fixtures`; saltos en pozo conservados | 3 |
+| F12-05 · [MAM-1089](https://linear.app/mamutsystems/issue/MAM-1089) | P0 | **Lector EPANET correcto** | `TANKS` nivel máx. es `row[4]` (hoy `row[5]` = diámetro); la carga del `RESERVOIR` no es cota de terreno; `JUNCTION` no es cámara de válvulas; leer `VALVES`, `PUMPS`, `HEADLOSS`, unidades, `VERTICES`. Corregir docs/03:23-24 (ambos traen planta) | fixture EPANET real (SI y US) con prueba | 2,5 |
+| F12-06 · [MAM-1090](https://linear.app/mamutsystems/issue/MAM-1090) | P0 | **Sentido de flujo declarado** | `topology.rs:40-44` invierte el sentido según cotas: usar el sentido declarado y marcar la contrapendiente como discrepancia; no aplicar en redes a presión; `stranded` (`:84-91`) debe aceptar descarga y PTAR como sumideros | una contrapendiente aparece como aviso y no cambia el sentido; red de gravedad sin bombeo no sale como aislada | 1,5 |
+| F12-07 · [MAM-1091](https://linear.app/mamutsystems/issue/MAM-1091) | P0 | **Aprobar exige cero observaciones abiertas** | `redes-cli/src/main.rs:594` solo bloquea pendientes; el journal no anota el objeto aprobado | `proyecto aprobar` con un objeto observado → `ok:false`; journal registra código del objeto | 0,5 |
+| F12-08 · [MAM-1092](https://linear.app/mamutsystems/issue/MAM-1092) | P0 | **DXF exportado útil para el dibujante** | tabla LAYER con colores; `$INSUNITS` y `$DWGCODEPAGE` (las capas llevan tildes); radio del bloque = DI/2 (hoy dibuja el doble, `export.rs:46,80`); línea del pozo de tapa a solera, hacia abajo (`:79-82`); etiquetas de tramo (DN, material, pendiente, longitud) y de pozo (cotas); notas en capa `OBSERVACIONES` (`:213-240`) | abre en AutoCAD/BricsCAD sin avisos; prueba que lee el DXF con un lector independiente | 3 |
+| F12-09 · [MAM-1093](https://linear.app/mamutsystems/issue/MAM-1093) | P1 | **Importar DXF de Civil 3D** | leer `INSERT` (`ingest.rs:348`); `"BARRaje"` nunca coincide en mayúsculas (`:883`); `AP`/`HIDR` no deben crear nodos con familia de tramo; `CAMARA` ≠ pozo sanitario; capas NCS en inglés (`C-WATR-*`, `C-SSWR-*`, `C-STRM-*`) | fixture de Civil 3D con bloques: estructuras como nodos, sin familias de tramo en nodos | 2 |
+| F12-10 · [MAM-1094](https://linear.app/mamutsystems/issue/MAM-1094) | P1 | **Familia tubería coherente** | `material` y `diametro_nominal` duplicados (`families.rs:868/991`, `887/1016`); `seccion` como lista de formas; DI/DE/SDR/PN; espesor por DN y material (no 8 mm fijo); juntas por material (PVC 6 m, hormigón 1–2,5 m) | prueba de que ningún atributo se repite en ninguna familia | 1,5 |
+| F12-11 · [MAM-1095](https://linear.app/mamutsystems/issue/MAM-1095) | P1 | **Pozo constructivo** | cono excéntrico de 0,6–0,9 m; escalera bajo la boca (hoy a 0,48 m del eje con boca de 0,36 m, `parts.rs:533,573`) | captura `--snap`: la escalera cae dentro de la boca | 1 |
+| F12-12 · [MAM-1096](https://linear.app/mamutsystems/issue/MAM-1096) | P1 | **Recubrimiento bien definido** | `demo_city.rs:568` llama recubrimiento a tapa − solera (es profundidad); recubrimiento = rasante − (clave + espesor) | nombre y fórmula corregidos donde aparezca | 0,5 |
+| F12-13 · [MAM-1097](https://linear.app/mamutsystems/issue/MAM-1097) | P1 | **Sistema de coordenadas controlado** | EPSG:32717 fijo (`ingest.rs:67`): admitir 17S/18S; comparar `Terrain.epsg` con `Project.crs`; detectar GeoJSON en lon/lat | GeoJSON en grados → error `E_CRS` legible; terreno en otra zona → aviso | 1,5 |
+| F12-14 · [MAM-1098](https://linear.app/mamutsystems/issue/MAM-1098) | P2 | **Longitud 3D en cantidades** | `cantidades.rs:92` mide en planta; añadir longitud inclinada | conducción con 20 % de pendiente reporta ambas longitudes | 0,5 |
+
+**Total F12: 23 días.**
+
+---
+
+## F13 — Herramientas del revisor (P0/P1)
+
+Objetivo: que el ingeniero revisor encuentre los problemas el día 1, sin cálculo hidráulico.
+
+| ID | P | Ticket | Alcance | Aceptación | Días |
+|---|---|---|---|---|---|
+| F13-01 · [MAM-1099](https://linear.app/mamutsystems/issue/MAM-1099) | P0 | **`redes validar` geométrico** | reglas sobre cotas importadas: contrapendiente, pendiente fuera de rango, salto en pozo sin subtipo de caída, recubrimiento mínimo, profundidad máxima, separación agua/alcantarillado (≥ 3 m horizontal, ≥ 0,30 m vertical, agua arriba), DN que baja aguas abajo, tramos huérfanos y nodos aislados, longitud declarada ≠ medida. Umbrales configurables. Panel en la app | cada regla tiene prueba con fixture; el resultado sale en el sobre JSON y como lista navegable en la app | 4 |
+| F13-02 · [MAM-1100](https://linear.app/mamutsystems/issue/MAM-1100) | P1 | **Perfil longitudinal** | por colector: rasante, solera, clave y pozos; SVG desde la CLI y vista en la app | perfil de la demo coincide con las cotas del archivo | 4 |
+| F13-03 · [MAM-1101](https://linear.app/mamutsystems/issue/MAM-1101) | P1 | **Observaciones con historial** | varias por objeto, fecha, estado abierta/cerrada, ubicación; migrar `nota` (hoy se sobrescribe, `main.rs:1346`). Sin autor salvo que cambie D2 | abrir un `.redes` viejo convierte la nota en una observación | 3 |
+| F13-04 · [MAM-1102](https://linear.app/mamutsystems/issue/MAM-1102) | P1 | **Acta de revisión** | exportar observaciones y estados a CSV/HTML imprimible | abre en Excel y en el navegador | 1,5 |
+| F13-05 · [MAM-1103](https://linear.app/mamutsystems/issue/MAM-1103) | P2 | **Comparar entregas (REV-08)** | `proyecto diff a.redes b.redes` | altas, bajas y cambios por objeto | 3 |
+| F13-06 · [MAM-1104](https://linear.app/mamutsystems/issue/MAM-1104) | P2 | **Reimportar sin perder revisión (ING-10)** | emparejar por código y conservar estados y observaciones | reimportar el mismo plan conserva el 100 % de la revisión | 3 |
+
+**Total F13: 18,5 días.**
+
+---
+
+## F14 — Rendimiento con redes reales (P0/P1)
+
+Objetivo: fluidez con 5k–50k tramos y 2k–20k pozos (hoy solo con cientos).
+
+| ID | P | Ticket | Alcance | Aceptación | Días |
+|---|---|---|---|---|---|
+| F14-01 · [MAM-1105](https://linear.app/mamutsystems/issue/MAM-1105) | P0 | **Índices en `Project`** | `node()`/`link()` recorren todo (`model.rs:296-301`) y se llaman por tramo en `view.rs:666`; también `topology.rs:63`, `add_node/add_link` (`model.rs:343,378`), `next_code`, ajuste de nodos en ingesta (`ingest.rs:574,1056`). `HashMap` por id y código | construir la escena de 50k tramos < 100 ms en release; ingesta de 50k < 2 s | 1,5 |
+| F14-02 · [MAM-1106](https://linear.app/mamutsystems/issue/MAM-1106) | P0 | **Cámara sin regenerar malla en 3D** | `rebuild()` (`main.rs:227-277`) regenera todo por cada evento de ratón; pasar `z_scale` a la matriz (`view.rs:142`), regenerar solo si cambian proyecto o capas; no ejecutar `build_opts` ni construir el `Shape` en modo `--gpu3d` | arrastrar en 3D no llama a `triangulos_exportables` (contador en prueba) | 2 |
+| F14-03 · [MAM-1107](https://linear.app/mamutsystems/issue/MAM-1107) | P0 | **Sin copia del búfer por frame** | `gpu3d.rs:352` clona los bytes en cada frame con el mutex tomado; `Arc<[u8]>` o copiar solo si cambia la generación | 0 copias por frame con la escena quieta | 0,5 |
+| F14-04 · [MAM-1108](https://linear.app/mamutsystems/issue/MAM-1108) | P1 | **Cámara precalculada y sin `Vec` por triángulo** | `basis()`/`eye()` por punto (`view.rs:170-206`); `pts`/`expand()` y `vec![tri]` por triángulo (`view.rs:733-961`) | construcción de escena ≥ 3× más rápida en el banco | 1 |
+| F14-05 · [MAM-1109](https://linear.app/mamutsystems/issue/MAM-1109) | P1 | **LOD, recorte e instanciado en 3D** | `gltf.rs:75` usa siempre detalle completo; sin frustum culling; mallas sin índices copiadas por instancia (`gpu3d.rs:134-146`); el tope de 512 MB (`:318`) recorta en silencio | 20k pozos < 512 MB; superar el tope avisa en la interfaz | 4 |
+| F14-06 · [MAM-1110](https://linear.app/mamutsystems/issue/MAM-1110) | P1 | **Caché de mallas paramétricas y proxies** | cachear por (familia, tipo, DN, LOD); no clonar la `Biblioteca` (`main.rs:386`) ni recalcular el proxy por instancia (`:410`) | segunda reconstrucción sin cambios no genera mallas | 1,5 |
+| F14-07 · [MAM-1111](https://linear.app/mamutsystems/issue/MAM-1111) | P1 | **Rejilla espacial para red y picking** | recorte por pantalla antes de ordenar; ajuste de nodos y picking con rejilla | picking O(1) amortizado; objetos fuera de pantalla no se ordenan | 1 |
+| F14-08 · [MAM-1112](https://linear.app/mamutsystems/issue/MAM-1112) | P2 | **Deshacer por diferencias** | `recordar()` clona el `Project` entero 20 veces (`main.rs:281-285`) | memoria del deshacer proporcional al cambio | 2 |
+| F14-09 · [MAM-1113](https://linear.app/mamutsystems/issue/MAM-1113) | P1 | **Perfil de compilación** | `[profile.release] lto = "thin", codegen-units = 1`; `[profile.dev.package."*"] opt-level = 2` | binario release más rápido en el banco; dev usable | 0,25 |
+| F14-10 · [MAM-1114](https://linear.app/mamutsystems/issue/MAM-1114) | P1 | **Banco con red sintética grande** | red de 20k/50k tramos generada; umbral en CI (amplía F9-03) | CI falla si la construcción de escena pasa del umbral | 1,5 |
+
+**Total F14: 15,25 días.**
+
+---
+
+## F15 — Arquitectura y mantenibilidad (P1/P2)
+
+| ID | P | Ticket | Alcance | Aceptación | Días |
+|---|---|---|---|---|---|
+| F15-01 · [MAM-1115](https://linear.app/mamutsystems/issue/MAM-1115) | P0 | **Migración de formato `.redes`** | hoy `load` deserializa directo (`project_io.rs:107`) y depende de `serde(default)`; pasar por `serde_json::Value` → `migrar_vN→vN+1` → `Project`. `redes.plan/*` acepta versiones futuras (`ingest.rs:124`): rechazarlas | fixtures v1 y v2 en `tests/fixtures` abren; plan `/2` → error `E_FMT_VERSION` | 2 |
+| F15-02 · [MAM-1116](https://linear.app/mamutsystems/issue/MAM-1116) | P1 | **Encapsular el agregado `Project`** | `nodes`/`links` y campos de `Node` son `pub` (`model.rs:249-250`); ~80 filtros manuales de `!deleted`. Campos privados, iteradores `vivos()`, alta solo por `add_*` | ningún `.deleted` fuera de `model.rs` | 3 |
+| F15-03 · [MAM-1117](https://linear.app/mamutsystems/issue/MAM-1117) | P1 | **Catálogo de familias como datos** | `families.rs` (8.553 líneas, `build()` ≈ 7.950) + `families_extra.rs` que lo parchea: pasar a JSON/TOML con `include_str!` y validación en prueba | el catálogo se carga y valida; diffs legibles | 4 |
+| F15-04 · [MAM-1118](https://linear.app/mamutsystems/issue/MAM-1118) | P1 | **Sin `match` por cadena de familia** | claves de familia literales en `view.rs` (36), `ingest.rs` (20), `parts_cadena.rs` (17), `biblioteca.rs` (11), app (6); `view.rs:1209/1280` repiten pozo → entero mágico. `enum TipoPozo` y tabla familia → constructor | añadir una familia geométrica toca un solo sitio | 3 |
+| F15-05 · [MAM-1119](https://linear.app/mamutsystems/issue/MAM-1119) | P1 | **Partir funciones gigantes** | `view::build_opts` (671 líneas, `view.rs:357`), `view()` de la app (656, `main.rs:711`), `run()` CLI (357, `redes-cli/src/main.rs:329`, comandos en módulos), `import_dxf` (242), `pozo_partes` (174) | ninguna función > 150 líneas | 3 |
+| F15-06 · [MAM-1120](https://linear.app/mamutsystems/issue/MAM-1120) | P1 | **Errores tipados** | 27 `Result<_, String>` con códigos en el texto; `E_IO_NOT_FOUND` para cualquier lectura. `enum RedesError` con `code()` e `impl Error` | la CLI mapea por `match`, no parseando texto | 2 |
+| F15-07 · [MAM-1121](https://linear.app/mamutsystems/issue/MAM-1121) | P2 | **Demos detrás de `feature = "demos"`** | `demo*` (≈ 2.550 líneas y la mayoría de `unwrap`) en la API pública de core | core compila sin demos | 1 |
+| F15-08 · [MAM-1122](https://linear.app/mamutsystems/issue/MAM-1122) | P2 | **Core sin entorno ni E/S directa** | `model.rs:511-518` lee `REDES_JOURNAL_USUARIO`/`USERNAME`; adaptadores reciben `Read`/`&[u8]` | identidad inyectada; pruebas sin disco | 1,5 |
+| F15-09 · [MAM-1123](https://linear.app/mamutsystems/issue/MAM-1123) | P1 | **Guardar fuera del hilo de UI** | `State::save` (`redes-app/src/main.rs:216`) es síncrono, contra la regla de `project_io.rs:20` | guardar un proyecto grande no congela la ventana | 1 |
+| F15-10 · [MAM-1124](https://linear.app/mamutsystems/issue/MAM-1124) | P1 | **Quitar `panic` en producción** | `geom.lock().unwrap()` (`gpu3d.rs:351`), `ingest.rs:228`, ~38 `unwrap()` en core fuera de pruebas | 0 `unwrap` fuera de pruebas y demos (clippy `unwrap_used` en core) | 1 |
+| F15-11 · [MAM-1125](https://linear.app/mamutsystems/issue/MAM-1125) | P1 | **Documentos desactualizados** | `docs/01` §4.2 «17 familias» (son 46); `redes-core/Cargo.toml` dice «hidráulica y movimiento de tierras» (contra D4); `docs/03` dice que SWMM/EPANET no traen planta; `docs/18` y `docs/23` desfasados sobre F6-05; decidir si el peso por densidad (`cantidades.rs:24`) cabe en D4 | docs coherentes entre sí y con el código | 0,5 |
+| F15-12 · [MAM-1126](https://linear.app/mamutsystems/issue/MAM-1126) | P2 | **Aislar Rune** | capa fina `ui_port`; `gpu3d.rs` acoplado a internos; registrar el commit de origen en `docs/00` | actualizar Rune toca un solo módulo | 2 |
+
+**Total F15: 24 días.**
+
+---
+
+## F16 — Release v1 (P0/P1)
+
+| ID | P | Ticket | Alcance | Aceptación | Días |
+|---|---|---|---|---|---|
+| F16-01 · [MAM-1127](https://linear.app/mamutsystems/issue/MAM-1127) | P0 | **DXF ilegible es error** | `importar dxf` con basura devuelve `ok:true`, 0 objetos y sube la revisión | `ok:false`, código `E_FMT_PARSE`, revisión sin cambios | 0,5 |
+| F16-02 · [MAM-1128](https://linear.app/mamutsystems/issue/MAM-1128) | P0 | **README con la sintaxis real** | `importar` exige `--archivo`; el README pone la ruta suelta | todos los comandos del README se ejecutan (prueba que los extrae) | 0,5 |
+| F16-03 · [MAM-1129](https://linear.app/mamutsystems/issue/MAM-1129) | P1 | **Fixtures reales y verificación externa** | EPANET, SWMM y DXF de Civil 3D reales; pruebas de ida y vuelta con nombre explícito; validar DXF y glTF con un lector externo | `cargo test` cubre los cinco formatos con archivos reales | 2 |
+| F16-04 · [MAM-1130](https://linear.app/mamutsystems/issue/MAM-1130) | P1 | **Cobertura de módulos críticos** | `ingest.rs` (3 pruebas en 1.246 líneas), `export.rs` (3), `families_extra.rs` y `parts_cadena.rs` (0), CLI (solo contrato) | cobertura medida (`cargo llvm-cov`) ≥ 60 % en `ingest` y `export` | 2 |
+| F16-05 · [MAM-1131](https://linear.app/mamutsystems/issue/MAM-1131) | P1 | **CI de publicación** | disparo por etiqueta `v*`, ejecutar `empaquetar.ps1`, subir artefactos y crear GitHub Release | etiquetar `v0.2.0` publica el zip | 1 |
+| F16-06 · [MAM-1132](https://linear.app/mamutsystems/issue/MAM-1132) | P1 | **Instalador** (continúa F11-03) | MSI o winget; firma de código | instala y desinstala limpio en Windows 11 | 2 |
+| F16-07 · [MAM-1133](https://linear.app/mamutsystems/issue/MAM-1133) | P1 | **Icono y recursos de Windows** | `.ico`, `.rc` y `build.rs` con versión y nombre | el `.exe` muestra icono y versión en Propiedades | 0,5 |
+| F16-08 · [MAM-1134](https://linear.app/mamutsystems/issue/MAM-1134) | P1 | **CHANGELOG** | `CHANGELOG.md` desde 0.1.0 | entrada por versión publicada | 0,25 |
+| F16-09 · [MAM-1135](https://linear.app/mamutsystems/issue/MAM-1135) | P2 | **Licencias y vulnerabilidades** | `cargo deny` / `cargo audit` en CI | CI falla con licencia incompatible o aviso de seguridad | 0,5 |
+| F16-10 · [MAM-1136](https://linear.app/mamutsystems/issue/MAM-1136) | P1 | **Mensajes de error para personas** | `E_FMT_PARSE` dice «Verifique la ruta» con archivos que existen pero están dañados; mensajes técnicos de serde | pista acorde al error; texto en español claro | 0,5 |
+| F16-11 · [MAM-1137](https://linear.app/mamutsystems/issue/MAM-1137) | P2 | **Avisos de compilación y clippy** | ~20 avisos propios (16 de asignación fuera de inicializador, patrones inalcanzables, campos `symbols`/`depth` sin leer, variables `field`/`nb`/`nink`) | `cargo clippy` sin avisos propios; subir el nivel en CI | 0,5 |
+| F16-12 · [MAM-1138](https://linear.app/mamutsystems/issue/MAM-1138) | P2 | **Salida legible en terminal** | la CLI imprime JSON en una línea; `--pretty` automático si la salida es una terminal | salida legible sin flags en terminal; sin cambios en tuberías | 0,5 |
+| F16-13 · [MAM-1139](https://linear.app/mamutsystems/issue/MAM-1139) | P2 | **Codificación de los `.md` en Windows** | mojibake en PowerShell 5.1 | se ven bien en la consola de Windows | 0,25 |
+
+**Total F16: 11 días.**
+
+---
+
+**Total revisión v1: 91,75 días.** Ruta mínima a v1 (P0): F12-01…08, F13-01, F14-01…03, F15-01,
+F16-01, F16-02 ≈ **27 días** (≈ 5,5 semanas a una persona).
+
+---
+
 ## Orden recomendado (tres sprints)
 
 | Sprint | Contenido | Resultado |
@@ -187,5 +307,6 @@ Objetivo: que lo que el CAD devuelve no pierda familia, código, atributos ni da
 - Proyecto: **Redes — Visor 3D de redes sanitarias (Rust + Rune)** (`P-MAM-15`).
 - Etiqueta: `redes`.
 - Sprint 1 creado: **MAM-1066 … MAM-1070** (F6-01, F6-02, F6-03, F6-04, F7-01).
+- Revisión v1 (25/11/2026): **MAM-1085 … MAM-1139** (F12-01…F16-13, 55 tickets) con milestone por fase y prioridad P0=Urgent, P1=High, P2=Medium.
 - El resto de las fases (F6-05…F11) se crean cuando el sprint 1 esté en marcha, para no llenar el
   tablero de tickets que aún no se van a tocar.
