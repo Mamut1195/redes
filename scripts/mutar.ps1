@@ -136,6 +136,24 @@ $mutaciones = @(
         Destino = "reimportar"
         Prueba = "las_bajas_con_revision_no_se_pierden_en_silencio"
         Que = "dar de baja en silencio objetos con revision (F13-06)"
+    },
+    @{
+        Nombre = "gpu3d-camara-regenera"
+        Archivo = "crates/redes-app/src/main.rs"
+        Patron = 'if self\.clave_malla != Some\(clave\) \{'
+        Reemplazo = 'if true {'
+        Paquete = "redes-app"
+        Prueba = "mover_la_camara_en_3d_no_regenera_la_malla"
+        Que = "regenerar la malla del pase 3D en cada movimiento de camara (F14-02)"
+    },
+    @{
+        Nombre = "gpu3d-sube-cada-frame"
+        Archivo = "crates/redes-app/src/gpu3d.rs"
+        Patron = 'subir: \(self\.generacion != subida\)\.then'
+        Reemplazo = 'subir: true.then'
+        Paquete = "redes-app"
+        Prueba = "la_escena_quieta_no_se_vuelve_a_subir"
+        Que = "volver a subir la malla en cada frame con la escena quieta (F14-03)"
     }
 )
 
@@ -165,7 +183,11 @@ foreach ($m in $mutaciones) {
         # binarios anteriores imprimen "test result: ok. 0 passed" y la mutacion pareceria viva.
         $destino = @()
         if ($m.Destino) { $destino = @("--test", $m.Destino) }
-        $salida = (& cargo test -p redes-core @destino $m.Prueba 2>&1 | Out-String)
+        # `Paquete`: crate cuyas pruebas corren (por defecto redes-core). La app solo tiene pruebas
+        # unitarias en su binario, así que no necesita `Destino`.
+        $paquete = "redes-core"
+        if ($m.Paquete) { $paquete = $m.Paquete }
+        $salida = (& cargo test -p $paquete @destino $m.Prueba 2>&1 | Out-String)
         if ($salida -match "test result: ok") {
             Write-Host "   SOBREVIVIO: la suite pasa con el codigo roto ($($m.Prueba))" -ForegroundColor Red
             $sobrevivieron += $m.Nombre

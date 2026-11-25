@@ -125,6 +125,8 @@ struct State {
     gpu3d: bool,
     /// Geometría compartida con el compositor GPU.
     geom: Arc<Mutex<gpu3d::Geometria>>,
+    /// De qué se generó la malla del pase 3D: si no cambia, la cámara no la regenera (F14-02).
+    clave_malla: Option<ClaveMalla>,
     /// Rectángulo del lienzo en puntos (x, y, ancho, alto): el pase 3D se limita a él.
     canvas_rect: [f32; 4],
     /// Caché de mallas de la biblioteca (un `.glb` se lee una vez).
@@ -141,6 +143,36 @@ struct State {
     obs_texto: rune::TextEdit,
 }
 
+/// Lo que define la malla del pase 3D. La cámara, la selección y los modos de detalle no entran:
+/// la malla se dibuja con su color de material y la exageración vertical va en la matriz.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct ClaveMalla {
+    /// Identidad del proyecto: cambia al deshacer o al sustituirlo entero.
+    proyecto: usize,
+    /// Revisión del journal: cambia con cada edición confirmada, aunque el `Arc` sea el mismo.
+    revision: u64,
+    terreno: bool,
+    agua: bool,
+    alcantarillado: bool,
+    edificios: bool,
+    /// La biblioteca se resuelve al primer `rebuild`: al llegar hay que añadir sus modelos.
+    biblioteca: bool,
+}
+
+impl ClaveMalla {
+    fn de(s: &State) -> ClaveMalla {
+        ClaveMalla {
+            proyecto: Arc::as_ptr(&s.project) as usize,
+            revision: s.project.revision,
+            terreno: s.layers.terreno,
+            agua: s.layers.agua,
+            alcantarillado: s.layers.alcantarillado,
+            edificios: s.layers.edificios,
+            biblioteca: s.bib.is_some(),
+        }
+    }
+}
+
 impl State {
     fn new() -> State {
         let (project, path, error_carga) = load_project();
@@ -155,7 +187,8 @@ impl State {
         });
         // La ciudad en ladera se lee mejor con algo más de exageración vertical.
         cam.z_scale = if project.entorno.is_some() { 2.6 } else { 2.0 };
-        let scene = view::build_with(&project, display.as_ref(), &cam, Layers::default(), None);
+        // La escena se arma en el `rebuild` del final, ya con el modo de dibujo decidido.
+        let scene = Scene::default();
         let mut estado = State {
             project: Arc::new(project),
             cam,
@@ -174,6 +207,7 @@ impl State {
             gpu3d: gpu3d::activo(),
             aviso: error_carga,
             geom: Arc::new(Mutex::new(gpu3d::Geometria::default())),
+            clave_malla: None,
             // Estimación para el primer frame (el layout aún no ha corrido): 1280×800 con los
             // paneles de 214 y 292 pt. `on_layout` la sustituye por el rectángulo real.
             canvas_rect: [230.0, 51.0, 742.0, 714.0],
@@ -213,17 +247,34 @@ impl State {
         }
     }
 
+    /// Pone la vista al día tras cualquier cambio (cámara, capas, selección o proyecto).
+    ///
+    /// Sin pase 3D, el pintor necesita la escena entera proyectada para cada cámara. Con
+    /// `--gpu3d` la escena del pintor no se dibuja: solo se recalculan las etiquetas y la matriz,
+    /// y la malla se regenera únicamente si cambió lo que la define (F14-02).
     fn rebuild(&mut self) {
         self.cam.viewport = self.viewport;
-        self.scene = view::build_opts(
-            &self.project,
-            self.display.as_ref(),
-            &self.cam,
-            self.layers,
-            self.sel.as_deref(),
-            &self.opts,
-        );
-        self.anadir_proxies();
+        if self.gpu3d {
+            self.scene = Scene {
+                etiquetas: view::etiquetas(
+                    &self.project,
+                    &self.cam,
+                    self.layers,
+                    self.sel.as_deref(),
+                ),
+                ..Scene::default()
+            };
+        } else {
+            self.scene = view::build_opts(
+                &self.project,
+                self.display.as_ref(),
+                &self.cam,
+                self.layers,
+                self.sel.as_deref(),
+                &self.opts,
+            );
+            self.anadir_proxies();
+        }
         // Manifiesto de la biblioteca: se resuelve una vez por proyecto.
         if self.bib.is_none() && self.project.biblioteca.is_some() {
             let dir = self
@@ -254,14 +305,28 @@ impl State {
         }
 
         if self.gpu3d {
-            let instancias = match &self.bib {
-                Some((carpeta, bib)) => {
-                    modelos::instancias(&self.project, carpeta, bib, &mut self.modelos)
+            let clave = ClaveMalla::de(self);
+            let instancias = if self.clave_malla != Some(clave) {
+                match &self.bib {
+                    Some((carpeta, bib)) => Some(modelos::instancias(
+                        &self.project,
+                        carpeta,
+                        bib,
+                        &mut self.modelos,
+                    )),
+                    None => Some(Vec::new()),
                 }
-                None => Vec::new(),
+            } else {
+                None
             };
             if let Ok(mut g) = self.geom.lock() {
-                g.cargar_con_modelos(&self.project, &self.cam, self.layers, &instancias);
+                if let Some(instancias) = instancias {
+                    g.cargar_con_modelos(&self.project, self.layers, &instancias);
+                    self.clave_malla = Some(clave);
+                }
+                g.fijar_camara(&self.cam);
+                // La barra de estado cuenta los triángulos que dibuja la GPU.
+                self.scene.tri_count = (g.vertices / 3) as usize;
             }
         }
     }
@@ -706,7 +771,7 @@ fn section(t: &str) -> El {
 }
 
 fn view(s: &State, _cx: &mut Cx<State>) -> El {
-    // --- escena a un solo Shape ---
+    // --- escena a un solo Shape (con `--gpu3d` la escena no trae primitivas: queda vacío) ---
     let mut shape = Shape::new();
     for p in &s.scene.prims {
         match p {
@@ -722,7 +787,7 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
             }
         }
     }
-    let stage = canvas(if s.gpu3d { Shape::new() } else { shape })
+    let stage = canvas(shape)
         .key("plano3d")
         .w_full()
         .h_full()
@@ -1720,6 +1785,63 @@ mod tests {
             (rt.state.cam.z_scale - 1.0).abs() < 1e-9,
             "en foco se dibuja a escala real"
         );
+    }
+
+    /// Con `--gpu3d`, arrastrar, girar con la rueda o cambiar de cámara solo mueve la matriz: la
+    /// malla (`triangulos_exportables`) no se regenera. Apagar una capa sí la regenera (F14-02).
+    #[test]
+    fn mover_la_camara_en_3d_no_regenera_la_malla() {
+        let mut st = State::new();
+        st.gpu3d = true;
+        st.rebuild();
+        let generacion = |rt: &Runtime<State>| rt.state.geom.lock().unwrap().generacion;
+        let vp = |rt: &Runtime<State>| rt.state.geom.lock().unwrap().vp;
+        let mut rt = Runtime::new(
+            st,
+            view,
+            (1280.0, 800.0),
+            Env {
+                system_dark: true,
+                scale: 1.0,
+            },
+        );
+        rt.frame(0.0);
+        rt.frame(1.0 / 60.0);
+        let g0 = generacion(&rt);
+        assert!(g0 > 0, "la malla inicial se generó");
+        assert!(rt.state.geom.lock().unwrap().vertices > 0);
+        assert!(
+            rt.state.scene.prims.is_empty(),
+            "en 3D no se arma la escena del pintor"
+        );
+        let (az0, vp0) = (rt.state.cam.azimuth, vp(&rt));
+
+        let (x, y) = rt.find("plano3d").expect("lienzo montado");
+        rt.pointer_down(x, y);
+        for i in 1..=6 {
+            rt.pointer_move(x + 12.0 * i as f32, y + 4.0 * i as f32);
+            rt.frame(1.0 / 60.0);
+        }
+        rt.pointer_up(x + 72.0, y + 24.0);
+        rt.wheel(x, y, -120.0);
+        rt.frame(1.0 / 60.0);
+
+        assert!(
+            (rt.state.cam.azimuth - az0).abs() > 1.0,
+            "el arrastre orbitó la cámara"
+        );
+        assert_ne!(vp(&rt), vp0, "la matriz sigue a la cámara");
+        assert_eq!(
+            generacion(&rt),
+            g0,
+            "mover la cámara no debe regenerar la malla"
+        );
+
+        let (x, y) = rt.find("btn-edificios").expect("chip Edificios montado");
+        rt.pointer_down(x, y);
+        rt.pointer_up(x, y);
+        rt.frame(1.0 / 60.0);
+        assert_eq!(generacion(&rt), g0 + 1, "apagar una capa regenera una vez");
     }
 
     /// Perfil: el botón del inspector de un tramo abre el perfil del colector y se puede cerrar.
