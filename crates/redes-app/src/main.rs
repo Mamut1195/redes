@@ -7,6 +7,7 @@
 
 mod gpu3d;
 mod modelos;
+mod perfil_panel;
 
 use std::sync::{Arc, Mutex};
 
@@ -130,6 +131,8 @@ struct State {
     bib: Option<(std::path::PathBuf, redes_core::biblioteca::Biblioteca)>,
     /// Aviso de política de dibujo (modelos pesados sin `--gpu3d`).
     aviso_modelos: Option<String>,
+    /// Perfil longitudinal abierto desde el inspector de un tramo (F13-02).
+    perfil: Option<redes_core::perfil::Perfil>,
 }
 
 impl State {
@@ -171,6 +174,7 @@ impl State {
             modelos: modelos::Cache::default(),
             bib: None,
             aviso_modelos: None,
+            perfil: None,
         };
         // Modo rayos X por línea de comandos (útil para capturas y para los agentes).
         if rune::extra_args().iter().any(|a| a == "--rayos-x") {
@@ -1146,6 +1150,15 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
                     right = right.child(text(nota.clone()).font(type_::LABEL).color(WARN).wrap());
                 }
             }
+            {
+                let code_p = l.code.clone();
+                right = right.child(button("Perfil").key("btn-perfil").on_press(
+                    move |s: &mut State| match perfil_panel::abrir(&s.project, &code_p) {
+                        Ok(pf) => s.perfil = Some(pf),
+                        Err(e) => s.aviso = Some(e),
+                    },
+                ));
+            }
             right = right.child(el().h(6.0));
             right = right.child(section("Geometría"));
             right = right.child(kv(
@@ -1373,6 +1386,7 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
                 .child(viewport)
                 .child(right),
         )
+        .children(s.perfil.as_ref().map(perfil_panel::panel))
         .child(status)
 }
 
@@ -1735,6 +1749,40 @@ mod tests {
             (rt.state.cam.z_scale - 1.0).abs() < 1e-9,
             "en foco se dibuja a escala real"
         );
+    }
+
+    /// Perfil: el botón del inspector de un tramo abre el perfil del colector y se puede cerrar.
+    #[test]
+    fn el_boton_perfil_abre_y_cierra_el_perfil_del_colector() {
+        let mut st = State::new();
+        st.sel = Some("CL-003".to_string());
+        st.rebuild();
+        let mut rt = Runtime::new(
+            st,
+            view,
+            (1280.0, 800.0),
+            Env {
+                system_dark: true,
+                scale: 1.0,
+            },
+        );
+        rt.frame(0.0);
+        let (x, y) = rt.find("btn-perfil").expect("botón Perfil montado");
+        rt.pointer_down(x, y);
+        rt.pointer_up(x, y);
+        rt.frame(1.0 / 60.0);
+        let pf = rt.state.perfil.as_ref().expect("perfil abierto");
+        assert_eq!(
+            pf.tramos.len(),
+            8,
+            "troncal más emisario, de cabecera a descarga"
+        );
+        assert!(rt.find("panel-perfil").is_some());
+        let (x, y) = rt.find("btn-perfil-cerrar").expect("botón cerrar");
+        rt.pointer_down(x, y);
+        rt.pointer_up(x, y);
+        rt.frame(1.0 / 60.0);
+        assert!(rt.state.perfil.is_none());
     }
 
     /// Corte: el plano se activa y se puede desactivar.

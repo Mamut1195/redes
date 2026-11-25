@@ -250,6 +250,30 @@ redes vista --salida vista.svg --azimut -55 --elevacion 32
 Es la misma escena 3D que dibuja la app, en SVG: se abre en el navegador y un agente puede
 inspeccionarla o convertirla a PNG.
 
+#### Perfil longitudinal
+
+```powershell
+redes -p red.redes perfil --desde PZ-001 --hasta PZ-008 --salida perfil.svg
+redes -p red.redes perfil --tramos CL-001,CL-002,CL-003 --exageracion 20 --paso 5
+```
+
+Dibuja el perfil de un colector: rasante (cota de terreno de cada pozo y muestreo del TIN entre
+pozos, cada `--paso` m, 10 por defecto; 0 = solo pozos), tubo entre solera y clave, pozos, y una
+tabla con abscisa, terreno, tapa, solera, profundidad, y por tramo DN, longitud y pendiente
+(S %). `--exageracion` es la exageración vertical (10 por defecto). El recorrido sigue el
+**sentido declarado** de los tramos: `--desde/--hasta` busca el camino más corto aguas abajo y
+`--tramos` exige tramos consecutivos; si no, error `E_TOPO_SIN_RUTA` o `E_TOPO_NO_CONSECUTIVO`.
+El JSON del perfil va en `data.perfil` del sobre `redes.envelope/1`.
+
+No calcula nada: la pendiente sale de las soleras declaradas del tramo y la clave es solera +
+diámetro interior. Si falta una solera, el tramo queda sin tubo, sin pendiente (`—`) y marcado
+«sin cota de solera»; un pozo sin cota muestra `—`. Nada se interpola como dato; la única cota
+que no es de un objeto es la rasante muestreada del TIN (`origen: "tin"` en el JSON).
+
+En la app, el botón **Perfil** del inspector de un tramo abre el perfil de su colector (de la
+cabecera a la descarga; en una bifurcación sigue el tramo de mayor DN) en un panel inferior, con
+el dibujo y la tabla; **Cerrar perfil** lo quita. El SVG con rótulos completos sale de la CLI.
+
 ### 5.6 Entregar
 
 ```powershell
