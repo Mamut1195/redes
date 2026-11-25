@@ -171,16 +171,9 @@ enum ImportarCmd {
         #[arg(long)]
         archivo: PathBuf,
     },
-    /// DXF ASCII (POINT, LINE, POLYLINE/LWPOLYLINE).
+    /// DXF exportado por Redes (capa `REDES_INFO`). Un DXF de otra aplicación se adapta con la
+    /// skill `skills/redes-ingesta` y entra como plan.
     Dxf {
-        #[arg(long)]
-        archivo: PathBuf,
-        /// Distancia para unir extremos de polilínea con pozos existentes (m).
-        #[arg(long, default_value_t = 1.0)]
-        tolerancia: f64,
-    },
-    /// GeoJSON de puntos y líneas.
-    Geojson {
         #[arg(long)]
         archivo: PathBuf,
     },
@@ -971,7 +964,6 @@ fn mutates(id: &str) -> bool {
         id,
         "importar.plan"
             | "importar.dxf"
-            | "importar.geojson"
             | "importar.terreno"
             | "objeto.aprobar"
             | "objeto.observar"
@@ -1009,7 +1001,6 @@ fn command_id(c: &Cmd) -> &'static str {
         Cmd::Importar { cmd } => match cmd {
             ImportarCmd::Plan { .. } => "importar.plan",
             ImportarCmd::Dxf { .. } => "importar.dxf",
-            ImportarCmd::Geojson { .. } => "importar.geojson",
             ImportarCmd::Terreno { .. } => "importar.terreno",
         },
         Cmd::Objeto { cmd } => match cmd {
@@ -1126,7 +1117,7 @@ fn esquema(filtro: Option<&str>) -> Envelope {
         "total_familias": families::families().len(),
         "comandos": comandos,
         "formatos": {
-            "entrada": ["redes.plan/1", "dxf", "geojson", "csv(E,N,Z)"],
+            "entrada": ["redes.plan/1", "dxf (exportado por Redes, capa REDES_INFO)", "csv(E,N,Z)"],
             "salida": ["dxf", "geojson", "svg"]
         },
         "codigos_error": CODIGOS
@@ -1161,6 +1152,11 @@ const CODIGOS: &[(&str, &str, i32)] = &[
     ),
     ("E_FMT_PARSE", "archivo ilegible", 7),
     ("E_FMT_UNSUPPORTED", "formato no soportado", 7),
+    (
+        "E_FMT_NOT_REDES",
+        "DXF que no exportó Redes (sin capa REDES_INFO): adáptelo con la skill de ingesta",
+        7,
+    ),
     ("E_IO_NOT_FOUND", "archivo inexistente", 7),
 ];
 
@@ -1198,20 +1194,11 @@ fn importar(p: &mut Project, cmd: ImportarCmd, dry: bool) -> Envelope {
             }
             ("importar.plan", ingest::import_plan(p, &archivo))
         }
-        ImportarCmd::Dxf {
-            archivo,
-            tolerancia,
-        } => {
+        ImportarCmd::Dxf { archivo } => {
             if dry {
                 return dry_import(p, "importar.dxf", &archivo);
             }
-            ("importar.dxf", ingest::import_dxf(p, &archivo, tolerancia))
-        }
-        ImportarCmd::Geojson { archivo } => {
-            if dry {
-                return dry_import(p, "importar.geojson", &archivo);
-            }
-            ("importar.geojson", ingest::import_geojson(p, &archivo))
+            ("importar.dxf", ingest::import_dxf(p, &archivo, 0.0))
         }
         ImportarCmd::Terreno { archivo, epsg } => {
             if dry {
@@ -1237,10 +1224,17 @@ fn importar(p: &mut Project, cmd: ImportarCmd, dry: bool) -> Envelope {
         })),
         Err(e) => {
             let code = e.split(':').next().unwrap_or("E_FMT_PARSE").to_string();
+            let pista = match code.as_str() {
+                "E_FMT_NOT_REDES" | "E_FMT_PARSE" if command == "importar.dxf" => {
+                    "`importar dxf` solo lee DXF exportados por Redes (capa REDES_INFO). Un DXF de otra aplicación se adapta con la skill `skills/redes-ingesta`, que escribe un `redes.plan/1`; luego `redes importar plan --archivo plan.json`."
+                }
+                _ => {
+                    "Revise el archivo. Los formatos ajenos se adaptan con la skill `skills/redes-ingesta` y entran como `redes.plan/1`."
+                }
+            };
             Envelope::fail(
                 command,
-                vec![Diagnostic::new(&code, Severity::Error, e)
-                    .hint("Revise el archivo; para DXF use ASCII (no binario) y capas con nombres de red.")],
+                vec![Diagnostic::new(&code, Severity::Error, e).hint(pista)],
             )
         }
     }

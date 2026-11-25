@@ -149,18 +149,20 @@ carpeta o de sus padres.
 ### 5.2 Importar
 
 ```powershell
-# Lo que exporta Civil 3D (capas POZO, AGUA, ALC, EMIS…)
-redes importar dxf --archivo levantamiento.dxf --tolerancia 1.0
+# El contrato de la skill: todo lo que viene de otra aplicación entra así (D5)
+redes importar plan --archivo plan.json
+
+# La vuelta del DXF que exportó Redes (capa REDES_INFO)
+redes importar dxf --archivo plano-devuelto.dxf
 
 # Puntos de terreno E,N,Z
 redes importar terreno --archivo puntos.csv --epsg 32717
-
-# GeoJSON de un SIG
-redes importar geojson --archivo red.geojson
-
-# El contrato de la skill (recomendado para SWMM/EPANET/Excel)
-redes importar plan --archivo plan.json
 ```
+
+La app **no adivina** formatos ajenos. Un DXF de Civil 3D, un GeoJSON de un SIG, un `.inp` o un
+Excel los adapta un agente con la skill `skills/redes-ingesta`, que escribe un `redes.plan/1`.
+`importar dxf` con un DXF que no exportó Redes devuelve `E_FMT_NOT_REDES` (y uno vacío o
+truncado, `E_FMT_PARSE`) sin tocar el proyecto.
 
 Cada importación devuelve cuántos entraron y **por qué** se descartó el resto:
 
@@ -248,11 +250,11 @@ no. Un «aprobar todo» convierte la revisión en un trámite.
 
 | Origen | Camino | Documento |
 |---|---|---|
-| Civil 3D / AutoCAD | `redes importar dxf` (mapeo por capa) | `skills/redes-ingesta/references/mapeos.md` §1 |
+| Civil 3D / AutoCAD | skill de ingesta → `importar plan` (la app ya no mapea capas) | `skills/redes-ingesta/references/mapeos.md` §1 |
 | SWMM | `python skills/redes-ingesta/scripts/inp_to_plan.py --tipo swmm` → `importar plan` | §2 |
 | EPANET | ídem `--tipo epanet` | §3 |
 | Excel / CSV | plan JSON escrito a mano o con un agente | §4 |
-| SIG | `redes importar geojson` | §5 |
+| SIG (GeoJSON) | skill de ingesta → `importar plan` | §5 |
 
 Detalle completo del contrato y del procedimiento: `skills/redes-ingesta/SKILL.md`.
 
@@ -266,13 +268,13 @@ Detalle completo del contrato y del procedimiento: `skills/redes-ingesta/SKILL.m
 | Síntoma | Causa | Solución |
 |---|---|---|
 | El proyecto aparece a 10 000 km del terreno | CRS del hemisferio equivocado (`32617` es 17**N**) | Usar `32717` (17S) o `32718` (18S) |
-| Todo apilado en un punto | El origen no traía coordenadas | Pasar `--coords` o importar el DXF |
+| Todo apilado en un punto | El origen no traía coordenadas | Pasar `--coords` a la skill |
 | «E_TOPO_ORPHAN_LINK» | Un arco apunta a un nodo que no entró | Revisar `desde`/`hasta` en el plan |
 | «E_STATE_DUPLICATE_NAME» | Código repetido | Renombrar en el origen |
 | El pozo no tiene altura | Sólo llegó la clave, sin tapa | Añadir `cota_terreno` o el TIN |
 | El inspector muestra `—` | El origen no traía ese dato | Es correcto: no se inventa |
 | La app va lenta al girar | Compilada en debug | `cargo build --release` y usar `--release` |
-| El DXF vuelve incompleto | Capas con nombres no reconocidos | Renombrar con la convención o usar un perfil (ING-05) |
+| «E_FMT_NOT_REDES» al importar un DXF | El DXF no lo exportó Redes (no trae la capa `REDES_INFO`) | Adaptarlo con la skill de ingesta e `importar plan` |
 
 ---
 

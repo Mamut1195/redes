@@ -1,4 +1,4 @@
-//! Ingesta con archivos de verdad: los cuatro formatos que entran al producto.
+//! Ingesta con archivos de verdad: lo que entra al producto (plan, DXF de Redes y terreno, D5).
 //!
 //! Las fixtures viven en `tests/fixtures` y son pequeñas a propósito: lo que se comprueba es el
 //! contrato (qué entra, qué se descarta y qué se dice), no el volumen.
@@ -14,34 +14,52 @@ fn fixture(nombre: &str) -> PathBuf {
 
 use redes_core::model::Project;
 
-#[test]
-fn un_dxf_de_otra_aplicacion_entra_por_sus_capas() {
+// ---------------------------------------------------------------------------------------------
+// DXF (F12-09, D5): solo entra el DXF que exportó Redes. El de otra aplicación se rechaza con un
+// código claro y sin tocar el proyecto; lo adapta la skill de ingesta.
+
+/// Importa un DXF escrito en el momento y devuelve el error, comprobando que el proyecto queda
+/// intacto (ni objetos, ni fuentes, ni revisión).
+fn dxf_rechazado(nombre: &str, contenido: &str) -> String {
+    let ruta = std::env::temp_dir().join(format!("redes-{nombre}-{}.dxf", std::process::id()));
+    std::fs::write(&ruta, contenido).unwrap();
     let mut p = Project::new("dxf", "EPSG:32717");
-    let rep = redes_core::ingest::import_dxf(&mut p, &fixture("red_ajena.dxf"), 0.5).expect("dxf");
-    assert_eq!(rep.nodos, 2, "dos POINT");
-    assert_eq!(rep.arcos, 1, "una LINE");
-    assert!(p.nodes.iter().all(|n| n.family == "saneamiento.pozo"));
-    assert!(p.links.iter().all(|l| l.family == "saneamiento.tuberia"));
-    // El archivo no trae la capa de datos: los códigos son correlativos del registro.
-    assert!(p.nodes.iter().all(|n| !n.code.is_empty()));
+    let revision = p.revision;
+    let err = redes_core::ingest::import_dxf(&mut p, &ruta, 0.5).expect_err("debe rechazarse");
+    let _ = std::fs::remove_file(&ruta);
+    assert_eq!(p.count(), 0, "{nombre}: no entra nada");
+    assert!(p.fuentes.is_empty(), "{nombre}: no anota fuente");
+    assert_eq!(p.revision, revision, "{nombre}: no toca la revisión");
+    err
+}
+
+/// Un DXF de CAD con pozos y un colector en capas con nombre, pero sin `REDES_INFO`.
+const DXF_AJENO: &str = "0\nSECTION\n2\nENTITIES\n\
+0\nPOINT\n8\nPOZOS\n10\n758010.0\n20\n9797010.0\n30\n2500.0\n\
+0\nPOINT\n8\nPOZOS\n10\n758040.0\n20\n9797012.0\n30\n2498.5\n\
+0\nLINE\n8\nALCANTARILLADO\n10\n758010.0\n20\n9797010.0\n30\n2500.0\n11\n758040.0\n21\n9797012.0\n31\n2498.5\n\
+0\nENDSEC\n0\nEOF\n";
+
+#[test]
+fn un_dxf_de_otra_aplicacion_se_rechaza_con_e_fmt_not_redes() {
+    let err = dxf_rechazado("ajeno", DXF_AJENO);
+    assert!(err.starts_with("E_FMT_NOT_REDES:"), "{err}");
+    assert!(err.contains("REDES_INFO"), "dice qué falta: {err}");
 }
 
 #[test]
-fn un_geojson_municipal_conserva_sus_atributos() {
-    let mut p = Project::new("geojson", "EPSG:32717");
-    let rep =
-        redes_core::ingest::import_geojson(&mut p, &fixture("municipal.geojson")).expect("geojson");
-    assert!(rep.nodos >= 1 && rep.arcos >= 1, "{rep:?}");
-    let pozo = p
-        .nodes
-        .iter()
-        .find(|n| n.code == "PZ-900")
-        .expect("el punto conserva su código");
-    assert_eq!(pozo.family, "saneamiento.pozo");
-    assert!(
-        pozo.num("diametro_interior").is_some(),
-        "atributo de familia"
-    );
+fn un_dxf_vacio_o_ilegible_se_rechaza_con_e_fmt_parse() {
+    assert!(dxf_rechazado("vacio", "").starts_with("E_FMT_PARSE:"));
+    // Truncado: sin EOF no se sabe si está completo.
+    let truncado = DXF_AJENO.replace("0\nEOF\n", "");
+    assert!(dxf_rechazado("truncado", &truncado).starts_with("E_FMT_PARSE:"));
+}
+
+#[test]
+fn una_capa_redes_info_sin_objetos_legibles_se_rechaza() {
+    let dxf = "0\nSECTION\n2\nENTITIES\n0\nTEXT\n8\nREDES_INFO\n10\n0\n20\n0\n30\n0\n1\nREDES|1|N|roto\n\
+0\nENDSEC\n0\nEOF\n";
+    assert!(dxf_rechazado("info-rota", dxf).starts_with("E_FMT_NOT_REDES:"));
 }
 
 #[test]
