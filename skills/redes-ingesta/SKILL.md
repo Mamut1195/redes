@@ -1,197 +1,110 @@
 ---
 name: redes-ingesta
-description: Convierte datos de otra aplicación (Civil 3D/DXF, SWMM, EPANET, Excel/CSV, SIG/GeoJSON) al contrato `redes.plan/1` que consumen la CLI `redes` y el visor 3D. Úsala cuando haya que meter un modelo existente en Redes, o cuando un archivo no entre y haya que averiguar por qué. No la uses para calcular hidráulica, hidrología ni movimientos de tierra: Redes no calcula.
+description: Convierte una red de agua o alcantarillado diseñada en otra aplicación (EPA SWMM o EPANET .inp, DXF de Civil 3D/AutoCAD, LandXML, GeoJSON/Shapefile de un SIG, Excel/CSV de diseño o informes de Civil 3D) en un plan `redes.plan/1` para la CLI `redes` y el visor 3D. Úsala cuando haya que meter un modelo existente en Redes o averiguar por qué un archivo no entra. El agente lee el origen, lo mapea con las referencias de formato, escribe el plan y lo valida con la CLI. No calcula hidráulica, hidrología ni movimiento de tierras.
 ---
 
-# Skill: ingesta de modelos en Redes
+# Ingesta guiada en Redes
 
-## Qué hace
-
-Traduce un modelo ya diseñado en otra herramienta al archivo que Redes entiende, **sin
-recalcular nada**. La salida es un JSON con el esquema `redes.plan/1`; después:
-
-```powershell
-redes importar plan --archivo plan.json
-redes vista --salida vista.svg        # comprobar que se ve
-redes objeto lista                    # comprobar que están todos
-```
+Tú (el agente) haces la conversión. No hay adaptadores por programa: lees el archivo de origen,
+entiendes su formato con la referencia correspondiente, escribes un `redes.plan/1` y la CLI lo
+valida (decisión D5, `docs/22-decisiones.md`).
 
 ## Cuándo usarla
 
-- Hay que ver en 3D una red que vive en Civil 3D, SWMM, EPANET, Excel o un SIG.
-- Un DXF entra incompleto y hay que mapear capas o atributos.
-- Hay que reimportar una versión corregida sin perder la revisión hecha.
+- Hay que ver en 3D una red que vive en SWMM, EPANET, Civil 3D, un SIG o una hoja de cálculo.
+- Un archivo de otra aplicación no entra, o entra incompleto, y hay que saber por qué.
+- Hay que reimportar una versión corregida del origen.
 
-## Cuándo NO usarla
+No la uses para calcular caudales, presiones, volúmenes ni cumplimiento normativo, ni para
+corregir el diseño: eso es de la aplicación de origen.
 
-- Para calcular caudales, presiones, volúmenes de excavación o cumplimiento normativo.
-  Esos números **vienen de la app de origen** y se copian como `datos`.
-- Para editar el diseño. Se corrige en la app de origen y se reimporta.
+**Sin skill:** un DXF escrito por Redes (capa `REDES_INFO`) entra con `redes importar dxf`, y los
+puntos de terreno `E,N,Z` con `redes importar terreno --archivo t.csv --epsg 32717`.
 
-## Qué formato entra por script y cuál por la CLI
+## Flujo
 
-No todo pasa por el script: DXF, GeoJSON y terreno los lee la propia CLI, que entiende el formato
-mejor que cualquier conversión intermedia. Usa la vía más corta.
+1. **Identifica el formato** por la extensión y las primeras líneas (`[TITLE]`/`[JUNCTIONS]` con
+   `[CONDUITS]` → SWMM; con `[PIPES]` → EPANET; `0\nSECTION` → DXF; `"FeatureCollection"` →
+   GeoJSON; `<LandXML` → LandXML).
+2. **Lee la referencia** de ese formato (tabla de abajo) y `references/plan.md` (el contrato).
+   Lee el archivo de origen entero, sección por sección; si es grande, pártelo con un script de
+   usar y tirar que **solo lea**. El mapeo lo decides tú con la referencia.
+3. **Consulta el registro** de familias: `redes esquema --familia <clave> --pretty`. Usa solo
+   familias, subtipos y atributos que existan.
+4. **Pregunta lo ambiguo antes de escribir** (ver «Preguntar»). Agrupa las preguntas en un solo
+   mensaje con tu propuesta para cada una.
+5. **Escribe el plan** (`plan.json`) y, a la vez, la lista de ausentes y descartes.
+6. **Valida** en un proyecto de prueba nuevo (`redes proyecto nuevo --nombre prueba --salida
+   out\prueba.redes`): primero `redes -p out\prueba.redes --dry-run importar plan --archivo
+   plan.json` y luego sin `--dry-run`. Hoy el `--dry-run` solo comprueba que el archivo existe;
+   la importación de prueba es la que da los descartes (`plan.md` §6).
+7. **Corrige según los diagnósticos** (`detalle_descartes`, `renombrados`, `E_FMT_PARSE`) y repite
+   hasta que lo único descartado sea lo que tú decidiste descartar.
+8. **Importa** en el proyecto real del usuario (proyecto nuevo o sin esos códigos: los repetidos se
+   descartan).
+9. **Revisa:** `redes -p <proyecto> objeto lista` (cuenta nodos y arcos frente al origen) y
+   `redes -p <proyecto> vista --salida out\vista.svg` (míralo: saltos de cota, nodos sueltos,
+   tramos que cruzan la ciudad = CRS o unidades mal).
+10. **Entrega el informe** al usuario (ver «Informe»).
 
-| Lo que llega | Vía | Comando |
-|---|---|---|
-| SWMM o EPANET (`.inp`) | **script** `inp_to_plan.py` | `python scripts/inp_to_plan.py red.inp --tipo swmm --salida plan.json --informe informe.json` y luego `redes importar plan --archivo plan.json` |
-| Hoja de cálculo con pozos/tramos (CSV/TSV) | **script** `plan_desde_tabla.py` | `python scripts/plan_desde_tabla.py pozos.csv --tipo pozos --salida plan.json` |
-| DXF de Civil 3D u otro CAD | **CLI directa** | `redes importar dxf --archivo red.dxf` |
-| SIG (GeoJSON) con propiedades | **CLI directa** | `redes importar geojson --archivo red.geojson` |
-| Nube de puntos del terreno (CSV E,N,Z) | **CLI directa** | `redes importar terreno --archivo terreno.csv` |
+## Referencias
 
-Reglas para elegir:
-
-1. Si el archivo ya trae familia, código y atributos, pásalo por la **CLI**: no hay nada que mapear
-   y una conversión intermedia solo puede perder datos.
-2. Si el archivo es de una app que no conoce a Redes (SWMM, EPANET, una hoja de cálculo), usa el
-   **script**: ahí es donde se decide qué familia y qué subtipo le toca a cada objeto.
-3. Si el DXF viene de otra aplicación y las capas no se llaman como las de Redes, primero prueba la
-   CLI y mira `descartados`; si el mapeo no sirve, escribe un `plan.json` a mano con
-   `plan_desde_tabla.py` como plantilla.
-
-## Tabla de decisión de familia y subtipo
-
-El registro completo (46 familias, 315 subtipos) se consulta con `redes capacidades`. Para no
-inventar claves:
-
-```powershell
-redes capacidades > capacidades.json      # todas las familias, subtipos y atributos
-```
-
-Si una clave del origen no existe, la importación la traduce si está entre las retiradas (por
-ejemplo `agua.captacion:toma_rio` → `agua.bocatoma:barraje_fijo`) y lo informa en `renombrados`.
-Lo que no se puede traducir se descarta y aparece en `descartados`: nunca se pierde en silencio.
-
-## El contrato `redes.plan/1`
-
-```json
-{
-  "schema": "redes.plan/1",
-  "proyecto": {
-    "nombre": "Alcantarillado La Esperanza",
-    "crs": "EPSG:32717",
-    "fuente_app": "Civil 3D",
-    "fuente_archivo": "red-la-esperanza.dxf"
-  },
-  "terreno": [[760000.0, 9796000.0, 2512.34], [760010.0, 9796000.0, 2512.10]],
-  "objetos": [
-    {
-      "tipo": "nodo",
-      "codigo": "PZ-001",
-      "familia": "saneamiento.pozo",
-      "subtipo": "inspeccion",
-      "e": 760060.0,
-      "n": 9796090.0,
-      "cota": 2510.92,
-      "cota_terreno": 2512.52,
-      "diametro": 1.2,
-      "attrs": { "material": "hormigon" },
-      "datos": {
-        "caudal_diseno": { "valor": 12.0, "unidad": "L/s", "fuente": "SWMM" }
-      }
-    },
-    {
-      "tipo": "arco",
-      "codigo": "CL-001",
-      "familia": "saneamiento.tuberia",
-      "subtipo": "colector",
-      "desde": "PZ-001",
-      "hasta": "PZ-002",
-      "diametro_mm": 250,
-      "vertices": [[760060.0, 9796090.0, 2510.92], [760125.0, 9796091.0, 2510.60]],
-      "attrs": { "material": "PVC", "rugosidad_n": 0.013 },
-      "datos": {
-        "volumen_excavacion": { "valor": 118.4, "unidad": "m³", "fuente": "Civil 3D" }
-      }
-    }
-  ]
-}
-```
-
-### Campos
-
-| Campo | Obligatorio | Regla |
-|---|---|---|
-| `schema` | sí | `redes.plan/1` |
-| `proyecto.crs` | sí | EPSG del proyecto; Ecuador continental: `32717` (17S) o `32718` (18S). **`32617` es 17N y desplaza 10 000 km** |
-| `terreno[]` | no | Puntos `[E, N, Z]`; producen el TIN |
-| `objetos[].tipo` | sí | `nodo` o `arco` |
-| `familia` | sí | Clave de `redes esquema` (p. ej. `saneamiento.pozo`) |
-| `subtipo` | no | Si falta se usa el primero de la familia |
-| `codigo` | no | Si falta se asigna `PZ-001`, `CL-001`… |
-| `e`, `n` | sí (nodo) | Coordenadas del proyecto en metros |
-| `cota` | no | Solera del nodo (fondo interior), nunca la clave; si falta y hay TIN se usa `z_terreno − 1.5` |
-| `cota_terreno` | no | Si falta, se interpola del TIN |
-| `diametro` | no | Metros (interior del pozo) |
-| `diametro_mm` | no | Milímetros (tubería), por defecto 200. Es el DN: ni el interior ni el exterior |
-| `cota_solera_inicio`, `cota_solera_fin` | no | Solera (fondo interior) del tramo en sus extremos. Mandan sobre la solera del pozo (caídas, entradas a otra cota). Si faltan, el trazado usa la solera del pozo y el tramo queda sin solera declarada |
-| `attrs.diametro_interior` | no | DI del tubo en mm; con él se dibuja el eje en solera + DI/2. Si falta, se dibuja con el DN |
-| `vertices` | no | `[E, N, solera]`. Si falta, el arco es recto entre las soleras de sus extremos |
-| `attrs` | no | Atributos de la familia con su clave exacta |
-| `datos` | no | Números del origen: `{valor, unidad, fuente}`. **Nunca se recalculan** |
-
-## Procedimiento
-
-1. **Identificar la fuente.** ¿DXF? ¿Texto de SWMM/EPANET? ¿Excel? ¿GeoJSON?
-2. **Extraer la geometría**: planta (E, N) y cotas. Sin planta no hay 3D.
-3. **Mapear familias y subtipos** con la tabla de `references/mapeos.md`. Ante la duda,
-   la familia genérica (`saneamiento.pozo`, `saneamiento.tuberia`) y se anota.
-4. **Normalizar unidades**: longitudes a metros, diámetros a mm, caudales a L/s, cotas a metros.
-   Convertir es aritmética de unidades, no cálculo de ingeniería.
-5. **Copiar los resultados del origen** a `datos` con su `fuente`. Si el origen no trae un
-   número, **no se inventa**: se omite.
-6. **Emitir el plan** y validarlo:
-   ```powershell
-   python skills/redes-ingesta/scripts/inp_to_plan.py --tipo swmm red.inp --salida plan.json --informe informe.json
-   redes importar plan --archivo plan.json --dry-run
-   redes importar plan --archivo plan.json
-   ```
-   Opciones del script que **sustituyen una suposición por una decisión del usuario**:
-
-   | Opción | Cuándo |
-   |---|---|
-   | `--sistema pluvial\|sanitario\|combinado` | SWMM. Obligatoria si el archivo no lo deja claro (sin `[SUBCATCHMENTS]`, sin `[DWF]` y sin pista en `[TITLE]`); si se da, manda y se avisa si no coincide con lo detectado |
-   | `--reservorio familia:subtipo` | EPANET. Sin ella los `RESERVOIRS` se descartan: una carga fija puede ser un río, un pozo o un tanque grande |
-   | `--subtipo-tuberia`, `--subtipo-tanque` | EPANET. Sin ellas se usan `distribucion_primaria` y `apoyado_cilindrico`, con aviso |
-   | `--coords codigo,E,N` | Completa o sustituye `[COORDINATES]`. Un nodo sin planta se descarta (nunca va a (0,0)) |
-
-   El script lee `FLOW_UNITS` (SWMM; si falta, CFS) y `Units` (EPANET; si falta, GPM) y pasa todo
-   a metros, milímetros y L/s. El detalle por sección está en `references/mapeos.md` §2 y §3.
-   Pruebas del script: `python -m unittest discover -s skills/redes-ingesta/scripts/tests`.
-7. **Verificar**: `redes proyecto info` (conteos), `redes objeto lista` (códigos), y
-   `redes vista --salida vista.svg` (que se vea).
-8. **Informar**: cuántos entraron, cuántos se descartaron y por qué.
-
-## Atajos ya implementados
-
-| Fuente | Camino |
+| Origen | Lee |
 |---|---|
-| DXF (puntos, líneas, polilíneas 3D, círculos) | `redes importar dxf --archivo x.dxf --tolerancia 1.0` (mapeo por nombre de capa) |
-| GeoJSON | `redes importar geojson --archivo x.geojson` (propiedades `familia`, `codigo`, `desde`, `hasta`) |
-| Puntos de terreno | `redes importar terreno --archivo puntos.csv --epsg 32717` |
-| SWMM / EPANET `.inp` | `scripts/inp_to_plan.py` → `redes importar plan` |
-| Excel / CSV de inventario | exportar a CSV `codigo,E,N,Z,tipo,diametro` y mapear con un plan JSON |
+| Contrato, cotas (solera, clave, rasante, tapa, recubrimiento), validación | `references/plan.md` |
+| EPA SWMM 5 `.inp` | `references/swmm.md` |
+| EPANET 2.2 `.inp` | `references/epanet.md` |
+| DXF de Civil 3D / AutoCAD, LandXML | `references/dxf-civil3d.md` |
+| GeoJSON, Shapefile, GeoPackage | `references/geojson-sig.md` |
+| Excel / CSV de diseño, informes de Civil 3D | `references/tablas.md` |
 
-## Errores típicos y qué hacer
+Ejemplos trabajados (origen y plan, línea a línea en `swmm.md` §6 y `epanet.md` §6):
+`crates/redes-core/tests/fixtures/{swmm_si_cms,swmm_us_cfs,epanet_si_lps,epanet_us_gpm}.inp` y
+sus `.plan.json`.
 
-| Síntoma | Causa | Arreglo |
-|---|---|---|
-| `E_TOPO_ORPHAN_LINK` | El arco referencia un código que no está en `objetos` | Añadir el nodo o corregir `desde`/`hasta` |
-| `E_STATE_DUPLICATE_NAME` | Dos objetos con el mismo `codigo` | Renombrar; los códigos son únicos en el proyecto |
-| `descartado: nodo X: … no tiene coordenadas` | El `.inp` no trae `[COORDINATES]` de ese nodo | Pasar `--coords codigo,E,N` |
-| `ERROR: no se puede saber si la red es pluvial…` | SWMM sin subcuencas ni `[DWF]` | Pasar `--sistema` |
-| Tubos de un SWMM 3,3 veces más largos | Era un archivo en CFS leído como metros (script viejo) | Regenerar el plan con el script actual |
-| El proyecto aparece a 10 000 km | CRS del hemisferio equivocado | Usar `32717`/`32718`, nunca `32617` |
-| El pozo no tiene altura | Sólo llegó la solera, sin tapa | Añadir `cota_terreno` o traer el TIN |
-| El inspector muestra `—` en un dato | El origen no traía ese número | Es correcto: no se inventa |
+## Reglas duras
 
-## Reglas de oro
+1. **Nunca inventes un dato.** Lo que el origen no trae queda **ausente** en el plan (no pongas
+   la clave) y se lista en el informe. Nada de «valores razonables»: ni terreno = solera + 1,5,
+   ni DN 200, ni volumen de tanque, ni coordenadas (0,0), ni Z = 0.
+2. **Conserva la procedencia.** `proyecto.fuente_app` y `fuente_archivo` siempre; cada número en
+   `datos` lleva `"fuente": "<App> (<archivo>)"`. No mezcles en un plan datos de dos orígenes
+   sin decirlo en la `fuente`.
+3. **Todo a SI**: m, mm (diámetros de tubo), L/s, m.c.a., kW. Lee la unidad del origen
+   (`FLOW_UNITS`, `Units`, `$INSUNITS`, fila de unidades de la hoja); si no la declara, pregunta.
+   Las coordenadas no se convierten: se exige el CRS correcto.
+4. **Solera ≠ clave.** solera = clave − DI solo con DI declarado; nunca al revés
+   (`plan.md` §4).
+5. **Pregunta en vez de adivinar** (ver abajo). Si el usuario no sabe, elige la opción más
+   conservadora y dilo en el informe como supuesto suyo, no tuyo.
+6. **No calcules hidráulica** ni nada derivado: volúmenes, pendientes, caudales, presiones,
+   recubrimientos. Las conversiones de unidad, de referencia (clave → solera con DI) y el reparto
+   de Z en vértices que el contrato exige no son cálculo; dilas igualmente.
+7. **No pierdas objetos en silencio.** Cada objeto del origen acaba en el plan o en la lista de
+   descartes con su motivo. Cuenta: objetos del origen = plan + descartados.
+8. **Solo campos del contrato.** El importador ignora campos desconocidos sin avisar.
 
-1. **No calcular.** Copiar, convertir unidades, ordenar. Nunca derivar un número de diseño.
-2. **Procedencia obligatoria.** Todo `dato` lleva `fuente`; si se desconoce, `"desconocida"`.
-3. **Códigos estables.** El mismo objeto conserva su código entre importaciones.
-4. **Descartes con motivo.** Lo que no se entiende se informa, no se adivina.
-5. **Un plan, un origen.** Varias fuentes se importan en pasos separados; el proyecto acumula
-   `fuentes`.
+## Preguntar (no adivinar)
+
+- **CRS** si el origen no lo declara (Ecuador: `EPSG:32717` 17S o `EPSG:32718` 18S).
+- **Sistema**: pluvial, sanitario o combinado, si el archivo no lo deja claro.
+- **Subtipo por defecto** de cada grupo: tipo de tubería en EPANET (conducción, distribución,
+  impulsión), de tanque (apoyado, elevado…), de descarga, de válvula sin equivalente.
+- **Qué es** un `RESERVOIR`, una `JUNCTION` de SWMM sin profundidad, una capa `CAMARA`, un
+  `[EMITTERS]`.
+- **Unidades dudosas**: diámetro `8` (¿pulgadas?), pendiente `1,5` (¿%?), `CT` (¿terreno o tapa?).
+- **Si el diámetro del origen es DN o interior.**
+- **Si se importa lo existente**, lo proyectado o ambos.
+
+## Informe al usuario
+
+Al terminar, en un mensaje corto:
+
+- origen, CRS y unidades leídas; supuestos confirmados por el usuario;
+- conteo: objetos del origen, nodos y arcos importados, descartados;
+- **descartados** con motivo (del plan y de la CLI);
+- **ausentes**: qué dato falta en qué objetos (p. ej. «terreno ausente en J3, MH3, PJ1»). Hasta
+  que el importador deje de rellenar huecos, advierte que el visor puede mostrar un valor
+  provisional donde dice ausente (`plan.md` §3);
+- conversiones hechas (US → SI, clave → solera, Z repartida en vértices);
+- la vista SVG generada.
