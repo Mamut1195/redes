@@ -208,10 +208,10 @@ Objetivo: que el ingeniero revisor encuentre los problemas el día 1, sin cálcu
 | ID | P | Ticket | Alcance | Aceptación | Días |
 |---|---|---|---|---|---|
 | F13-01 · [MAM-1099](https://linear.app/mamutsystems/issue/MAM-1099) | P0 | **`redes validar` geométrico** (hecho: `redes validar`, panel Validación; umbrales en D6) | reglas sobre cotas importadas: contrapendiente, pendiente fuera de rango, salto en pozo sin subtipo de caída, recubrimiento mínimo, profundidad máxima, separación agua/alcantarillado (≥ 3 m horizontal, ≥ 0,30 m vertical, agua arriba), DN que baja aguas abajo, tramos huérfanos y nodos aislados, longitud declarada ≠ medida. Umbrales configurables. Panel en la app | cada regla tiene prueba con fixture; el resultado sale en el sobre JSON y como lista navegable en la app | 4 |
-| F13-02 · [MAM-1100](https://linear.app/mamutsystems/issue/MAM-1100) | P1 | **Perfil longitudinal** | por colector: rasante, solera, clave y pozos; SVG desde la CLI y vista en la app | perfil de la demo coincide con las cotas del archivo | 4 |
+| F13-02 · [MAM-1100](https://linear.app/mamutsystems/issue/MAM-1100) | P1 | **Perfil longitudinal** (hecho: `redes perfil` SVG/JSON y botón Perfil en el inspector del tramo) | por colector: rasante, solera, clave y pozos; SVG desde la CLI y vista en la app | perfil de la demo coincide con las cotas del archivo | 4 |
 | F13-03 · [MAM-1101](https://linear.app/mamutsystems/issue/MAM-1101) | P1 | **Observaciones con historial** | varias por objeto, fecha, estado abierta/cerrada, ubicación; migrar `nota` (hoy se sobrescribe, `main.rs:1346`). Sin autor salvo que cambie D2 | abrir un `.redes` viejo convierte la nota en una observación | 3 |
 | F13-04 · [MAM-1102](https://linear.app/mamutsystems/issue/MAM-1102) | P1 | **Acta de revisión** | exportar observaciones y estados a CSV/HTML imprimible | abre en Excel y en el navegador | 1,5 |
-| F13-05 · [MAM-1103](https://linear.app/mamutsystems/issue/MAM-1103) | P2 | **Comparar entregas (REV-08)** | `proyecto diff a.redes b.redes` | altas, bajas y cambios por objeto | 3 |
+| F13-05 · [MAM-1103](https://linear.app/mamutsystems/issue/MAM-1103) | P2 | **Comparar entregas (REV-08)** (hecho: `redes proyecto diff` con CSV) | `proyecto diff a.redes b.redes` | altas, bajas y cambios por objeto | 3 |
 | F13-06 · [MAM-1104](https://linear.app/mamutsystems/issue/MAM-1104) | P2 | **Reimportar sin perder revisión (ING-10)** | emparejar por código y conservar estados y observaciones | reimportar el mismo plan conserva el 100 % de la revisión | 3 |
 
 **Total F13: 18,5 días.**

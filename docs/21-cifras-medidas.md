@@ -65,16 +65,20 @@ reproducible detrás: se retira como afirmación.
 
 | Suite | Pruebas |
 |---|---:|
-| Núcleo (`redes-core`) | **85** |
-| Interfaz (`redes-app`) | **14** |
-| Contrato del CLI (`tests/contrato.rs`) | **11** |
-| Ingesta con fixtures (`tests/ingesta.rs`) | **5** |
+| Núcleo (`redes-core`, unitarias) | **126** |
+| Validación geométrica (`redes-core/tests/validar.rs`) | **13** |
+| Ingesta con fixtures (`tests/ingesta.rs`) | **31** |
+| Cotas de tramo (`tests/cotas_tramo.rs`) | **3** |
 | Presupuesto de frame (`tests/rendimiento.rs`) | **2** |
+| Interfaz (`redes-app`) | **17** |
+| Contrato del CLI (`tests/contrato.rs`) | **16** |
+| Perfil del CLI (`tests/perfil.rs`) | **3** |
+| Validar del CLI (`tests/validar.rs`) | **4** |
 | Doctest | **1** |
-| **Total** | **118** |
+| **Total** | **216** |
 
-Más el arnés de mutación: `powershell -File scripts/mutar.ps1` rompe cinco comportamientos y exige
-que la suite falle.
+Más el arnés de mutación: `powershell -File scripts/mutar.ps1` rompe ocho comportamientos (cinco
+de vista y tres de `redes validar`) y exige que la suite falle.
 
 ## 6. Qué cifras de los informes anteriores son falsas
 

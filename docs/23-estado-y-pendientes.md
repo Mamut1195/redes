@@ -12,7 +12,8 @@ Documento de traspaso: qué está hecho, qué falta y por dónde seguir. Las cif
 | Modelos | importación, validación, medidas, caché, dibujo en el pase 3D, política de pesados, foco sobre el modelo, **selector en el inspector** y **anclas de conexión** (se leen del `.glb` y la tubería nace en el puerto, no en el centro) |
 | Cantidades | `redes cantidades`: unidades, longitudes por DN/material, volúmenes, pesos, discrepancias y CSV |
 | CAD | ida y vuelta DXF sin pérdida (46 familias y 7 arcos vuelven idénticos), **bloques con atributos** por familia y GeoJSON con atributos |
-| Calidad | 89 + 14 + 11 + 5 + 2 + 1 pruebas, arnés de 5 mutaciones, CI en GitHub **en verde** |
+| Calidad | **216 pruebas** (núcleo 126 + 13 validar + 31 ingesta + 3 cotas + 2 rendimiento, app 17, CLI 16 + 3 + 4, doctest 1), arnés de 8 mutaciones, CI en GitHub **en verde** |
+| Revisor (F13) | `redes validar` geométrico con panel Validación (F13-01, D6), `redes perfil` con botón Perfil en el inspector (F13-02), `redes proyecto diff` (F13-05) |
 | Producto | plantilla, licencias de modelos, journal con fecha, paquete portable y **release 0.1.0 publicada** |
 | Documentación | 23 documentos; los informes antiguos llevan aviso de cifras corregidas |
 
@@ -24,7 +25,7 @@ y en Linear (MAM-1085…MAM-1139). Se trabaja **por fases en orden**; no se abre
 | Fase | Estado |
 |---|---|
 | F12 — Corrección de dominio | **cerrada** (F12-01…F12-15). Ingesta por skill guiada (D5) |
-| F13 — Herramientas del revisor | **siguiente**: `redes validar` (P0), perfil longitudinal, observaciones con historial, acta |
+| F13 — Herramientas del revisor | **en curso**: hechas F13-01 (`redes validar`), F13-02 (perfil longitudinal) y F13-05 (`proyecto diff`); pendientes F13-03 (observaciones con historial, en curso), F13-04 (acta) y F13-06 (reimportar sin perder revisión) |
 | F14 — Rendimiento con redes reales | pendiente (índices, cámara 3D sin regenerar, LOD/instanciado) |
 | F15 — Arquitectura | pendiente (migración de formato P0, agregado, catálogo como datos, errores tipados) |
 | F16 — Release v1 | pendiente (F16-01 ya cerrada por F12-09) |
@@ -36,8 +37,8 @@ Sin validar en CAD real: el DXF de F12-08 (no hubo `ezdxf`); abrir una demo expo
 ## Cómo retomar
 
 ```powershell
-cargo test --workspace                       # 170+ pruebas
-powershell -File scripts/mutar.ps1           # 5 mutaciones
+cargo test --workspace                       # 216 pruebas
+powershell -File scripts/mutar.ps1           # 8 mutaciones
 powershell -File scripts/empaquetar.ps1      # zip portable
 gh run list --limit 3                        # CI
 ```
