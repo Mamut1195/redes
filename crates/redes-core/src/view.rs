@@ -825,13 +825,7 @@ pub fn build_opts(
                 None
             };
 
-            let r = n.diametro() * 0.5;
-            let top = to_local(P3::new(n.pos.x, n.pos.y, n.z_rim));
-            let edge = to_local(P3::new(n.pos.x + r, n.pos.y, n.z_rim));
-            let r_px = match (cam.project(top), cam.project(edge)) {
-                (Some(a), Some(b)) => ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt(),
-                _ => 0.0,
-            };
+            let (top, r_px) = nodo_en_pantalla(n, cam, &to_local);
 
             // Muy lejos: símbolo de tamaño fijo (una ciudad no se llena de cilindros).
             if r_px < 3.0
@@ -985,17 +979,7 @@ pub fn build_opts(
                 }
             }
 
-            // Etiqueta: solo cuando la pieza ya se distingue o está seleccionada.
-            if (r_px > 9.0 || sel)
-                && let Some(c) = cam.project(top)
-            {
-                etiquetas.push(Etiqueta {
-                    pos: [c[0], c[1] - 10.0],
-                    texto: format!("{} · {}", n.code, n.ty.replace('_', " ")),
-                    seleccion: sel,
-                    depth: cam.depth(top) as f32,
-                });
-            }
+            etiquetas.extend(etiqueta_de(n, cam, top, r_px, sel));
         }
     }
 
@@ -1007,13 +991,119 @@ pub fn build_opts(
     // La red se dibuja sobre el terreno (modo rayos X) pero **bajo** los edificios: así las
     // tuberías se ven a través del suelo y quedan ocultas detrás de una fachada, como debe ser.
     sort_far_first(&mut net);
-    // Las etiquetas se reparten en carriles para que no se pisen; si una no cabe, se calla.
-    // Las líneas guía entran en `net` y por tanto se ordenan con el resto de la red.
-    let mut etiquetas = acomodar_etiquetas(std::mem::take(&mut etiquetas), &mut net);
+    // Las líneas guía de las etiquetas entran en `net` y se ordenan con el resto de la red.
+    let etiquetas = ordenar_etiquetas(etiquetas, &mut net);
     prims.extend(net);
     sort_far_first(&mut city);
     prims.extend(city);
+    Scene {
+        prims,
+        tri_count,
+        line_count,
+        etiquetas,
+    }
+}
 
+/// Solo las etiquetas de la escena, sin proyectar ni teselar geometría (F14-02).
+///
+/// El pase 3D (`--gpu3d`) dibuja la malla en la GPU y solo necesita el texto encima: mover la
+/// cámara recalcula esto y la matriz, no la escena del pintor. Sigue las mismas reglas que
+/// [`build_opts`]: misma capa, mismo umbral de tamaño en pantalla y mismo reparto en carriles.
+pub fn etiquetas(
+    p: &Project,
+    cam: &Camera,
+    layers: Layers,
+    selected: Option<&str>,
+) -> Vec<Etiqueta> {
+    if !layers.nodos {
+        return Vec::new();
+    }
+    let o = p.origin;
+    let zr = cam.target[2];
+    let k = cam.z_scale;
+    let to_local = move |q: P3| [q.x - o.x, q.y - o.y, (q.z - zr) * k + zr];
+    let mut etiquetas = Vec::new();
+    for n in p.nodes.iter().filter(|n| !n.deleted) {
+        if !nodo_dibujable(n, layers) {
+            continue;
+        }
+        let sel = selected.map(|s| s == n.code).unwrap_or(false);
+        let (top, r_px) = nodo_en_pantalla(n, cam, &to_local);
+        // Mismos descartes que la escena: lejos es un símbolo y sin pieza no hay etiqueta.
+        if r_px < 3.0 && cam.project(top).is_some() {
+            continue;
+        }
+        let Some(e) = etiqueta_de(n, cam, top, r_px, sel) else {
+            continue;
+        };
+        if pieza_partes(n, 1).is_empty() {
+            continue;
+        }
+        etiquetas.push(e);
+    }
+    // Las líneas guía no se usan: en el pase 3D no hay pintor que las dibuje.
+    ordenar_etiquetas(etiquetas, &mut Vec::new())
+}
+
+/// ¿El nodo tiene forma que dibujar con estas capas?
+fn nodo_dibujable(n: &crate::model::Node, layers: Layers) -> bool {
+    let Some(def) = family(&n.family) else {
+        return false;
+    };
+    // Se dibuja lo que tiene forma: nodos hidráulicos, acometidas y también el resto de
+    // familias con geometría propia (accesorios, tapas, hitos, cruces…).
+    if !def.can(caps::HYDRAULIC_NODE)
+        && !def.can(caps::ATTACHABLE)
+        && !def.can(caps::REPORTABLE)
+        && !def.can(caps::STRUCTURAL)
+    {
+        return false;
+    }
+    let es_agua = n.family.starts_with("agua");
+    !((es_agua && !layers.agua) || (!es_agua && !layers.alcantarillado))
+}
+
+/// Punto superior del nodo (local, con exageración) y su radio en pantalla.
+fn nodo_en_pantalla(
+    n: &crate::model::Node,
+    cam: &Camera,
+    to_local: &impl Fn(P3) -> [f64; 3],
+) -> ([f64; 3], f32) {
+    let r = n.diametro() * 0.5;
+    let top = to_local(P3::new(n.pos.x, n.pos.y, n.z_rim));
+    let edge = to_local(P3::new(n.pos.x + r, n.pos.y, n.z_rim));
+    let r_px = match (cam.project(top), cam.project(edge)) {
+        (Some(a), Some(b)) => ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt(),
+        _ => 0.0,
+    };
+    (top, r_px)
+}
+
+/// Etiqueta del nodo: solo cuando la pieza ya se distingue o está seleccionada.
+fn etiqueta_de(
+    n: &crate::model::Node,
+    cam: &Camera,
+    top: [f64; 3],
+    r_px: f32,
+    sel: bool,
+) -> Option<Etiqueta> {
+    if (r_px > 9.0 || sel)
+        && let Some(c) = cam.project(top)
+    {
+        return Some(Etiqueta {
+            pos: [c[0], c[1] - 10.0],
+            texto: format!("{} · {}", n.code, n.ty.replace('_', " ")),
+            seleccion: sel,
+            depth: cam.depth(top) as f32,
+        });
+    }
+    None
+}
+
+/// Reparte las etiquetas en carriles, conserva las más cercanas y deja la seleccionada al final.
+fn ordenar_etiquetas(etiquetas: Vec<Etiqueta>, net: &mut Vec<Prim>) -> Vec<Etiqueta> {
+    // Las etiquetas se reparten en carriles para que no se pisen; si una no cabe, se calla.
+    let mut etiquetas = acomodar_etiquetas(etiquetas, net);
     // Se conservan las etiquetas más cercanas (las que el usuario está mirando) y la del
     // objeto seleccionado se dibuja al final, para que nunca la tape otra.
     let seleccionada = etiquetas.iter().position(|e| e.seleccion);
@@ -1027,12 +1117,7 @@ pub fn build_opts(
     if let Some(e) = elegida.take() {
         etiquetas.push(e);
     }
-    Scene {
-        prims,
-        tri_count,
-        line_count,
-        etiquetas,
-    }
+    etiquetas
 }
 
 /// Coloca las etiquetas en carriles sin solaparse y, si hay que moverlas, dibuja la línea guía.
@@ -1847,6 +1932,45 @@ mod tests {
         for e in &s.etiquetas {
             assert!(!e.texto.is_empty());
         }
+    }
+
+    /// El pase 3D pide solo las etiquetas (F14-02): deben ser las mismas que las de la escena
+    /// completa, en el mismo orden y sitio, con y sin selección y al apagar una capa.
+    #[test]
+    fn las_etiquetas_sueltas_son_las_de_la_escena() {
+        let p = crate::demo_catalog::catalogo();
+        let cam = Camera {
+            viewport: [900.0, 600.0],
+            distance: 12.0,
+            target: [10.0, 36.0, 2500.0],
+            ..Default::default()
+        };
+        let lejos = p
+            .nodes
+            .iter()
+            .rev()
+            .find(|n| !n.deleted)
+            .map(|n| n.code.clone());
+        let mut sin_agua = Layers::default();
+        sin_agua.agua = false;
+        let mut casos = 0;
+        for capas in [Layers::default(), sin_agua] {
+            for sel in [None, lejos.as_deref()] {
+                let escena = build_opts(&p, None, &cam, capas, sel, &Opciones::default());
+                let sueltas = etiquetas(&p, &cam, capas, sel);
+                let clave = |v: &[Etiqueta]| -> Vec<(String, [i32; 2], bool)> {
+                    v.iter()
+                        .map(|e| {
+                            let pos = [(e.pos[0] * 10.0) as i32, (e.pos[1] * 10.0) as i32];
+                            (e.texto.clone(), pos, e.seleccion)
+                        })
+                        .collect()
+                };
+                assert_eq!(clave(&sueltas), clave(&escena.etiquetas));
+                casos += escena.etiquetas.len();
+            }
+        }
+        assert!(casos > 0, "la prueba debe comparar etiquetas reales");
     }
 
     /// El corte debe seccionar también las tuberías. Se aísla la red (sin piezas de nodo) y se

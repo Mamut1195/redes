@@ -10,6 +10,8 @@
 //! El canvas se pinta transparente para que el pase 3D se vea a través de él. Sin GPU o con
 //! `--sin-gpu3d` la app usa el renderer 2D de siempre.
 
+use std::sync::Arc;
+
 use rune::compose::{Compositor, Frame};
 use rune::render::EffectSite;
 
@@ -47,33 +49,55 @@ fn fs(i: Out) -> @location(0) vec4<f32> {
 "#;
 
 /// Geometría que la app deja lista para el pase 3D.
-#[derive(Clone, Debug, Default)]
+///
+/// La malla y la cámara van por separado (F14-02): mover la cámara solo cambia `vp`; la malla se
+/// regenera cuando cambia lo que la define (proyecto, capas, biblioteca) y entonces sube
+/// `generacion`. Los bytes se comparten con el compositor sin copiarlos (F14-03).
+#[derive(Clone, Debug)]
 pub struct Geometria {
-    /// Vértices empaquetados: posición (3f), normal (3f), color (3f) = 36 bytes.
-    pub bytes: Vec<u8>,
+    /// Vértices empaquetados en coordenadas locales y cota real: posición (3f), normal (3f),
+    /// color (3f) = 36 bytes. La exageración vertical va en la matriz, no aquí.
+    pub bytes: Arc<[u8]>,
     pub vertices: u32,
-    /// Matriz vista-proyección en columnas (16 floats).
+    /// Matriz vista-proyección en columnas (16 floats), con la exageración vertical incluida.
     pub vp: [f32; 16],
+    /// Sube cada vez que se regenera la malla; el compositor solo la vuelve a subir entonces.
     pub generacion: u64,
 }
 
+impl Default for Geometria {
+    fn default() -> Self {
+        Geometria {
+            bytes: Arc::from(Vec::new()),
+            vertices: 0,
+            vp: [0.0; 16],
+            generacion: 0,
+        }
+    }
+}
+
 impl Geometria {
-    /// Recalcula la geometría a partir del proyecto (solo cuando algo cambia).
-    #[allow(dead_code)]
-    pub fn cargar(
-        &mut self,
-        p: &redes_core::model::Project,
-        cam: &redes_core::view::Camera,
-        capas: redes_core::view::Layers,
-    ) {
-        self.cargar_con_modelos(p, cam, capas, &[]);
+    /// Recalcula la malla a partir del proyecto (solo cuando algo cambia).
+    #[cfg(test)]
+    pub fn cargar(&mut self, p: &redes_core::model::Project, capas: redes_core::view::Layers) {
+        self.cargar_con_modelos(p, capas, &[]);
+    }
+
+    /// Solo la cámara: matriz vista-proyección con la exageración vertical alrededor de la cota
+    /// del objetivo. Es lo único que cambia al orbitar, desplazar o acercar.
+    pub fn fijar_camara(&mut self, cam: &redes_core::view::Camera) {
+        let aspecto = if cam.viewport[1] > 1.0 {
+            cam.viewport[0] / cam.viewport[1]
+        } else {
+            1.6
+        };
+        self.vp = cam.matriz(aspecto, cam.z_scale as f32);
     }
 
     /// Igual que [`Self::cargar`] pero añade las mallas de la biblioteca ya colocadas.
     pub fn cargar_con_modelos(
         &mut self,
         p: &redes_core::model::Project,
-        cam: &redes_core::view::Camera,
         capas: redes_core::view::Layers,
         instancias: &[crate::modelos::Instancia],
     ) {
@@ -99,26 +123,15 @@ impl Geometria {
             })
             .map(|(i, _)| i as u16)
             .collect();
-        let k = cam.z_scale as f32;
-        let zr = cam.target[2] as f32;
-        let _ = k;
-        let aspecto = if cam.viewport[1] > 1.0 {
-            cam.viewport[0] / cam.viewport[1]
-        } else {
-            1.6
-        };
-        // La z ya viene exagerada en los vértices: la matriz va en escala 1.
-        self.vp = cam.matriz(aspecto, 1.0);
-        self.bytes.clear();
-        self.bytes.reserve(malla.tris.len() * 3 * 36);
-        // La app dibuja con z exagerada: se aplica aquí, una sola vez por reconstrucción.
+        let mut bytes: Vec<u8> = Vec::with_capacity(malla.tris.len() * 3 * 36);
+        // Sin exageración vertical: la pone la matriz, así la malla no depende de la cámara.
         let mut contador: u32 = 0;
         let mut empujar = |pos: [f32; 3], normal: [f32; 3], color: [f32; 3]| {
-            let z = (pos[2] - zr) * k + zr;
             for v in [
-                pos[0], pos[1], z, normal[0], normal[1], normal[2], color[0], color[1], color[2],
+                pos[0], pos[1], pos[2], normal[0], normal[1], normal[2], color[0], color[1],
+                color[2],
             ] {
-                self.bytes.extend_from_slice(&v.to_le_bytes());
+                bytes.extend_from_slice(&v.to_le_bytes());
             }
         };
         for t in &malla.tris {
@@ -146,9 +159,31 @@ impl Geometria {
         }
         // Lo que se declara es lo que se escribió: antes se contaba la malla entera aunque las
         // capas filtraran triángulos, y el pase leía vértices del frame anterior.
+        self.bytes = Arc::from(bytes);
         self.vertices = contador;
-        self.generacion = self.generacion.wrapping_add(1);
+        // Nunca vuelve a 0: el compositor usa 0 para «búfer vacío, hay que subir».
+        self.generacion = self.generacion.wrapping_add(1).max(1);
     }
+
+    /// Lo que el compositor toma en un frame: la matriz siempre; los bytes solo si la malla es
+    /// de otra generación que la ya subida. Compartir el `Arc` no copia nada.
+    pub fn tomar(&self, subida: u64) -> Toma {
+        Toma {
+            subir: (self.generacion != subida).then(|| Arc::clone(&self.bytes)),
+            vertices: self.vertices,
+            vp: self.vp,
+            generacion: self.generacion,
+        }
+    }
+}
+
+/// Lectura de un frame: con el mutex tomado solo se copian la matriz y un puntero.
+pub struct Toma {
+    /// Bytes que hay que subir a la GPU, o `None` si el búfer ya tiene esta generación.
+    pub subir: Option<Arc<[u8]>>,
+    pub vertices: u32,
+    pub vp: [f32; 16],
+    pub generacion: u64,
 }
 
 struct Recursos {
@@ -346,26 +381,31 @@ impl Compositor<crate::State> for Compositor3d {
     fn render(&mut self, f: &mut Frame<'_, crate::State>) {
         let (device, queue, size, formato) = (f.device, f.queue, f.size, f.format);
         // La geometría la mantiene el estado de la app; el compositor solo la consume.
+        // Antes se clonaban aquí todos los bytes de la malla en cada frame, con el mutex tomado
+        // (F14-03). Ahora se mira el tamaño, se preparan los recursos y solo entonces se toma la
+        // geometría: el `Arc` de los bytes viene solo si hay una generación nueva que subir.
         let geom = f.rt.state.geom.clone();
-        let (bytes, vertices, vp, generacion) = {
-            let g = geom.lock().unwrap();
-            (g.bytes.clone(), g.vertices, g.vp, g.generacion)
-        };
+        let vertices = geom.lock().map(|g| g.vertices).unwrap_or(0);
         if vertices == 0 {
             f.draw_ui();
             return;
         }
         self.asegurar(device, size, formato);
-        self.crecer(device, bytes.len());
+        self.crecer(device, vertices as usize * 36);
+        let Ok(toma) = geom.lock().map(|g| g.tomar(self.ultima_generacion)) else {
+            f.draw_ui();
+            return;
+        };
+        let (vertices, vp) = (toma.vertices, toma.vp);
         let Some(r) = &self.recursos else {
             f.draw_ui();
             return;
         };
 
-        if generacion != self.ultima_generacion {
-            let n = bytes.len().min(r.capacidad as usize) as u64;
-            queue.write_buffer(&r.vertices, 0, &bytes[..n as usize]);
-            self.ultima_generacion = generacion;
+        if let Some(bytes) = toma.subir {
+            let n = bytes.len().min(r.capacidad as usize);
+            queue.write_buffer(&r.vertices, 0, &bytes[..n]);
+            self.ultima_generacion = toma.generacion;
         }
 
         // El pase se limita al rectángulo del lienzo (en píxeles de dispositivo), no a la ventana:
@@ -481,12 +521,9 @@ mod tests {
     #[test]
     fn los_vertices_declarados_son_los_escritos() {
         let p = redes_core::demo_city::ciudad();
-        let mut cam = redes_core::view::Camera::default();
-        cam.viewport = [900.0, 600.0];
-        cam.fit(&p);
 
         let mut todo = Geometria::default();
-        todo.cargar(&p, &cam, Layers::default());
+        todo.cargar(&p, Layers::default());
         assert!(todo.vertices > 0);
         assert_eq!(
             todo.bytes.len() as u32,
@@ -497,7 +534,7 @@ mod tests {
         let mut sin_alcantarillado = Layers::default();
         sin_alcantarillado.alcantarillado = false;
         let mut parte = Geometria::default();
-        parte.cargar(&p, &cam, sin_alcantarillado);
+        parte.cargar(&p, sin_alcantarillado);
         assert!(
             parte.vertices < todo.vertices,
             "apagar alcantarillado debe reducir los vértices ({} vs {})",
@@ -505,5 +542,85 @@ mod tests {
             todo.vertices
         );
         assert_eq!(parte.bytes.len() as u32, parte.vertices * 36);
+    }
+
+    /// Con la escena quieta el compositor no copia ni sube nada (F14-03): la primera toma trae
+    /// los bytes (el mismo `Arc`, sin copia) y las siguientes de la misma generación no traen
+    /// nada aunque la cámara cambie. Una malla nueva vuelve a traerlos.
+    #[test]
+    fn la_escena_quieta_no_se_vuelve_a_subir() {
+        let p = redes_core::demo::project();
+        let mut cam = redes_core::view::Camera {
+            viewport: [900.0, 600.0],
+            ..Default::default()
+        };
+        cam.fit(&p);
+        let mut g = Geometria::default();
+        g.cargar(&p, Layers::default());
+        g.fijar_camara(&cam);
+
+        // El búfer de la GPU empieza vacío (generación 0): hay que subir.
+        let primera = g.tomar(0);
+        let bytes = primera.subir.expect("la primera toma sube la malla");
+        assert!(
+            std::sync::Arc::ptr_eq(&bytes, &g.bytes),
+            "se comparte el búfer, no se copia"
+        );
+        let subida = primera.generacion;
+        assert_ne!(subida, 0, "una malla cargada nunca es la generación vacía");
+
+        for _ in 0..3 {
+            assert!(g.tomar(subida).subir.is_none(), "frame quieto: 0 copias");
+        }
+        cam.orbit(30.0, 5.0);
+        g.fijar_camara(&cam);
+        let tras_camara = g.tomar(subida);
+        assert!(
+            tras_camara.subir.is_none(),
+            "mover la cámara no vuelve a subir la malla"
+        );
+        assert_ne!(tras_camara.vp, primera.vp, "pero la matriz sí cambia");
+
+        g.cargar(&p, Layers::default());
+        assert!(
+            g.tomar(subida).subir.is_some(),
+            "una malla regenerada se vuelve a subir"
+        );
+    }
+
+    /// La exageración vertical va en la matriz y no en los vértices: el mismo punto con la
+    /// matriz de `z_scale` k cae donde caía antes el vértice exagerado con la matriz en escala 1.
+    #[test]
+    fn la_exageracion_vertical_va_en_la_matriz() {
+        let cam = redes_core::view::Camera {
+            viewport: [900.0, 600.0],
+            target: [10.0, -4.0, 2500.0],
+            distance: 80.0,
+            z_scale: 2.6,
+            ..Default::default()
+        };
+        let mut g = Geometria::default();
+        g.fijar_camara(&cam);
+        let m_k = g.vp;
+        let m_1 = cam.matriz(1.5, 1.0);
+        let m_k_bien = cam.matriz(1.5, 2.6);
+        assert_eq!(
+            m_k, m_k_bien,
+            "fijar_camara usa el aspecto y la z_scale de la cámara"
+        );
+        let aplicar = |m: &[f32; 16], p: [f64; 3]| -> [f64; 3] {
+            let c = |i: usize| -> f64 {
+                (0..3).map(|j| m[j * 4 + i] as f64 * p[j]).sum::<f64>() + m[12 + i] as f64
+            };
+            let w = c(3);
+            [c(0) / w, c(1) / w, c(2) / w]
+        };
+        let punto = [3.0, 7.0, 2496.0];
+        let exagerado = [3.0, 7.0, (2496.0 - 2500.0) * 2.6 + 2500.0];
+        let a = aplicar(&m_k_bien, punto);
+        let b = aplicar(&m_1, exagerado);
+        for i in 0..3 {
+            assert!((a[i] - b[i]).abs() < 1e-4, "eje {i}: {} vs {}", a[i], b[i]);
+        }
     }
 }

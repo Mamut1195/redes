@@ -49,6 +49,18 @@ abrir un proyecto conserva el entorno y su TIN.
 
 Sin el flag, todo sigue por el renderer 2D (algoritmo del pintor): la app funciona igual.
 
+**Cámara y malla separadas (F14-02, F14-03).** La malla se guarda en coordenadas locales (origen
+restado en `f64` antes de bajar a `f32`) **con la cota real**; la exageración vertical va en la
+matriz (`Geometria::fijar_camara` → `Camera::matriz(aspecto, z_scale)`, alrededor de la cota del
+objetivo). Por eso orbitar, desplazar, acercar o cambiar `z_scale` solo recalcula la matriz y las
+etiquetas (`view::etiquetas`, mismas reglas que la escena del pintor); en `--gpu3d` no se ejecuta
+`build_opts` ni se arma el `Shape`. La malla (`triangulos_exportables`) se regenera solo cuando
+cambia su clave: proyecto (`Arc` y `revision`), capas terreno/agua/alcantarillado/edificios o la
+llegada de la biblioteca. Los bytes son un `Arc<[u8]>`: el compositor toma la matriz cada frame y
+el `Arc` solo si la generación es nueva (`Geometria::tomar`), sin copiar la malla con el mutex
+tomado. En la ciudad (release): 6,0 ms → 0,008 ms por cambio de cámara y 3,6 MB copiados por
+frame → 0. La barra de estado cuenta, en `--gpu3d`, los triángulos que dibuja la GPU.
+
 **Por qué importa** (medido por la revisión de pruebas, release, p95 por frame):
 
 | Escena | 2D (pintor) | 3D (`--gpu3d`) |
