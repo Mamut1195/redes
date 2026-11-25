@@ -24,7 +24,7 @@
 ## Comandos (PowerShell; los mismos que usa el CI)
 - Formato: `cargo fmt -p redes-core -p redes-cli -p redes-app --check` (NUNCA `cargo fmt --all`: alcanza vendor/rune).
 - Clippy: `cargo clippy -p redes-core -p redes-cli -p redes-app --all-targets -- -D clippy::correctness`
-- Pruebas: `cargo test --workspace`
+- Pruebas: `cargo test --workspace` y `python -m unittest discover -s skills/redes-ingesta/scripts/tests` (skill de ingesta)
 - Release: `cargo build --release -p redes-app -p redes-cli`
 - Mutación: `powershell -NoProfile -File scripts/mutar.ps1`. Debe salir con 0: si sobrevive una mutación, la suite está floja.
 - Paquete portable: `powershell -File scripts/empaquetar.ps1` (`-SinCompilar` para no recompilar).

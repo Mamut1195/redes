@@ -32,6 +32,9 @@ jobs:
       - name: Pruebas
         run: cargo test --workspace
 
+      - name: Pruebas de la skill de ingesta (Python)
+        run: python -m unittest discover -s skills/redes-ingesta/scripts/tests -v
+
       - name: Release
         run: cargo build --release -p redes-app -p redes-cli
 
