@@ -4,6 +4,7 @@
 //! y lo devuelve al CAD. Toda salida es un sobre JSON `redes.envelope/1`.
 
 mod diff;
+mod observaciones;
 mod perfil;
 mod svg;
 mod validar;
@@ -17,7 +18,7 @@ use redes_core::envelope::{Diagnostic, ENGINE_VERSION, ENVELOPE_SCHEMA, Envelope
 use redes_core::export;
 use redes_core::families::{self, caps};
 use redes_core::ingest;
-use redes_core::model::{EstadoObjeto, EstadoProyecto, Project};
+use redes_core::model::{EstadoProyecto, Project};
 use redes_core::view::{self, Camera, Layers};
 use serde_json::json;
 
@@ -221,23 +222,9 @@ enum ObjetoCmd {
         #[arg(long)]
         estado: Option<String>,
     },
-    /// Marca un objeto como aprobado.
-    Aprobar {
-        #[arg(long)]
-        codigo: String,
-    },
-    /// Marca un objeto como observado (con nota).
-    Observar {
-        #[arg(long)]
-        codigo: String,
-        #[arg(long, default_value = "")]
-        nota: String,
-    },
-    /// Devuelve un objeto a pendiente.
-    Reabrir {
-        #[arg(long)]
-        codigo: String,
-    },
+    /// Revisión: aprobar, observar, cerrar observaciones, historial, reabrir (F13-03).
+    #[command(flatten)]
+    Revision(observaciones::RevisionCmd),
 }
 
 #[derive(Subcommand)]
@@ -636,10 +623,13 @@ fn run(cli: Cli, t0: Instant) -> i32 {
                         Diagnostic::new(
                             "E_STATE_OBSERVED",
                             Severity::Error,
-                            format!("Quedan {obs} objetos observados sin resolver."),
+                            format!(
+                                "Quedan {obs} objetos observados sin resolver ({} observaciones abiertas).",
+                                p.observaciones_abiertas()
+                            ),
                         )
                         .hint(
-                            "Use `redes objeto lista --estado observado`; resuélvalos y apruébelos, o reábralos con `objeto reabrir`.",
+                            "Use `redes objeto lista --estado observado` y `objeto observaciones --codigo X`; cierre cada una con `objeto cerrar-observacion` o apruebe con `--cerrar-todas`.",
                         ),
                     ],
                 )
@@ -1007,14 +997,8 @@ fn elapsed(t0: Instant) -> u64 {
 fn mutates(id: &str) -> bool {
     matches!(
         id,
-        "importar.plan"
-            | "importar.dxf"
-            | "importar.terreno"
-            | "objeto.aprobar"
-            | "objeto.observar"
-            | "objeto.reabrir"
-            | "proyecto.aprobar"
-    )
+        "importar.plan" | "importar.dxf" | "importar.terreno" | "proyecto.aprobar"
+    ) || observaciones::muta(id)
 }
 
 fn io_error(command: &str, msg: &str) -> Envelope {
@@ -1051,9 +1035,7 @@ fn command_id(c: &Cmd) -> &'static str {
         },
         Cmd::Objeto { cmd } => match cmd {
             ObjetoCmd::Lista { .. } => "objeto.lista",
-            ObjetoCmd::Aprobar { .. } => "objeto.aprobar",
-            ObjetoCmd::Observar { .. } => "objeto.observar",
-            ObjetoCmd::Reabrir { .. } => "objeto.reabrir",
+            ObjetoCmd::Revision(c) => c.id(),
         },
         Cmd::Exportar { cmd } => match cmd {
             ExportarCmd::Dxf { .. } => "exportar.dxf",
@@ -1173,7 +1155,7 @@ fn esquema(filtro: Option<&str>) -> Envelope {
             "entrada": ["redes.plan/1", "dxf (exportado por Redes, capa REDES_INFO)", "csv(E,N,Z)"],
             "salida": ["dxf", "geojson", "svg"]
         },
-        "codigos_error": CODIGOS
+        "codigos_error": CODIGOS.iter().chain(observaciones::CODIGOS).collect::<Vec<_>>()
     }))
 }
 
@@ -1355,7 +1337,7 @@ fn objeto(p: &mut Project, cmd: ObjetoCmd, dry: bool) -> Envelope {
                 items.push(json!({
                     "codigo": n.code, "familia": n.family, "subtipo": n.ty,
                     "estado": n.estado.key(), "e": round(n.pos.x, 3), "n": round(n.pos.y, 3),
-                    "cota_solera": n.cota_solera().map(|z| round(z, 3)), "nota": n.nota
+                    "cota_solera": n.cota_solera().map(|z| round(z, 3)), "nota": n.nota_vigente()
                 }));
             }
             for l in p.links.iter().filter(|l| !l.deleted) {
@@ -1371,89 +1353,14 @@ fn objeto(p: &mut Project, cmd: ObjetoCmd, dry: bool) -> Envelope {
                 }
                 items.push(json!({
                     "codigo": l.code, "familia": l.family, "subtipo": l.ty,
-                    "estado": l.estado.key(), "diametro_mm": l.dn(), "nota": l.nota,
+                    "estado": l.estado.key(), "diametro_mm": l.dn(), "nota": l.nota_vigente(),
                     "longitud_m": round(l.length_2d(), 2)
                 }));
             }
             Envelope::ok("objeto.lista").with_data(json!({ "total": items.len(), "items": items }))
         }
-        ObjetoCmd::Aprobar { codigo } => cambiar_estado(
-            p,
-            &codigo,
-            EstadoObjeto::Aprobado,
-            None,
-            dry,
-            "objeto.aprobar",
-        ),
-        ObjetoCmd::Reabrir { codigo } => cambiar_estado(
-            p,
-            &codigo,
-            EstadoObjeto::Pendiente,
-            None,
-            dry,
-            "objeto.reabrir",
-        ),
-        ObjetoCmd::Observar { codigo, nota } => {
-            let texto = if nota.trim().is_empty() {
-                None
-            } else {
-                Some(nota.as_str())
-            };
-            cambiar_estado(
-                p,
-                &codigo,
-                EstadoObjeto::Observado,
-                texto,
-                dry,
-                "objeto.observar",
-            )
-        }
+        ObjetoCmd::Revision(c) => observaciones::ejecutar(p, c, dry),
     }
-}
-
-fn cambiar_estado(
-    p: &mut Project,
-    codigo: &str,
-    nuevo: EstadoObjeto,
-    nota: Option<&str>,
-    dry: bool,
-    cmd: &str,
-) -> Envelope {
-    let id = p
-        .node_by_code(codigo)
-        .map(|n| n.id)
-        .or_else(|| p.link_by_code(codigo).map(|l| l.id));
-    let Some(id) = id else {
-        return Envelope::fail(
-            cmd,
-            vec![
-                Diagnostic::new(
-                    "E_STATE_NOT_FOUND",
-                    Severity::Error,
-                    format!("No existe el código {codigo}."),
-                )
-                .hint("Liste con `redes objeto lista`."),
-            ],
-        );
-    };
-    if dry {
-        return Envelope::ok(cmd).with_data(json!({
-            "dry_run": true, "codigo": codigo, "estado": nuevo.key(), "nota": nota
-        }));
-    }
-    if let Some(n) = p.nodes.iter_mut().find(|n| n.id == id) {
-        n.estado = nuevo;
-        n.nota = nota.map(|s| s.to_string());
-    } else if let Some(l) = p.links.iter_mut().find(|l| l.id == id) {
-        l.estado = nuevo;
-        l.nota = nota.map(|s| s.to_string());
-    }
-    p.commit(&format!("{cmd} {codigo}"));
-    let (pnd, ok, obs) = p.revision_counts();
-    Envelope::ok(cmd).with_data(json!({
-        "codigo": codigo, "estado": nuevo.key(), "nota": nota,
-        "revision": { "pendientes": pnd, "aprobados": ok, "observados": obs }
-    }))
 }
 
 fn exportar(p: &Project, cmd: ExportarCmd, dry: bool) -> Envelope {

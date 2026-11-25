@@ -1,8 +1,8 @@
-//! Comparación de dos entregas de un proyecto (REV-08, F13-05).
+﻿//! Comparación de dos entregas de un proyecto (REV-08, F13-05).
 //!
 //! Los objetos se emparejan por **código** (`PZ-001`), no por [`crate::model::ElementId`], que
 //! cambia de una entrega a otra. Se reportan altas, bajas y cambios por objeto con el detalle por
-//! campo. Los campos de revisión (estado, nota, observaciones) van aparte de los de diseño.
+//! campo. Los campos de revisión (estado, observaciones) van aparte de los de diseño.
 //!
 //! Solo lee el modelo; no lo modifica. El orden del resultado es determinista: nodos antes que
 //! tramos, y dentro de cada grupo por código.
@@ -10,13 +10,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Serialize;
-use serde_json::Value as Json;
 
 use crate::families::Value;
 use crate::geom::P2;
 use crate::model::{
     COTA_SOLERA, COTA_TAPA, COTA_TERRENO, DIAMETRO_NOMINAL, Dato, Link, Node, Project, SIN_DATO,
 };
+use crate::revision::Observacion;
 
 /// Parámetros de la comparación.
 #[derive(Clone, Copy, Debug)]
@@ -392,14 +392,10 @@ fn sin_dato(out: &mut Vec<Cambio>, a: &[String], b: &[String], propios: &[&str])
     }
 }
 
-/// Campos de revisión. `observaciones` se lee del JSON del objeto si el modelo ya lo trae.
-fn revision<T: Serialize>(
-    out: &mut Vec<Cambio>,
-    estado: (&str, &str),
-    nota: (Option<&str>, Option<&str>),
-    a: &T,
-    b: &T,
-) {
+/// Campos de revisión: el estado y cada observación por su id (F13-03). Una observación que
+/// aparece, desaparece o cambia (se cierra, cambia su texto) es un cambio `observaciones.<id>`
+/// con `estado: texto` antes y después.
+fn revision(out: &mut Vec<Cambio>, estado: (&str, &str), obs: (&[Observacion], &[Observacion])) {
     if estado.0 != estado.1 {
         out.push(cambio(
             Clase::Revision,
@@ -408,29 +404,24 @@ fn revision<T: Serialize>(
             estado.1.into(),
         ));
     }
-    if nota.0 != nota.1 {
-        out.push(cambio(
-            Clase::Revision,
-            "nota",
-            texto_opt(nota.0),
-            texto_opt(nota.1),
-        ));
-    }
-    let obs = |t: &T| -> Option<Json> {
-        serde_json::to_value(t)
-            .ok()?
-            .get("observaciones")
-            .filter(|v| !v.is_null() && v.as_array().is_none_or(|x| !x.is_empty()))
-            .cloned()
-    };
-    let (oa, ob) = (obs(a), obs(b));
-    if oa != ob {
-        let t = |o: &Option<Json>| {
+    let ids: BTreeSet<u32> = obs.0.iter().chain(obs.1).map(|o| o.id).collect();
+    for id in ids {
+        let buscar = |v: &[Observacion]| v.iter().find(|o| o.id == id).cloned();
+        let (oa, ob) = (buscar(obs.0), buscar(obs.1));
+        if oa == ob {
+            continue;
+        }
+        let t = |o: &Option<Observacion>| {
             o.as_ref()
-                .map(Json::to_string)
+                .map(|o| format!("{}: {}", o.estado.key(), o.texto))
                 .unwrap_or_else(|| SIN_DATO.into())
         };
-        out.push(cambio(Clase::Revision, "observaciones", t(&oa), t(&ob)));
+        out.push(cambio(
+            Clase::Revision,
+            &format!("observaciones.{id}"),
+            t(&oa),
+            t(&ob),
+        ));
     }
 }
 
@@ -484,9 +475,7 @@ fn cambios_nodo(a: &Node, b: &Node, op: &Opciones) -> Vec<Cambio> {
     revision(
         &mut c,
         (a.estado.key(), b.estado.key()),
-        (a.nota.as_deref(), b.nota.as_deref()),
-        a,
-        b,
+        (&a.observaciones, &b.observaciones),
     );
     c
 }
@@ -603,9 +592,7 @@ fn cambios_tramo(pa: &Project, a: &Link, pb: &Project, b: &Link, op: &Opciones) 
     revision(
         &mut c,
         (a.estado.key(), b.estado.key()),
-        (a.nota.as_deref(), b.nota.as_deref()),
-        a,
-        b,
+        (&a.observaciones, &b.observaciones),
     );
     c
 }
@@ -761,6 +748,33 @@ mod tests {
         b.crs = "EPSG:32718".into();
         let e = comparar(&a, &b, &Opciones::default()).unwrap_err();
         assert!(e.starts_with("E_STATE_CRS_DISTINTO"));
+    }
+
+    /// F13-03: cada observación se compara por su id y se informa con `estado: texto`.
+    #[test]
+    fn las_observaciones_se_comparan_por_id() {
+        let a = base();
+        let mut b = base();
+        let c = b.links[0].code.clone();
+        b.observar(&c, "Revisar pendiente", None).unwrap();
+        b.observar(&c, "Falta DN", None).unwrap();
+        b.cerrar_observacion(&c, 1, None).unwrap();
+        let d = comparar(&a, &b, &Opciones::default()).unwrap();
+        let m = d.modificados.iter().find(|m| m.codigo == c).unwrap();
+        let campos: Vec<(&str, &str, &str)> = m
+            .cambios
+            .iter()
+            .map(|x| (x.campo.as_str(), x.antes.as_str(), x.despues.as_str()))
+            .collect();
+        assert_eq!(
+            campos,
+            vec![
+                ("estado", a.links[0].estado.key(), "observado"),
+                ("observaciones.1", SIN_DATO, "cerrada: Revisar pendiente"),
+                ("observaciones.2", SIN_DATO, "abierta: Falta DN"),
+            ]
+        );
+        assert!(m.cambios.iter().all(|x| x.clase == Clase::Revision));
     }
 
     #[test]

@@ -96,7 +96,11 @@ pub fn validar_finito(p: &Project) -> Result<(), String> {
 }
 
 /// Versión de esquema que entiende esta compilación.
-pub const SCHEMA_VERSION: u32 = 2;
+///
+/// - 2: `nota` única por objeto.
+/// - 3: `observaciones` con historial (F13-03). Un archivo 2 se migra al abrir y se guarda como 3;
+///   una versión que solo entiende la 2 rechaza el 3 en vez de perder las observaciones.
+pub const SCHEMA_VERSION: u32 = 3;
 
 /// Carga un proyecto y lo valida antes de devolverlo.
 ///
@@ -110,11 +114,43 @@ pub fn load(path: &Path) -> Result<Project, String> {
     validar_tin(&p)?;
     validar_identidad(&mut p)?;
     p.migrar_cotas();
+    p.migrar_observaciones(&notas_legadas(&text));
+    p.schema = format!("redes.project/{SCHEMA_VERSION}");
     // El índice espacial del TIN no se serializa: se reconstruye al abrir.
     if let Some(t) = p.terrain.as_mut() {
         t.reindexar();
     }
     Ok(p)
+}
+
+/// Notas únicas de un `.redes` anterior a F13-03 (código → texto). El modelo ya no tiene el campo
+/// `nota`: se leen aparte, solo si el texto lo menciona, para no pagar una segunda lectura en los
+/// archivos nuevos.
+fn notas_legadas(text: &str) -> std::collections::HashMap<String, String> {
+    #[derive(serde::Deserialize)]
+    struct ConNota {
+        code: String,
+        #[serde(default)]
+        nota: Option<String>,
+    }
+    #[derive(serde::Deserialize)]
+    struct Legado {
+        #[serde(default)]
+        nodes: Vec<ConNota>,
+        #[serde(default)]
+        links: Vec<ConNota>,
+    }
+    if !text.contains("\"nota\"") {
+        return Default::default();
+    }
+    let Ok(l) = serde_json::from_str::<Legado>(text) else {
+        return Default::default();
+    };
+    l.nodes
+        .into_iter()
+        .chain(l.links)
+        .filter_map(|c| Some((c.code, c.nota?)))
+        .collect()
 }
 
 /// Acepta versiones hasta [`SCHEMA_VERSION`]; una futura se rechaza en vez de perder datos.
@@ -334,7 +370,7 @@ mod tests {
             attrs: Default::default(),
             datos: Default::default(),
             estado: crate::model::EstadoObjeto::Pendiente,
-            nota: None,
+            observaciones: Vec::new(),
             modelo: None,
             deleted: false,
             sin_dato: Vec::new(),
@@ -365,6 +401,7 @@ mod tests {
     }
 
     use super::*;
+    use crate::model::EstadoObjeto;
 
     #[test]
     fn guardar_y_abrir_conserva_el_documento() {
@@ -379,7 +416,65 @@ mod tests {
         assert_eq!(q.name, p.name);
         assert_eq!(q.name, "La Esperanza 2");
         assert_eq!(q.revision, 1);
-        assert_eq!(q.schema, "redes.project/2");
+        assert_eq!(q.schema, format!("redes.project/{SCHEMA_VERSION}"));
         let _ = std::fs::remove_file(&path);
+    }
+
+    /// Un `.redes` real de la versión 2 (generado con la CLI antes de F13-03: `PZ-901` observado
+    /// con nota, `CL-901` observado sin nota, `PZ-902` aprobado) abre con su nota convertida en
+    /// observación, y al guardarlo pasa a la versión 3 sin `nota`.
+    #[test]
+    fn un_redes_v2_con_nota_abre_con_observaciones() {
+        let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/revision_v2.redes");
+        let texto = std::fs::read_to_string(&fixture).unwrap();
+        assert!(texto.contains("\"redes.project/2\"") && texto.contains("\"nota\""));
+        let p = load(&fixture).expect("abre la versión 2");
+        let pz = p.node_by_code("PZ-901").unwrap();
+        assert_eq!(pz.estado, EstadoObjeto::Observado);
+        assert_eq!(pz.observaciones.len(), 1);
+        let o = &pz.observaciones[0];
+        assert!(o.abierta() && o.migrada);
+        assert_eq!(o.texto, "Tapa desplazada 0,5 m respecto al plano");
+        assert_eq!(pz.nota_vigente(), Some(o.texto.as_str()));
+        let cl = p.link_by_code("CL-901").unwrap();
+        assert_eq!(cl.estado, EstadoObjeto::Observado);
+        assert_eq!(cl.observaciones[0].texto, "Observado sin nota");
+        let ok = p.node_by_code("PZ-902").unwrap();
+        assert_eq!(ok.estado, EstadoObjeto::Aprobado);
+        assert!(ok.observaciones.is_empty());
+        assert_eq!(p.observaciones_abiertas(), 2);
+
+        let ruta = std::env::temp_dir().join(format!("redes-v2-{}.redes", std::process::id()));
+        save(&p, &ruta).unwrap();
+        let guardado = std::fs::read_to_string(&ruta).unwrap();
+        assert!(guardado.contains("\"redes.project/3\""), "sube de versión");
+        assert!(!guardado.contains("\"nota\""), "la nota no se duplica");
+        // Abrir el guardado no vuelve a migrar ni duplica.
+        let q = load(&ruta).unwrap();
+        assert_eq!(q.node_by_code("PZ-901").unwrap().observaciones.len(), 1);
+        let _ = std::fs::remove_file(&ruta);
+    }
+
+    /// Un aprobado con nota (editado a mano o de versiones viejas) migra a observación cerrada.
+    #[test]
+    fn un_aprobado_con_nota_migra_a_observacion_cerrada() {
+        let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/revision_v2.redes");
+        let mut v: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&fixture).unwrap()).unwrap();
+        for n in v["nodes"].as_array_mut().unwrap() {
+            if n["code"] == "PZ-902" {
+                n["nota"] = serde_json::json!("Cumple");
+            }
+        }
+        let ruta = escribir_temporal("aprobado-nota", &v);
+        let p = load(&ruta).unwrap();
+        let n = p.node_by_code("PZ-902").unwrap();
+        assert_eq!(n.estado, EstadoObjeto::Aprobado);
+        assert!(!n.observaciones[0].abierta());
+        assert_eq!(n.observaciones[0].texto, "Cumple");
+        assert_eq!(n.nota_vigente(), None);
+        let _ = std::fs::remove_file(&ruta);
     }
 }

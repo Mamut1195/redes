@@ -1,0 +1,139 @@
+{
+  "schema": "redes.project/2",
+  "id": "prj_e2c10af8",
+  "name": "Fixture",
+  "crs": "EPSG:32717",
+  "origin": {
+    "x": 0.0,
+    "y": 0.0
+  },
+  "revision": 5,
+  "estado": "importado",
+  "fuentes": [
+    {
+      "app": "plan",
+      "archivo": "crates/redes-core/tests/fixtures/plan.json",
+      "formato": "plan",
+      "importado_en": "2026-11-25"
+    }
+  ],
+  "terrain": null,
+  "entorno": null,
+  "nodes": [
+    {
+      "id": {
+        "slot": 1,
+        "generation": 1
+      },
+      "family": "saneamiento.pozo",
+      "ty": "inspeccion",
+      "code": "PZ-901",
+      "pos": {
+        "x": 758010.0,
+        "y": 9797010.0
+      },
+      "z_terrain": 2500.1,
+      "z_rim": 2500.1,
+      "z_invert": 2498.4,
+      "attrs": {
+        "diametro_interior": 1.2
+      },
+      "datos": {},
+      "estado": "observado",
+      "nota": "Tapa desplazada 0,5 m respecto al plano",
+      "deleted": false,
+      "sin_dato": [
+        "cota_tapa"
+      ]
+    },
+    {
+      "id": {
+        "slot": 2,
+        "generation": 1
+      },
+      "family": "saneamiento.pozo",
+      "ty": "inspeccion",
+      "code": "PZ-902",
+      "pos": {
+        "x": 758040.0,
+        "y": 9797012.0
+      },
+      "z_terrain": 2499.8,
+      "z_rim": 2499.8,
+      "z_invert": 2497.9,
+      "attrs": {
+        "diametro_interior": 1.2
+      },
+      "datos": {},
+      "estado": "aprobado",
+      "deleted": false,
+      "sin_dato": [
+        "cota_tapa"
+      ]
+    }
+  ],
+  "links": [
+    {
+      "id": {
+        "slot": 3,
+        "generation": 1
+      },
+      "family": "saneamiento.tuberia",
+      "ty": "colector_sanitario",
+      "code": "CL-901",
+      "from": {
+        "slot": 1,
+        "generation": 1
+      },
+      "to": {
+        "slot": 2,
+        "generation": 1
+      },
+      "path": [
+        {
+          "x": 758010.0,
+          "y": 9797010.0,
+          "z": 2498.4
+        },
+        {
+          "x": 758040.0,
+          "y": 9797012.0,
+          "z": 2497.9
+        }
+      ],
+      "d_mm": 200,
+      "attrs": {},
+      "datos": {},
+      "estado": "observado",
+      "deleted": false
+    }
+  ],
+  "next_slot": 4,
+  "journal": [
+    {
+      "revision": 1,
+      "command": "proyecto.nuevo",
+      "cuando": "2026-11-25T19:00:07Z"
+    },
+    {
+      "revision": 2,
+      "command": "importar plan",
+      "cuando": "2026-11-25T19:00:07Z"
+    },
+    {
+      "revision": 3,
+      "command": "objeto.observar PZ-901",
+      "cuando": "2026-11-25T19:00:07Z"
+    },
+    {
+      "revision": 4,
+      "command": "objeto.observar CL-901",
+      "cuando": "2026-11-25T19:00:07Z"
+    },
+    {
+      "revision": 5,
+      "command": "objeto.aprobar PZ-902",
+      "cuando": "2026-11-25T19:00:07Z"
+    }
+  ]
+}

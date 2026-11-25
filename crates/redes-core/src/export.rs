@@ -495,7 +495,7 @@ fn escribe_nodo(d: &mut Dibujo, node: &Node) {
     d.observacion(
         &node.code,
         node.estado,
-        node.nota.as_deref(),
+        node.nota_vigente(),
         [x0, y + 1.5 * h, z],
         0.0,
         (di * 0.5 + 1.0).max(2.0),
@@ -532,7 +532,7 @@ fn escribe_tramo(d: &mut Dibujo, link: &Link) {
     d.observacion(
         &link.code,
         link.estado,
-        link.nota.as_deref(),
+        link.nota_vigente(),
         desplaza(-2.0 * h),
         giro,
         2.0_f64.max(link.diametro_interior_m() + 1.0),
@@ -770,7 +770,7 @@ pub fn export_geojson(p: &Project, path: &Path) -> Result<usize, String> {
             "subtipo": n.ty,
             "cota_terreno": cota_terreno(n),
             "estado": n.estado.key(),
-            "nota": n.nota,
+            "nota": n.nota_vigente(),
         });
         for (k, v) in &n.attrs {
             props[k] = serde_json::json!(valor_a_texto(v));
@@ -802,7 +802,7 @@ pub fn export_geojson(p: &Project, path: &Path) -> Result<usize, String> {
             "diametro_mm": dn_mm(l),
             "longitud_m": l.length_2d(),
             "estado": l.estado.key(),
-            "nota": l.nota,
+            "nota": l.nota_vigente(),
         });
         for (k, v) in &l.attrs {
             props[k] = serde_json::json!(valor_a_texto(v));
@@ -1286,10 +1286,10 @@ mod tests {
     #[test]
     fn las_observaciones_van_a_su_capa() {
         let mut p = crate::demo::project();
-        p.nodes[0].estado = EstadoObjeto::Observado;
-        p.nodes[0].nota = Some("Revisar cota de tubería\nen campo".into());
-        p.links[0].nota = Some("Falta junta".into());
         let (cn, cl) = (p.nodes[0].code.clone(), p.links[0].code.clone());
+        p.observar(&cn, "Revisar cota de tubería\nen campo", None)
+            .unwrap();
+        p.observar(&cl, "Falta junta", None).unwrap();
         let l = lee_dxf(&exporta(&p, "obs"));
         let obs: Vec<&Ent> = l
             .entidades
@@ -1316,7 +1316,7 @@ mod tests {
         let pendiente = p
             .nodes
             .iter()
-            .find(|n| n.estado == EstadoObjeto::Pendiente && n.nota.is_none())
+            .find(|n| n.estado == EstadoObjeto::Pendiente && n.nota_vigente().is_none())
             .unwrap();
         assert!(
             !textos
@@ -1325,17 +1325,16 @@ mod tests {
         );
     }
 
-    /// F12-08: un aprobado sin nota no entra en OBSERVACIONES; con nota, sí; observado, siempre.
+    /// F12-08 y F13-03: un aprobado no entra en OBSERVACIONES aunque tuviera observaciones (ya
+    /// cerradas); un observado (con alguna abierta), siempre.
     #[test]
     fn observaciones_solo_si_observado_o_con_nota() {
         let mut p = crate::demo::project();
-        p.nodes[0].estado = EstadoObjeto::Aprobado;
-        p.nodes[0].nota = None;
-        p.nodes[1].estado = EstadoObjeto::Aprobado;
-        p.nodes[1].nota = Some("Cumple".into());
-        p.nodes[2].estado = EstadoObjeto::Observado;
-        p.nodes[2].nota = None;
         let c: Vec<String> = (0..3).map(|i| p.nodes[i].code.clone()).collect();
+        p.aprobar_objeto(&c[0], None).unwrap();
+        p.observar(&c[1], "Cumple", None).unwrap();
+        p.aprobar_objeto(&c[1], Some("Revisado")).unwrap();
+        p.observar(&c[2], "Revisar", None).unwrap();
         let l = lee_dxf(&exporta(&p, "obsregla"));
         let textos: Vec<&str> = l
             .entidades
@@ -1345,8 +1344,8 @@ mod tests {
             .collect();
         let hay = |code: &str| textos.iter().any(|t| t.starts_with(&format!("{code} ")));
         assert!(!hay(&c[0]), "aprobado sin nota: {textos:?}");
-        assert!(hay(&c[1]), "aprobado con nota: {textos:?}");
-        assert!(hay(&c[2]), "observado sin nota: {textos:?}");
+        assert!(!hay(&c[1]), "aprobado con observación cerrada: {textos:?}");
+        assert!(hay(&c[2]), "observado: {textos:?}");
     }
 
     /// F12-03: un pozo sin terreno y un tramo sin DN no se rotulan y siguen sin ese dato tras

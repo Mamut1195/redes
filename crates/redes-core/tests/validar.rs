@@ -1,4 +1,4 @@
-//! `redes validar` (F13-01): cada regla con un caso que la dispara, uno que no y uno «no
+﻿//! `redes validar` (F13-01): cada regla con un caso que la dispara, uno que no y uno «no
 //! evaluable» (falta un dato). Más el fixture de proyecto pequeño que usa también la CLI.
 #![allow(clippy::too_many_arguments)]
 
@@ -29,7 +29,7 @@ fn nodo(p: &mut Project, fam: &str, ty: &str, code: &str, x: f64, y: f64, sol: f
         datos: BTreeMap::new(),
         modelo: None,
         estado: EstadoObjeto::Pendiente,
-        nota: None,
+        observaciones: Vec::new(),
         deleted: false,
         sin_dato: Vec::new(),
     })
@@ -69,7 +69,7 @@ fn tramo(
         ]),
         datos: BTreeMap::new(),
         estado: EstadoObjeto::Pendiente,
-        nota: None,
+        observaciones: Vec::new(),
         deleted: false,
         cota_solera_inicio: Some(za),
         cota_solera_fin: Some(zb),

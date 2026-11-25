@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::families::{Value, family};
 use crate::geom::{Bbox, P2, P3};
+use crate::revision::Observacion;
 use crate::terrain::Terrain;
 
 /// Identidad de un elemento. 8 bytes; `slot` nunca se reutiliza con la misma `generation`.
@@ -133,9 +134,10 @@ pub struct Node {
     pub modelo: Option<String>,
     #[serde(default = "estado_pendiente")]
     pub estado: EstadoObjeto,
-    /// Observacion de la revision (que hay que corregir en la app de origen).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub nota: Option<String>,
+    /// Observaciones de la revisión, con historial (F13-03). Sustituyen a la antigua `nota`
+    /// única, que se migra al abrir ([`Project::migrar_observaciones`]).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub observaciones: Vec<Observacion>,
     #[serde(default)]
     pub deleted: bool,
     /// Datos que el origen **no trajo** (F12-03): claves [`COTA_TERRENO`], [`COTA_TAPA`],
@@ -208,6 +210,10 @@ impl Node {
     pub fn diametro(&self) -> f64 {
         self.num("diametro_interior").unwrap_or(1.20)
     }
+    /// Texto de la última observación abierta (lo que antes mostraba la `nota`).
+    pub fn nota_vigente(&self) -> Option<&str> {
+        crate::revision::nota_vigente(&self.observaciones)
+    }
 }
 
 /// Un arco del grafo (tubería, canal, acometida, sifón).
@@ -231,9 +237,10 @@ pub struct Link {
     pub datos: BTreeMap<String, Dato>,
     #[serde(default = "estado_pendiente")]
     pub estado: EstadoObjeto,
-    /// Observacion de la revision (que hay que corregir en la app de origen).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub nota: Option<String>,
+    /// Observaciones de la revisión, con historial (F13-03). Sustituyen a la antigua `nota`
+    /// única, que se migra al abrir ([`Project::migrar_observaciones`]).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub observaciones: Vec<Observacion>,
     #[serde(default)]
     pub deleted: bool,
     /// Cota de solera declarada por el origen al inicio del tramo (m). `None` si no la trae: no
@@ -313,6 +320,10 @@ impl Link {
     }
     pub fn num(&self, key: &str) -> Option<f64> {
         self.attrs.get(key).and_then(|v| v.as_f64())
+    }
+    /// Texto de la última observación abierta (lo que antes mostraba la `nota`).
+    pub fn nota_vigente(&self) -> Option<&str> {
+        crate::revision::nota_vigente(&self.observaciones)
     }
 }
 
@@ -399,7 +410,7 @@ impl Default for Project {
 impl Project {
     pub fn new(name: &str, crs: &str) -> Project {
         Project {
-            schema: "redes.project/2".into(),
+            schema: format!("redes.project/{}", crate::project_io::SCHEMA_VERSION),
             id: format!("prj_{:08x}", fnv1a(name.as_bytes())),
             name: name.into(),
             crs: crs.into(),
@@ -657,7 +668,7 @@ fn fnv1a(bytes: &[u8]) -> u32 {
 ///
 /// Decisión del 2026-11-21: la revisión no identifica a nadie por defecto. El journal guarda la
 /// revisión, el comando y la fecha; el usuario es opcional y explícito.
-fn usuario_del_sistema() -> Option<String> {
+pub(crate) fn usuario_del_sistema() -> Option<String> {
     let activo = std::env::var("REDES_JOURNAL_USUARIO")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
@@ -671,7 +682,7 @@ fn usuario_del_sistema() -> Option<String> {
 }
 
 /// Fecha y hora en UTC, sin dependencias: `YYYY-MM-DDTHH:MM:SSZ`.
-fn ahora_utc() -> Option<String> {
+pub(crate) fn ahora_utc() -> Option<String> {
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .ok()?
@@ -733,7 +744,7 @@ mod tests {
             attrs: BTreeMap::from([("diametro_interior".to_string(), Value::Num(1.2))]),
             datos: BTreeMap::new(),
             estado: EstadoObjeto::Pendiente,
-            nota: None,
+            observaciones: Vec::new(),
             modelo: None,
             deleted: false,
             sin_dato: Vec::new(),
@@ -780,7 +791,7 @@ mod tests {
             attrs: BTreeMap::new(),
             datos: BTreeMap::new(),
             estado: EstadoObjeto::Pendiente,
-            nota: None,
+            observaciones: Vec::new(),
             cota_solera_inicio: None,
             cota_solera_fin: None,
             deleted: false,

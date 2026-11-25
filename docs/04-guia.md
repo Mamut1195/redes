@@ -140,7 +140,7 @@ Regla dura: **`ok:false` ⇔ código de salida ≠ 0**.
 redes proyecto nuevo --nombre "Alcantarillado Norte" --crs EPSG:32717 --salida norte.redes
 redes proyecto demo --salida la-esperanza.redes
 redes proyecto info --pretty
-redes proyecto aprobar          # falla si quedan objetos pendientes (E_STATE_PENDING) u observados (E_STATE_OBSERVED)
+redes proyecto aprobar          # falla si quedan objetos pendientes (E_STATE_PENDING) u observados, con observaciones abiertas (E_STATE_OBSERVED)
 ```
 
 Resolución del proyecto: `--project` / `-p` → `$REDES_PROJECT` → el primer `*.redes` de la
@@ -191,12 +191,43 @@ del propio plan, y se avisa. Un nodo sin ninguna cota se descarta con motivo.
 ```powershell
 redes objeto lista --estado pendiente
 redes objeto aprobar --codigo PZ-001
-redes objeto observar --codigo CL-014 --nota "Revisar cota de salida en campo"
-redes objeto reabrir --codigo CL-014
+redes objeto observar --codigo CL-014 --texto "Revisar cota de salida en campo" [--ubicacion E,N,Z]
+redes objeto observaciones --codigo CL-014            # historial: abiertas y cerradas
+redes objeto cerrar-observacion --codigo CL-014 --id 1 --texto "Corregida en Civil 3D"
+redes objeto aprobar --codigo CL-014 --cerrar-todas "Corregido en origen"
+redes objeto reabrir --codigo PZ-001                  # aprobado → pendiente
 ```
 
-La nota se guarda con el objeto y se ve en el inspector de la app. Lo mismo se puede hacer
-desde el visor: seleccionar y pulsar **Aprobar** u **Observar**, y luego **Guardar**.
+**Observaciones con historial (F13-03).** Cada objeto guarda una lista de observaciones que no se
+sobrescriben: `observar` añade una nueva (`#1`, `#2`…) con fecha UTC, revisión del proyecto en que
+se abrió y, si se da, el punto (`--ubicacion`). `--nota` sigue valiendo como alias de `--texto`;
+el texto es obligatorio (`E_ARG_MISSING`).
+
+- El estado se **deriva**: un objeto está **observado** si y solo si tiene alguna observación
+  abierta. Cerrar la última lo deja **pendiente** (aprobarlo es otro acto).
+- **Aprobar** con observaciones abiertas falla con `E_STATE_OBS_ABIERTAS`; con
+  `--cerrar-todas "texto"` se cierran todas en el mismo comando y se aprueba. `reabrir` con
+  abiertas también falla. Cerrar una ya cerrada da `E_STATE_OBS_CERRADA`; un id que no existe,
+  `E_STATE_NOT_FOUND`.
+- El journal anota código e id: `objeto.observar CL-014 #2`, `objeto.cerrar_observacion CL-014 #1`,
+  `objeto.aprobar CL-014 #2` (las que cerró).
+- **Sin autor (D2):** la observación solo guarda el usuario del sistema (`autor`, `autor_cierre`)
+  si se arranca con `REDES_JOURNAL_USUARIO=1`, igual que el journal.
+- **Archivos anteriores** (`redes.project/2`, con una `nota` única): al abrirlos, un objeto
+  observado pasa a tener una observación **abierta** con el texto de la nota («Observado sin nota»
+  si no tenía); un aprobado o pendiente con nota, una observación **cerrada** con el cierre
+  «Cerrada al migrar: el objeto estaba …». Las migradas llevan `migrada: true` y no tienen fecha.
+  Al guardar, el archivo pasa a `redes.project/3`; una versión anterior de Redes lo rechaza
+  (`E_PROJ_SCHEMA_TOO_NEW`) en vez de perder las observaciones.
+- En `objeto lista`, GeoJSON y la capa `OBSERVACIONES` del DXF, «nota» es el texto de la última
+  observación abierta.
+
+En el visor, el inspector muestra el historial (abiertas arriba, con su botón **Cerrar**), un campo
+de texto y **Añadir observación**. El texto del campo sirve de observación nueva o de cierre; el
+chip **Observar** con el campo vacío anota «Observado en revisión». **Aprobar** con abiertas no
+aprueba: lo explica la barra de estado. Después, **Guardar**.
+
+![Inspector con el historial de observaciones](img/observaciones.png)
 
 #### Comparar dos entregas (`proyecto diff`)
 
@@ -211,8 +242,8 @@ atributos, datos (valor, unidad y fuente), tramo (desde, hasta y vértices) y lo
 un dato que aparece o desaparece (`—`) es un cambio. Un movimiento en planta menor que
 `--tolerancia-pos` (0,01 m por defecto) no se reporta.
 
-Los campos de revisión (estado, nota y, si el proyecto las trae, observaciones) llevan
-`clase: "revision"`; el resto es `clase: "diseno"`. `--solo diseno|revision` filtra por clase. Dos
+Los campos de revisión llevan `clase: "revision"`: `estado` y cada observación por su id
+(`observaciones.2`, con `abierta: texto` o `cerrada: texto` antes y después; `—` si no existía); el resto es `clase: "diseno"`. `--solo diseno|revision` filtra por clase. Dos
 proyectos con CRS distinto dan `E_STATE_CRS_DISTINTO` (código de salida 3).
 
 El sobre `redes.envelope/1` trae `data.resumen` (altas, bajas, objetos modificados, cambios por clase
@@ -288,7 +319,8 @@ cargo run -p redes-app --release -- --scene detalle `
 - `--snap` toma una foto en un instante y `--tree` vuelca el árbol de elementos: con eso se
   verifica una interfaz headless, sin abrir ventana.
 - Los chips y botones tienen claves estables (`btn-aprobar`, `btn-observar`, `btn-guardar`,
-  `btn-planta`, `btn-iso`, `btn-encuadrar`) para que un guion los encuentre.
+  `btn-planta`, `btn-iso`, `btn-encuadrar`, `btn-anadir-obs`, `btn-cerrar-obs-N`, campo
+  `obs-texto`) para que un guion los encuentre.
 
 Resultado: [demo.mp4](img/demo.mp4) y su vista previa [demo.gif](img/demo.gif).
 
@@ -350,8 +382,8 @@ El DXF es el que se abre en AutoCAD/Civil 3D/BricsCAD para el **detallado y el D
   (inicio y fin) y la longitud en planta y se marca `(soleras)`; si hay las dos y no cuadran, salen
   ambas (`i=2.00 % (soleras 0.00 %)`): es una discrepancia, no se corrige.
 - **Solo lo que existe**: si falta un dato (DN, material, una cota) no se escribe; nunca se inventa.
-- **`OBSERVACIONES`** (rojo): código, estado y nota de cada objeto observado, aprobado o con nota;
-  los observados llevan además un círculo (nube) alrededor.
+- **`OBSERVACIONES`** (rojo): código, estado y última observación abierta de cada objeto
+  observado; los observados llevan además un círculo (nube) alrededor.
 - **`REDES_INFO`** (apagada): la carga de la ida y vuelta que lee `redes importar dxf` (familia,
   subtipo, código, atributos y datos de nodos y tramos).
 - Texto de 1,0 m (2 mm a 1:500). Lo visible es ASCII: las tildes de los textos van como `\U+00ED`,
@@ -372,7 +404,8 @@ importar  →  revisar en 3D  →  aprobar / observar  →  proyecto aprobar  �
 1. Importar (los objetos nacen **pendientes**).
 2. Recorrer el modelo con la lista de pendientes y la vista 3D.
 3. Aprobar lo correcto; observar lo que debe corregirse en la herramienta de diseño.
-4. `redes proyecto aprobar` verifica que no quede nada pendiente.
+4. `redes proyecto aprobar` verifica que no quede nada pendiente ni observado (ninguna
+   observación abierta).
 5. Exportar a DXF y entregar.
 
 **Por qué por objeto y no un botón:** el acta de revisión debe poder decir qué se aprobó y qué

@@ -459,22 +459,160 @@ fn aprobar_el_proyecto_con_observados_devuelve_e_state_observed() {
         .collect();
     assert!(codigos.len() > 1);
     for (i, c) in codigos.iter().enumerate() {
-        let verbo = if i == 0 { "observar" } else { "aprobar" };
-        let j = sobre(&corre(&["-p", r, "objeto", verbo, "--codigo", c], &d));
-        assert_eq!(j["ok"], true, "{verbo} {c}: {j}");
+        let mut args = vec!["-p", r, "objeto"];
+        if i == 0 {
+            args.extend(["observar", "--codigo", c, "--texto", "Revisar"]);
+        } else {
+            args.extend(["aprobar", "--codigo", c]);
+        }
+        let j = sobre(&corre(&args, &d));
+        assert_eq!(j["ok"], true, "{args:?}: {j}");
     }
     let s = corre(&["-p", r, "proyecto", "aprobar"], &d);
     let j = sobre(&s);
     assert_eq!(j["ok"], false, "{j}");
     assert_eq!(j["diagnostics"][0]["code"], "E_STATE_OBSERVED");
     assert_eq!(s.codigo, 3);
-    // Resuelto el observado, el proyecto sí se aprueba.
-    corre(&["-p", r, "objeto", "aprobar", "--codigo", &codigos[0]], &d);
+    // Resuelto el observado (cerrando su observación al aprobar), el proyecto sí se aprueba.
+    let j = sobre(&corre(
+        &[
+            "-p",
+            r,
+            "objeto",
+            "aprobar",
+            "--codigo",
+            &codigos[0],
+            "--cerrar-todas",
+            "Corregido",
+        ],
+        &d,
+    ));
+    assert_eq!(j["ok"], true, "{j}");
     let j = sobre(&corre(&["-p", r, "proyecto", "aprobar"], &d));
     assert_eq!(j["ok"], true, "{j}");
     // El diario anota qué objeto se aprobó.
     let guardado = std::fs::read_to_string(r).unwrap();
     assert!(guardado.contains(&format!("objeto.aprobar {}", codigos[1])));
+}
+
+/// F13-03: las observaciones se añaden (no se sobrescriben), se cierran por id, se listan con su
+/// historial; aprobar con abiertas falla con `E_STATE_OBS_ABIERTAS` y el journal anota código e id.
+#[test]
+fn las_observaciones_tienen_historial() {
+    let d = tempdir("observaciones");
+    let ruta = d.join("v2.redes");
+    let r = ruta.to_str().unwrap();
+    // Un `.redes` de la versión 2 con una `nota` (generado antes de F13-03).
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../redes-core/tests/fixtures/revision_v2.redes");
+    std::fs::copy(&fixture, &ruta).unwrap();
+    let ok = |args: &[&str]| {
+        let mut v = vec!["-p", r, "objeto"];
+        v.extend_from_slice(args);
+        let s = corre(&v, &d);
+        let j = sobre(&s);
+        assert_eq!(j["ok"], true, "{v:?}: {j}");
+        assert_eq!(s.codigo, 0);
+        j
+    };
+    let falla = |args: &[&str], codigo: &str, salida: i32| {
+        let mut v = vec!["-p", r, "objeto"];
+        v.extend_from_slice(args);
+        let s = corre(&v, &d);
+        let j = sobre(&s);
+        assert_eq!(j["ok"], false, "{v:?}: {j}");
+        assert_eq!(j["error"]["code"], codigo, "{j}");
+        assert_eq!(s.codigo, salida, "{j}");
+    };
+
+    // La nota vieja es la observación #1, abierta.
+    let j = ok(&["observaciones", "--codigo", "PZ-901"]);
+    assert_eq!(j["data"]["abiertas"], 1);
+    assert_eq!(
+        j["data"]["observaciones"][0]["texto"],
+        "Tapa desplazada 0,5 m respecto al plano"
+    );
+    // Observar añade la #2 con ubicación.
+    let j = ok(&[
+        "observar",
+        "--codigo",
+        "PZ-901",
+        "--texto",
+        "Falta escalera",
+        "--ubicacion",
+        "758010,9797010,2499.5",
+    ]);
+    assert_eq!(j["data"]["id"], 2);
+    falla(&["observar", "--codigo", "PZ-901"], "E_ARG_MISSING", 2);
+    // Aprobar con abiertas falla y no cambia nada.
+    falla(
+        &["aprobar", "--codigo", "PZ-901"],
+        "E_STATE_OBS_ABIERTAS",
+        3,
+    );
+    falla(
+        &["reabrir", "--codigo", "PZ-901"],
+        "E_STATE_OBS_ABIERTAS",
+        3,
+    );
+    // Cerrar la #1; la #2 sigue abierta y el objeto, observado.
+    let j = ok(&[
+        "cerrar-observacion",
+        "--codigo",
+        "PZ-901",
+        "--id",
+        "1",
+        "--texto",
+        "Corregido en Civil 3D",
+    ]);
+    assert_eq!(j["data"]["estado"], "observado");
+    falla(
+        &["cerrar-observacion", "--codigo", "PZ-901", "--id", "1"],
+        "E_STATE_OBS_CERRADA",
+        3,
+    );
+    falla(
+        &["cerrar-observacion", "--codigo", "PZ-901", "--id", "9"],
+        "E_STATE_NOT_FOUND",
+        4,
+    );
+    // Cerrar la última deja el objeto pendiente; después se aprueba.
+    let j = ok(&["cerrar-observacion", "--codigo", "PZ-901", "--id", "2"]);
+    assert_eq!(j["data"]["estado"], "pendiente");
+    let j = ok(&["aprobar", "--codigo", "PZ-901"]);
+    assert_eq!(j["data"]["estado"], "aprobado");
+    // El historial conserva las dos, cerradas, con su cierre y la ubicación.
+    let j = ok(&["observaciones", "--codigo", "PZ-901"]);
+    let obs = j["data"]["observaciones"].as_array().unwrap();
+    assert_eq!(obs.len(), 2);
+    assert!(obs.iter().all(|o| o["estado"] == "cerrada"), "{obs:?}");
+    assert_eq!(obs[0]["cierre"], "Corregido en Civil 3D");
+    assert_eq!(obs[1]["ubicacion"]["z"], 2499.5);
+    assert!(obs[1].get("autor").is_none(), "D2: sin autor por defecto");
+    // Aprobar cerrando todas en el mismo acto.
+    let j = ok(&[
+        "aprobar",
+        "--codigo",
+        "CL-901",
+        "--cerrar-todas",
+        "Resuelto",
+    ]);
+    assert_eq!(j["data"]["cerradas"], serde_json::json!([1]));
+
+    let guardado = std::fs::read_to_string(&ruta).unwrap();
+    assert!(guardado.contains("\"redes.project/3\""));
+    assert!(guardado.contains("objeto.observar PZ-901 #2"));
+    assert!(guardado.contains("objeto.cerrar_observacion PZ-901 #1"));
+    assert!(guardado.contains("objeto.aprobar CL-901 #1"));
+    // Registrados en `redes esquema`.
+    let e = sobre(&corre(&["esquema"], &d)).to_string();
+    for c in [
+        "objeto cerrar-observacion",
+        "objeto observaciones",
+        "E_STATE_OBS_ABIERTAS",
+    ] {
+        assert!(e.contains(c), "{c} no está en el esquema");
+    }
 }
 
 #[test]
