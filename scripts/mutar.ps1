@@ -56,6 +56,33 @@ $mutaciones = @(
         Reemplazo = 'if !def.can(caps::HYDRAULIC_NODE) && !def.can(caps::ATTACHABLE) { continue; }'
         Prueba = "el_render_dibuja_familias_no_hidraulicas"
         Que = "volver al filtro que ocultaba las familias no hidraulicas"
+    },
+    @{
+        Nombre = "validar-contrapendiente"
+        Archivo = "crates/redes-core/src/validar.rs"
+        Patron = 'topo\.contrapendiente\.contains\(&l\.id\) \|\| b > a \+ 1e-9'
+        Reemplazo = 'false'
+        Destino = "validar"
+        Prueba = "contrapendiente_dispara_cumple_y_no_evaluable"
+        Que = "dejar de marcar la contrapendiente"
+    },
+    @{
+        Nombre = "validar-supone-dato"
+        Archivo = "crates/redes-core/src/validar.rs"
+        Patron = '_ if exacto => cx\.cumple\(R\),'
+        Reemplazo = '_ => cx.cumple(R),'
+        Destino = "validar"
+        Prueba = "recubrimiento_minimo_en_extremos"
+        Que = "dar por bueno el recubrimiento cuando falta un dato (inventar)"
+    },
+    @{
+        Nombre = "validar-agua-arriba"
+        Archivo = "crates/redes-core/src/validar.rs"
+        Patron = 'Some\(\(h, en\)\) if h < sep_v - 1e-9'
+        Reemplazo = 'Some((h, en)) if h < -1e9'
+        Destino = "validar"
+        Prueba = "separacion_agua_alcantarillado"
+        Que = "ignorar la separacion vertical entre agua y alcantarillado"
     }
 )
 
@@ -81,7 +108,11 @@ foreach ($m in $mutaciones) {
 
     try {
         Set-Content -Path $m.Archivo -Value $mutado -NoNewline
-        $salida = (& cargo test -p redes-core $m.Prueba 2>&1 | Out-String)
+        # Con `Destino` se corre solo ese binario de pruebas (tests/<Destino>.rs): si no, los
+        # binarios anteriores imprimen "test result: ok. 0 passed" y la mutacion pareceria viva.
+        $destino = @()
+        if ($m.Destino) { $destino = @("--test", $m.Destino) }
+        $salida = (& cargo test -p redes-core @destino $m.Prueba 2>&1 | Out-String)
         if ($salida -match "test result: ok") {
             Write-Host "   SOBREVIVIO: la suite pasa con el codigo roto ($($m.Prueba))" -ForegroundColor Red
             $sobrevivieron += $m.Nombre

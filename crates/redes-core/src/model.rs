@@ -375,6 +375,10 @@ pub struct Project {
     /// sin inventar tramos. Vacío en los `.redes` anteriores.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub enlaces: Vec<Enlace>,
+    /// Umbrales propios de `redes validar` (F13-01). `None`: los de referencia
+    /// ([`crate::validar::ReglasValidacion::default`]). Ausente en los `.redes` anteriores.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reglas_validacion: Option<crate::validar::ReglasValidacion>,
     pub(crate) next_slot: u32,
     #[serde(default)]
     pub journal: Vec<JournalEntry>,
@@ -408,6 +412,7 @@ impl Project {
             nodes: Vec::new(),
             links: Vec::new(),
             enlaces: Vec::new(),
+            reglas_validacion: None,
             next_slot: 1,
             journal: Vec::new(),
             biblioteca: None,

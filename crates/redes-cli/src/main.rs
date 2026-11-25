@@ -6,6 +6,7 @@
 mod diff;
 mod perfil;
 mod svg;
+mod validar;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -117,6 +118,8 @@ enum Cmd {
         #[arg(long, default_value_t = 760.0)]
         alto: f32,
     },
+    /// Validación geométrica de la red importada: informe de hallazgos (no es hidráulica ni norma).
+    Validar(validar::ValidarArgs),
 }
 
 #[derive(Subcommand)]
@@ -667,6 +670,7 @@ fn run(cli: Cli, t0: Instant) -> i32 {
         Cmd::Exportar { cmd } => exportar(&p, cmd, dry),
         Cmd::Biblioteca { cmd } => biblioteca(&cmd),
         Cmd::Perfil(a) => perfil::ejecutar(&p, &a, dry),
+        Cmd::Validar(args) => validar::ejecutar(&mut p, &path, &args, dry),
         Cmd::Vista {
             salida,
             azimut,
@@ -1059,6 +1063,7 @@ fn command_id(c: &Cmd) -> &'static str {
         Cmd::Cantidades { .. } => "cantidades",
         Cmd::Perfil(_) => "perfil",
         Cmd::Vista { .. } => "vista",
+        Cmd::Validar(_) => "validar",
         Cmd::Biblioteca { cmd } => match cmd {
             BibliotecaCmd::Revisar { .. } => "biblioteca.revisar",
             BibliotecaCmd::Importar { .. } => "biblioteca.importar",
@@ -1178,6 +1183,7 @@ fn about(c: &clap::Command) -> String {
 
 const CODIGOS: &[(&str, &str, i32)] = &[
     ("E_ARG_MISSING", "falta un argumento requerido", 2),
+    ("E_ARG_INVALID", "valor de argumento no admitido", 2),
     (
         "E_STATE_CRS_DISTINTO",
         "las dos entregas usan CRS distinto: no se comparan",

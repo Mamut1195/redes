@@ -220,6 +220,57 @@ y `por_familia`) y el detalle en `data.altas`, `data.bajas` y `data.modificados[
 (`campo`, `antes`, `despues`, `clase`), en orden determinista (nodos antes que tramos, por código).
 `--salida` escribe un CSV con BOM y `;`, una fila por cambio, alta o baja.
 
+### 5.3.1 Validar la geometría (F13-01)
+
+```powershell
+redes validar                                     # todas las reglas, umbrales del proyecto o de referencia
+redes validar --solo pendiente,recubrimiento      # solo esas reglas
+redes validar --reglas umbrales.json              # umbrales propios (los que falten: proyecto → referencia)
+redes validar --reglas umbrales.json --guardar    # y los deja en el proyecto (--dry-run no guarda)
+```
+
+Son las comprobaciones que el revisor haría a mano sobre los **datos importados**: no calcula
+hidráulica ni verifica la norma. Es un informe: sale `ok:true` aunque haya hallazgos; solo falla
+con una regla desconocida en `--solo` (`E_ARG_INVALID`, código 2) o un archivo de reglas ilegible,
+con un campo que no existe (`E_FMT_CAMPO`) o con un umbral sin sentido (`E_FMT_PARSE`).
+
+| Regla (`--solo`) | Qué mide | Umbral por defecto |
+|---|---|---|
+| `contrapendiente` | tramo de gravedad cuya solera sube en el sentido declarado (grave) | 0 |
+| `pendiente` | (solera inicio − solera fin) / longitud en planta, por sistema | sanitario 0,5–15 %; pluvial y canal 0,3–15 %; combinado 0,3–15 % |
+| `salto_pozo` | solera de llegada − solera del pozo, si el subtipo no es de caída (los que exigen `altura_caida`) | 0,75 m |
+| `recubrimiento` | rasante − (solera + DI + espesor) en cada vértice; rasante = terreno del nodo en los extremos o el TIN | alcantarillado 1,0 m; agua 0,8 m |
+| `profundidad_pozo` | tapa (o terreno si no hay tapa) − solera | 5,0 m |
+| `separacion` | agua potable a menos de la horizontal de un colector: se exige el agua por encima con la vertical mínima (fondo exterior del agua − clave exterior del colector); agua por debajo = grave | 3,0 m y 0,30 m |
+| `dn_aguas_abajo` | DN de salida de un nodo menor que el de una llegada en gravedad | — |
+| `tramo_huerfano` | tramo con un extremo inexistente o borrado (grave) | — |
+| `nodo_aislado` | nodo de red sin tramos ni enlaces | — |
+| `longitud` | longitud declarada (`attrs.longitud` o `datos.longitud`) contra la medida en planta o 3D (la más próxima) | máx(0,5 m; 1 %) |
+
+**Los umbrales por defecto son una referencia típica, no una norma: ajústelos a la suya.** El
+archivo de `--reglas` usa las claves de `data.umbrales` de la respuesta (p. ej.
+`{"profundidad_max_pozo_m": 6.0, "pendiente_sanitario": {"min": 0.004, "max": 0.12}}`); con
+`--guardar` se guardan en el campo `reglas_validacion` del proyecto (los `.redes` anteriores, sin
+él, abren con los de referencia).
+
+**Nunca un valor supuesto.** Si falta un dato para evaluar una regla en un objeto, el hallazgo es
+`no_evaluable` con `falta` (p. ej. `espesor_pared`, `cota_solera`, `rasante (terreno del nodo o
+TIN)`). El DN no se usa como diámetro interior ni se pone un espesor típico. Única excepción, la
+**cota segura**: si aun sin contar lo que falta la regla ya se incumple (el recubrimiento sobre la
+solera ya es menor que el mínimo), el incumplimiento es cierto y el mensaje dice qué no se contó.
+
+Cada hallazgo trae `regla`, `severidad` (`grave`, `aviso`, `no_evaluable`), `objetos` (códigos; el
+primero es el principal), `medido`, `umbral`, `unidad`, `mensaje` y `ubicacion` `[E, N]`; `resumen`
+da por regla los `evaluados`, `incumplen` y `no_evaluables`. La separación busca los pares cercanos
+con una rejilla (no compara todos los tramos entre sí).
+
+En la app, el panel izquierdo tiene **Validación → Validar**: muestra el recuento y la lista de
+hallazgos (✕ grave, ▲ aviso, ? sin dato); un clic selecciona el objeto y lleva la cámara a la
+ubicación. La lista es la de la última pulsación: tras editar, vuelva a validar. Captura:
+`cargo run -p redes-app -- --snap docs\img\validacion.png --scene validar`.
+
+![Panel Validación sobre la demo La Esperanza](img/validacion.png)
+
 ### 5.4 Grabar una demo (o una prueba de interfaz)
 
 No hace falta Playwright: la app se graba a sí misma. Un guion de eventos y la bandera `--video`:

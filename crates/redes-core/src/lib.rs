@@ -36,6 +36,7 @@ pub mod perfil;
 pub mod project_io;
 pub mod terrain;
 pub mod topology;
+pub mod validar;
 pub mod view;
 
 /// Versión del motor (la misma del crate).

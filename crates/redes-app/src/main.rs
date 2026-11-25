@@ -8,6 +8,7 @@
 mod gpu3d;
 mod modelos;
 mod perfil_panel;
+mod validacion;
 
 use std::sync::{Arc, Mutex};
 
@@ -133,6 +134,8 @@ struct State {
     aviso_modelos: Option<String>,
     /// Perfil longitudinal abierto desde el inspector de un tramo (F13-02).
     perfil: Option<redes_core::perfil::Perfil>,
+    /// Última validación geométrica (F13-01).
+    validacion: validacion::Panel,
 }
 
 impl State {
@@ -175,6 +178,7 @@ impl State {
             bib: None,
             aviso_modelos: None,
             perfil: None,
+            validacion: Default::default(),
         };
         // Modo rayos X por línea de comandos (útil para capturas y para los agentes).
         if rune::extra_args().iter().any(|a| a == "--rayos-x") {
@@ -963,6 +967,7 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
             s.rebuild();
         }));
     }
+    left = left.child(el().h(10.0)).child(validacion::seccion(s));
 
     // --- panel derecho: inspector ---
     let mut right = col()
@@ -1653,6 +1658,7 @@ fn main() {
                     s.rebuild();
                 }) as fn(&mut State),
             ),
+            ("validar", validacion::escena as fn(&mut State)),
         ],
         ..AppSpec::new("Redes — visor 3D", (1280.0, 800.0), State::new, view)
     };
