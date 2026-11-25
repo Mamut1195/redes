@@ -105,6 +105,7 @@ pub fn project() -> Project {
                 nota: None,
                 modelo: None,
                 deleted: false,
+                sin_dato: Vec::new(),
             })
             .unwrap();
         trunk.push(id);
@@ -161,6 +162,7 @@ pub fn project() -> Project {
             cota_solera_inicio: None,
             cota_solera_fin: None,
             deleted: false,
+            sin_dato: Vec::new(),
         })
         .ok();
         let _ = (ac, bc);
@@ -194,6 +196,7 @@ pub fn project() -> Project {
                 nota: None,
                 modelo: None,
                 deleted: false,
+                sin_dato: Vec::new(),
             })
             .unwrap();
         p.add_link(Link {
@@ -212,6 +215,7 @@ pub fn project() -> Project {
             cota_solera_inicio: None,
             cota_solera_fin: None,
             deleted: false,
+            sin_dato: Vec::new(),
         })
         .ok();
     }
@@ -246,6 +250,7 @@ pub fn project() -> Project {
             nota: None,
             modelo: None,
             deleted: false,
+            sin_dato: Vec::new(),
         })
         .unwrap();
     p.add_link(Link {
@@ -264,6 +269,7 @@ pub fn project() -> Project {
         cota_solera_inicio: None,
         cota_solera_fin: None,
         deleted: false,
+        sin_dato: Vec::new(),
     })
     .ok();
 
@@ -294,6 +300,7 @@ pub fn project() -> Project {
             nota: None,
             modelo: None,
             deleted: false,
+            sin_dato: Vec::new(),
         })
         .unwrap();
 
@@ -322,6 +329,7 @@ pub fn project() -> Project {
                 nota: None,
                 modelo: None,
                 deleted: false,
+                sin_dato: Vec::new(),
             })
             .unwrap();
         let (ax, ay, az) = {
@@ -351,6 +359,7 @@ pub fn project() -> Project {
             cota_solera_inicio: None,
             cota_solera_fin: None,
             deleted: false,
+            sin_dato: Vec::new(),
         })
         .ok();
         prev = id;
@@ -379,6 +388,7 @@ pub fn project() -> Project {
         nota: None,
         modelo: None,
         deleted: false,
+        sin_dato: Vec::new(),
     })
     .ok();
 
@@ -400,6 +410,7 @@ pub fn project() -> Project {
         nota: None,
         modelo: None,
         deleted: false,
+        sin_dato: Vec::new(),
     })
     .ok();
 
@@ -491,6 +502,7 @@ pub fn plantilla() -> Project {
                 nota: None,
                 modelo: None,
                 deleted: false,
+                sin_dato: Vec::new(),
             })
             .expect("pozo de plantilla");
         ids.push((
@@ -531,6 +543,7 @@ pub fn plantilla() -> Project {
             cota_solera_inicio: None,
             cota_solera_fin: None,
             deleted: false,
+            sin_dato: Vec::new(),
         })
         .expect("colector de plantilla");
     }

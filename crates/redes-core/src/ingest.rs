@@ -32,6 +32,9 @@ pub struct ImportReport {
     /// Objetos que entraron con otra clave porque la suya estaba retirada (docs/20 §4.2).
     #[serde(default)]
     pub renombrados: Vec<String>,
+    /// Objetos que entraron con algún dato ausente (F12-03): se muestran con `—`, no se rellenan.
+    #[serde(default)]
+    pub avisos: Vec<String>,
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -78,10 +81,14 @@ pub enum PlanObjeto {
         subtipo: String,
         e: f64,
         n: f64,
+        /// Cota de solera.
         #[serde(default)]
         cota: Option<f64>,
         #[serde(default)]
         cota_terreno: Option<f64>,
+        /// Cota de tapa. Si falta, queda ausente: no se copia el terreno (F12-03).
+        #[serde(default)]
+        cota_tapa: Option<f64>,
         #[serde(default)]
         diametro: Option<f64>,
         #[serde(default)]
@@ -155,16 +162,53 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
             n,
             cota,
             cota_terreno,
+            cota_tapa,
             diametro,
             attrs,
             datos,
         } = o
         {
-            let zt = cota_terreno
-                .or(*cota)
-                .or_else(|| p.terrain.as_ref().and_then(|t| t.z_at(P2::new(*e, *n))))
-                .unwrap_or(0.0);
-            let zc = cota.unwrap_or(zt - 1.5);
+            // F12-03: nada se rellena. La cota de terreno puede salir del TIN que trae el mismo
+            // plan (es un dato del origen, y se avisa); la solera y la tapa, solo del plan.
+            let del_tin = cota_terreno
+                .is_none()
+                .then(|| p.terrain.as_ref().and_then(|t| t.z_at(P2::new(*e, *n))))
+                .flatten();
+            let zt = cota_terreno.or(del_tin);
+            let (zs, zr) = (*cota, *cota_tapa);
+            let Some(dibujo) = zr.or(zt).or(zs) else {
+                rep.descartados.push(format!(
+                    "nodo {codigo}: sin ninguna cota (solera, tapa ni terreno, y sin TIN en su planta): no se puede ubicar en altura"
+                ));
+                continue;
+            };
+            let mut sin_dato = Vec::new();
+            for (falta, clave) in [
+                (zt.is_none(), crate::model::COTA_TERRENO),
+                (zr.is_none(), crate::model::COTA_TAPA),
+                (zs.is_none(), crate::model::COTA_SOLERA),
+            ] {
+                if falta {
+                    sin_dato.push(clave.to_string());
+                }
+            }
+            if del_tin.is_some() {
+                rep.avisos.push(format!(
+                    "nodo {codigo}: cota_terreno tomada del TIN del plan"
+                ));
+            }
+            if !sin_dato.is_empty() {
+                let plano = zs.is_none() || (zt.is_none() && zr.is_none());
+                rep.avisos.push(format!(
+                    "nodo {codigo}: sin {} (se muestra «—»{})",
+                    sin_dato.join(", "),
+                    if plano {
+                        "; se dibuja plano, sin altura"
+                    } else {
+                        ""
+                    }
+                ));
+            }
             let mut a = attrs.clone();
             if let Some(d) = diametro {
                 a.insert("diametro_interior".to_string(), Value::Num(*d));
@@ -184,15 +228,18 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
                 },
                 code: code.clone(),
                 pos: P2::new(*e, *n),
-                z_terrain: zt,
-                z_rim: zt,
-                z_invert: zc,
+                // Lo ausente guarda solo un valor de dibujo (la cota de arriba que sí hay, o la
+                // solera): la pieza queda plana y `sin_dato` impide mostrarlo como dato.
+                z_terrain: zt.unwrap_or(dibujo),
+                z_rim: zr.unwrap_or(dibujo),
+                z_invert: zs.unwrap_or(dibujo),
                 attrs: a,
                 datos: to_datos(datos),
                 estado: EstadoObjeto::Pendiente,
                 nota: None,
                 modelo: None,
                 deleted: false,
+                sin_dato,
             };
             // Clave retirada: se traduce a su destino y se anota (nunca en silencio).
             if let Some((nf, nt)) = crate::families_extra::alias(&node.family, &node.ty) {
@@ -233,15 +280,32 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
                 continue;
             };
             let (a, b) = (p.node(from).unwrap(), p.node(to).unwrap());
+            let mut sin_dato = Vec::new();
             let path = if vertices.len() >= 2 {
                 vertices.iter().map(|v| P3::new(v[0], v[1], v[2])).collect()
             } else {
-                // La solera declarada del tramo manda sobre la del pozo (F12-02).
+                // La solera declarada del tramo manda sobre la del pozo (F12-02). Si no hay
+                // ninguna de las dos, el trazado va a la cota de dibujo del pozo y se marca.
+                let z0 = cota_solera_inicio.or(a.cota_solera());
+                let z1 = cota_solera_fin.or(b.cota_solera());
+                if z0.is_none() || z1.is_none() {
+                    sin_dato.push(crate::model::COTA_SOLERA.to_string());
+                }
                 vec![
-                    P3::new(a.pos.x, a.pos.y, cota_solera_inicio.unwrap_or(a.z_invert)),
-                    P3::new(b.pos.x, b.pos.y, cota_solera_fin.unwrap_or(b.z_invert)),
+                    P3::new(a.pos.x, a.pos.y, z0.unwrap_or(a.z_invert)),
+                    P3::new(b.pos.x, b.pos.y, z1.unwrap_or(b.z_invert)),
                 ]
             };
+            let dn = diametro_mm.filter(|d| *d > 0);
+            if dn.is_none() {
+                sin_dato.push(crate::model::DIAMETRO_NOMINAL.to_string());
+            }
+            if !sin_dato.is_empty() {
+                rep.avisos.push(format!(
+                    "arco {codigo}: sin {} (se muestra «—» y se dibuja como línea sin dato)",
+                    sin_dato.join(", ")
+                ));
+            }
             let code = if codigo.is_empty() {
                 p.next_code(familia)
             } else {
@@ -259,7 +323,8 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
                 from,
                 to,
                 path,
-                d_mm: diametro_mm.unwrap_or(200),
+                // Sin DN declarado queda 0 («sin dato»), no 200 (F12-03).
+                d_mm: dn.unwrap_or(0),
                 attrs: attrs.clone(),
                 datos: to_datos(datos),
                 estado: EstadoObjeto::Pendiente,
@@ -267,6 +332,7 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
                 cota_solera_inicio: *cota_solera_inicio,
                 cota_solera_fin: *cota_solera_fin,
                 deleted: false,
+                sin_dato,
             };
             match p.add_link(link) {
                 Ok(_) => rep.arcos += 1,
@@ -465,24 +531,43 @@ fn importar_de_capa_info(
         let x = campos[5].parse::<f64>().ok();
         let y = campos[6].parse::<f64>().ok();
         let (Some(x), Some(y)) = (x, y) else { continue };
-        let z_rim = campos[7].parse::<f64>().unwrap_or(0.0);
-        let z_inv = campos[8].parse::<f64>().unwrap_or(z_rim - 1.0);
-        let z_ter = campos[9].parse::<f64>().unwrap_or(z_rim);
+        // Una cota vacía o ilegible queda ausente (F12-03): ni 0 ni «tapa − 1».
+        let cota = |s: &str| s.trim().parse::<f64>().ok().filter(|v| v.is_finite());
+        let (zr, zs, zt) = (cota(campos[7]), cota(campos[8]), cota(campos[9]));
+        let Some(dibujo) = zr.or(zt).or(zs) else {
+            rep.descartados
+                .push(format!("nodo {code}: sin ninguna cota legible"));
+            continue;
+        };
+        let sin_dato: Vec<String> = [
+            (zt.is_none(), crate::model::COTA_TERRENO),
+            (zr.is_none(), crate::model::COTA_TAPA),
+            (zs.is_none(), crate::model::COTA_SOLERA),
+        ]
+        .iter()
+        .filter(|(falta, _)| *falta)
+        .map(|(_, k)| k.to_string())
+        .collect();
+        if !sin_dato.is_empty() {
+            rep.avisos
+                .push(format!("nodo {code}: sin {}", sin_dato.join(", ")));
+        }
         let node = Node {
             id: ElementId::new(0, 0),
             family: familia.to_string(),
             ty: subtipo.to_string(),
             code: code.clone(),
             pos: P2::new(x, y),
-            z_terrain: z_ter,
-            z_rim,
-            z_invert: z_inv,
+            z_terrain: zt.unwrap_or(dibujo),
+            z_rim: zr.unwrap_or(dibujo),
+            z_invert: zs.unwrap_or(dibujo),
             attrs: attrs.get(&code).cloned().unwrap_or_default(),
             datos: datos.get(&code).cloned().unwrap_or_default(),
             estado: EstadoObjeto::Pendiente,
             nota: None,
             modelo: None,
             deleted: false,
+            sin_dato,
         };
         match p.add_node(node) {
             Ok(id) => {
@@ -504,7 +589,8 @@ fn importar_de_capa_info(
         }
         let (familia, subtipo) = (campos[1], campos[2]);
         let code = campos[3].to_string();
-        let dn = campos[5].parse::<u32>().unwrap_or(200);
+        // DN vacío, ilegible o 0: ausente, no 200 (F12-03).
+        let dn = campos[5].trim().parse::<u32>().ok().filter(|d| *d > 0);
         let trazado: Vec<P3> = campos[6]
             .split(';')
             .filter_map(|v| {
@@ -538,7 +624,7 @@ fn importar_de_capa_info(
             from: desde,
             to: hasta,
             path: trazado,
-            d_mm: dn,
+            d_mm: dn.unwrap_or(0),
             attrs: attrs.get(&code).cloned().unwrap_or_default(),
             datos: datos.get(&code).cloned().unwrap_or_default(),
             estado: EstadoObjeto::Pendiente,
@@ -546,6 +632,15 @@ fn importar_de_capa_info(
             cota_solera_inicio: None,
             cota_solera_fin: None,
             deleted: false,
+            sin_dato: if dn.is_none() {
+                rep.avisos.push(format!(
+                    "arco {code}: sin {}",
+                    crate::model::DIAMETRO_NOMINAL
+                ));
+                vec![crate::model::DIAMETRO_NOMINAL.to_string()]
+            } else {
+                Vec::new()
+            },
         };
         match p.add_link(link) {
             Ok(_) => arcos_creados += 1,
@@ -722,6 +817,38 @@ mod tests {
         assert_eq!(rep.puntos_terreno, 3);
         assert!(p.links[0].datos.contains_key("caudal"));
         let _ = std::fs::remove_file(&path);
+    }
+
+    /// En la vuelta del DXF, una cota o un DN vacíos quedan ausentes: ni 0, ni «tapa − 1», ni 200.
+    #[test]
+    fn la_vuelta_del_dxf_no_rellena_cotas_ni_dn() {
+        let texto = |s: &str| format!("0\nTEXT\n8\nREDES_INFO\n10\n0\n20\n0\n30\n0\n1\n{s}\n");
+        let dxf = format!(
+            "0\nSECTION\n2\nENTITIES\n{}{}{}{}0\nENDSEC\n0\nEOF\n",
+            texto("REDES|1|N|saneamiento.pozo|inspeccion|PZ-001|pendiente|0|0||98.0|"),
+            texto("REDES|1|N|saneamiento.pozo|inspeccion|PZ-002|pendiente|10|0|||100.0"),
+            texto("REDES|1|N|saneamiento.pozo|inspeccion|PZ-003|pendiente|50|50|||"),
+            texto(
+                "REDES|1|L|saneamiento.tuberia|colector_sanitario|CL-001|pendiente||0,0,98;10,0,97.9"
+            ),
+        );
+        let ruta = std::env::temp_dir().join(format!("redes-vuelta-{}.dxf", std::process::id()));
+        std::fs::write(&ruta, dxf).unwrap();
+        let mut p = Project::new("x", "EPSG:32717");
+        let rep = import_dxf(&mut p, &ruta, 0.0).expect("importa");
+        let _ = std::fs::remove_file(&ruta);
+        let pz = p.node_by_code("PZ-001").unwrap();
+        assert_eq!(pz.cota_solera(), Some(98.0));
+        assert_eq!(pz.cota_tapa(), None);
+        assert_eq!(pz.cota_terreno(), None);
+        assert_eq!(
+            p.node_by_code("PZ-002").unwrap().cota_terreno(),
+            Some(100.0)
+        );
+        assert!(p.node_by_code("PZ-003").is_none(), "sin ninguna cota");
+        assert!(rep.descartados.iter().any(|d| d.contains("PZ-003")));
+        assert_eq!(p.link_by_code("CL-001").unwrap().dn(), None);
+        assert!(!rep.avisos.is_empty());
     }
 
     #[test]

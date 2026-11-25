@@ -535,6 +535,8 @@ impl State {
             .find(|n| n.code == code && !n.deleted)
         {
             match clave {
+                // Sin altura con datos no hay solera que mover: se movería un valor de dibujo.
+                "profundidad" if n.sin_altura() => {}
                 "profundidad" => {
                     // Más profundo = solera más baja; los límites se ordenan para no invertir el clamp.
                     let (bajo, alto) = (n.z_terrain - 12.0, n.z_rim - 0.6);
@@ -693,6 +695,12 @@ fn chip(label: &str, on: bool) -> El {
                 .font(type_::LABEL)
                 .color(if on { INK } else { DIM }),
         )
+}
+
+/// Un valor en metros, o `—` si el origen no lo trajo (F12-03).
+fn metros(v: Option<f64>, decimales: usize) -> String {
+    v.map(|x| format!("{x:.decimales$} m"))
+        .unwrap_or_else(|| redes_core::model::SIN_DATO.to_string())
 }
 
 fn kv(k: &str, v: String) -> El {
@@ -1005,9 +1013,10 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
             right = right.child(section("Geometría"));
             right = right.child(kv("E", format!("{:.3}", n.pos.x)));
             right = right.child(kv("N", format!("{:.3}", n.pos.y)));
-            right = right.child(kv("cota tapa", format!("{:.3} m", n.z_rim)));
-            right = right.child(kv("cota clave", format!("{:.3} m", n.z_invert)));
-            right = right.child(kv("altura", format!("{:.2} m", n.altura())));
+            right = right.child(kv("cota terreno", metros(n.cota_terreno(), 3)));
+            right = right.child(kv("cota tapa", metros(n.cota_tapa(), 3)));
+            right = right.child(kv("cota solera", metros(n.cota_solera(), 3)));
+            right = right.child(kv("altura", metros(n.altura_dato(), 2)));
             right = right.child(kv("diámetro", format!("{:.2} m", n.diametro())));
             // Modelos de la biblioteca para esta familia: se eligen aquí, sin tocar la CLI.
             if let Some((_, bib)) = s.bib.clone() {
@@ -1139,12 +1148,16 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
             }
             right = right.child(el().h(6.0));
             right = right.child(section("Geometría"));
-            right = right.child(kv("DN", format!("{} mm", l.d_mm)));
+            right = right.child(kv(
+                "DN",
+                l.dn()
+                    .map(|d| format!("{d} mm"))
+                    .unwrap_or_else(|| redes_core::model::SIN_DATO.to_string()),
+            ));
             right = right.child(kv("longitud", format!("{:.2} m", l.length_2d())));
-            if let (Some(a), Some(b)) = (l.path.first(), l.path.last()) {
-                right = right.child(kv("cota inicial", format!("{:.3} m", a.z)));
-                right = right.child(kv("cota final", format!("{:.3} m", b.z)));
-            }
+            let cotas = l.cotas_trazado();
+            right = right.child(kv("cota inicial", metros(cotas.map(|c| c.0), 3)));
+            right = right.child(kv("cota final", metros(cotas.map(|c| c.1), 3)));
             if !l.datos.is_empty() {
                 right = right.child(el().h(6.0));
                 right = right.child(section("Datos importados (no calculados)"));

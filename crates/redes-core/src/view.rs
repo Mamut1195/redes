@@ -688,19 +688,28 @@ pub fn build_opts(
             let depth = ((cam.depth(a) + cam.depth(b)) * 0.5) as f32;
             let r_px = (d_ext * 0.5 * cam.focal() / depth.max(1.0) as f64) as f32;
 
-            if r_px < 2.2 {
+            // Sin DN o sin cota (F12-03): línea gris fina, nunca un tubo de diámetro inventado.
+            let sin_dato = l.dibujo_sin_dato();
+            if r_px < 2.2 || sin_dato {
                 // A lo lejos, la tubería es una línea: mismo color, mucho menos coste.
                 let width = if sel {
                     4.5
+                } else if sin_dato {
+                    1.4
                 } else {
                     (r_px * 2.0).clamp(1.2, 6.0)
                 };
                 let fog = fog(depth, cam.distance as f32);
+                let [cr, cg, cb] = if sin_dato {
+                    COLOR_SIN_DATO
+                } else {
+                    [lr, lg, lb]
+                };
                 net.push(Prim::Line {
                     a: sa,
                     b: sb,
                     w: width,
-                    color: [lr, lg, lb, fog],
+                    color: [cr, cg, cb, fog],
                     depth,
                 });
                 line_count += 1;
@@ -1200,9 +1209,30 @@ pub fn pieza_para_exportar(n: &crate::model::Node) -> crate::parts::Mesh {
     pieza_local(n, 2)
 }
 
+/// Gris de lo que se dibuja sin dato: no es un material, es un aviso.
+pub const COLOR_SIN_DATO: [f32; 3] = [0.56, 0.56, 0.58];
+
+/// Símbolo plano de un nodo sin altura con datos (le falta la solera, o la tapa y el terreno):
+/// un disco gris de 5 cm a la cota que sí se conoce. No sugiere una profundidad (F12-03).
+fn simbolo_sin_dato(n: &crate::model::Node) -> crate::parts::Mesh {
+    let [r, g, b] = COLOR_SIN_DATO;
+    crate::parts::cilindro(
+        (n.diametro() * 0.5) as f32,
+        0.05,
+        20,
+        crate::parts::Material::new(r, g, b),
+    )
+}
+
 /// Construye las partes nombradas de una pieza (pozos y válvulas se despiezan; el resto es una).
 fn pieza_partes(n: &crate::model::Node, lod: u8) -> Vec<crate::parts::Parte> {
     use crate::parts as pt;
+    if n.sin_altura() {
+        return vec![pt::Parte {
+            nombre: "sin_dato",
+            mesh: simbolo_sin_dato(n),
+        }];
+    }
     // Cadena de agua cruda (docs/20): bocatoma, cámaras, tratamiento y salida del alcantarillado.
     if let Some(partes) = crate::parts_cadena::piezas(n, lod) {
         return partes;
@@ -1278,6 +1308,9 @@ fn pieza_partes(n: &crate::model::Node, lod: u8) -> Vec<crate::parts::Parte> {
 /// El origen local es el centro de la base (x=0, y=0, z=0 en la clave del objeto).
 fn pieza_local(n: &crate::model::Node, lod: u8) -> crate::parts::Mesh {
     use crate::parts as pt;
+    if n.sin_altura() {
+        return simbolo_sin_dato(n);
+    }
     let dn = n.num("diametro_nominal").unwrap_or(200.0) as u32;
     match n.family.as_str() {
         "saneamiento.pozo" => {
@@ -1497,6 +1530,7 @@ mod tests {
                 nota: None,
                 modelo: None,
                 deleted: false,
+                sin_dato: Vec::new(),
             };
             let malla = pieza_local(&nodo, 2);
             let dibuja = if malla.is_empty() {
@@ -1690,6 +1724,7 @@ mod tests {
                     nota: None,
                     modelo: None,
                     deleted: false,
+                    sin_dato: Vec::new(),
                 })
                 .is_ok();
             if !ok {
@@ -1744,6 +1779,7 @@ mod tests {
                 nota: None,
                 modelo: None,
                 deleted: false,
+                sin_dato: Vec::new(),
             })
             .expect("nodo");
         }

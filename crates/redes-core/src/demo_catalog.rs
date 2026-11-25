@@ -83,6 +83,7 @@ pub fn catalogo() -> Project {
                 nota: None,
                 modelo: None,
                 deleted: false,
+                sin_dato: Vec::new(),
             })
             .unwrap();
         pozos.push(id);
@@ -112,6 +113,7 @@ pub fn catalogo() -> Project {
             cota_solera_inicio: None,
             cota_solera_fin: None,
             deleted: false,
+            sin_dato: Vec::new(),
         })
         .ok();
     }
@@ -185,6 +187,7 @@ pub fn catalogo() -> Project {
                 nota: None,
                 modelo: None,
                 deleted: false,
+                sin_dato: Vec::new(),
             })
             .unwrap();
         fila.push(id);
@@ -232,6 +235,7 @@ pub fn catalogo() -> Project {
             nota: None,
             modelo: None,
             deleted: false,
+            sin_dato: Vec::new(),
         })
         .ok();
     }
@@ -276,6 +280,7 @@ pub fn catalogo() -> Project {
             nota: None,
             modelo: None,
             deleted: false,
+            sin_dato: Vec::new(),
         })
         .ok();
     }
@@ -306,6 +311,7 @@ pub fn catalogo() -> Project {
                 nota: None,
                 modelo: None,
                 deleted: false,
+                sin_dato: Vec::new(),
             })
             .unwrap();
         cadena.push(id);
@@ -346,6 +352,7 @@ pub fn catalogo() -> Project {
             cota_solera_inicio: None,
             cota_solera_fin: None,
             deleted: false,
+            sin_dato: Vec::new(),
         })
         .ok();
     }
@@ -371,6 +378,7 @@ pub fn catalogo() -> Project {
         nota: None,
         modelo: None,
         deleted: false,
+        sin_dato: Vec::new(),
     })
     .ok();
 
@@ -397,6 +405,7 @@ pub fn catalogo() -> Project {
         nota: None,
         modelo: None,
         deleted: false,
+        sin_dato: Vec::new(),
     })
     .ok();
 
@@ -475,6 +484,7 @@ pub fn catalogo_completo() -> Project {
             nota: None,
             modelo: None,
             deleted: false,
+            sin_dato: Vec::new(),
         };
         let id = match p.add_node(nodo) {
             Ok(id) => id,
@@ -509,6 +519,7 @@ pub fn catalogo_completo() -> Project {
                 cota_solera_inicio: None,
                 cota_solera_fin: None,
                 deleted: false,
+                sin_dato: Vec::new(),
             };
             let _ = p.add_link(arco);
         }

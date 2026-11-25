@@ -107,13 +107,33 @@ fn un_terreno_con_una_fila_mala_avisa_y_sigue() {
 // a partir de los `.inp` de esta carpeta; `test_inp_to_plan.py` comprueba que siguen al día.
 
 fn importa_plan(nombre: &str) -> (Project, redes_core::ingest::ImportReport) {
+    importa_plan_descartando(nombre, &[])
+}
+
+/// Importa un plan de fixture y exige que se descarten exactamente esos nodos, por no traer
+/// ninguna cota (F12-03: antes entraban a cota 0).
+fn importa_plan_descartando(
+    nombre: &str,
+    sin_cota: &[&str],
+) -> (Project, redes_core::ingest::ImportReport) {
     let mut p = Project::new(nombre, "EPSG:32717");
     let rep = redes_core::ingest::import_plan(&mut p, &fixture(nombre)).expect("plan");
-    assert!(
-        rep.descartados.is_empty(),
+    assert_eq!(
+        rep.descartados.len(),
+        sin_cota.len(),
         "{nombre}: {:?}",
         rep.descartados
     );
+    for c in sin_cota {
+        assert!(
+            rep.descartados
+                .iter()
+                .any(|d| d.starts_with(&format!("nodo {c}:")) && d.contains("sin ninguna cota")),
+            "{nombre}: {c} {:?}",
+            rep.descartados
+        );
+        assert!(p.nodes.iter().all(|n| n.code != *c));
+    }
     assert!(
         rep.renombrados.is_empty(),
         "{nombre}: {:?}",
@@ -167,23 +187,22 @@ fn un_swmm_en_cfs_entra_en_metros() {
 
 #[test]
 fn un_epanet_en_lps_entra_sin_inventar_tanques() {
-    let (p, rep) = importa_plan("epanet_si_lps.plan.json");
-    assert_eq!((rep.nodos, rep.arcos), (11, 6));
+    // EPANET no da cota a la bomba ni a la captación: se descartan, no entran a cota 0.
+    let (p, rep) = importa_plan_descartando("epanet_si_lps.plan.json", &["B1", "CAPT"]);
+    assert_eq!((rep.nodos, rep.arcos), (9, 6));
     let tq = nodo(&p, "TQ1");
     assert_eq!(tq.num("cota_nivel_max"), Some(2533.2));
     assert_eq!(tq.num("volumen_util"), None, "EPANET no da volumen útil");
     assert_eq!(nodo(&p, "N2").family, "comun.accesorio");
     assert_eq!(nodo(&p, "PRV1").family, "agua.valvula");
     assert_eq!(nodo(&p, "PRV1").ty, "reduccion_presion");
-    assert_eq!(nodo(&p, "B1").family, "agua.bombeo");
-    assert_eq!(nodo(&p, "CAPT").family, "agua.captacion");
     assert_eq!(tramo(&p, "T1").path.len(), 4);
 }
 
 #[test]
 fn un_epanet_en_gpm_entra_en_milimetros_y_metros() {
-    let (p, rep) = importa_plan("epanet_us_gpm.plan.json");
-    assert_eq!((rep.nodos, rep.arcos), (9, 5));
+    let (p, rep) = importa_plan_descartando("epanet_us_gpm.plan.json", &["PU1"]);
+    assert_eq!((rep.nodos, rep.arcos), (8, 5));
     assert_eq!(tramo(&p, "102").d_mm, 203, "8 in");
     assert!((nodo(&p, "J20").z_invert - 690.0 * 0.3048).abs() < 1e-6);
     assert_eq!(
@@ -195,4 +214,203 @@ fn un_epanet_en_gpm_entra_en_milimetros_y_metros() {
         p.nodes.iter().all(|n| n.code != "LAKE"),
         "el RESERVOIR sin --reservorio se descarta en el script, no se convierte en terreno"
     );
+}
+
+// ---------------------------------------------------------------------------------------------
+// No inventar datos (F12-03): lo que el plan no trae queda ausente, se avisa y se ve como `—`.
+
+fn plan_en_memoria(
+    nombre: &str,
+    plan: serde_json::Value,
+) -> (Project, redes_core::ingest::ImportReport) {
+    let ruta = std::env::temp_dir().join(format!("redes-{nombre}-{}.json", std::process::id()));
+    std::fs::write(&ruta, plan.to_string()).unwrap();
+    let mut p = Project::new(nombre, "EPSG:32717");
+    let rep = redes_core::ingest::import_plan(&mut p, &ruta).expect("importa");
+    let _ = std::fs::remove_file(&ruta);
+    (p, rep)
+}
+
+fn plan_con(objetos: serde_json::Value, terreno: serde_json::Value) -> serde_json::Value {
+    serde_json::json!({
+        "schema": "redes.plan/1",
+        "proyecto": { "nombre": "x", "crs": "EPSG:32717" },
+        "terreno": terreno,
+        "objetos": objetos
+    })
+}
+
+#[test]
+fn un_pozo_solo_con_solera_no_recibe_terreno_ni_tapa() {
+    let (p, rep) = plan_en_memoria(
+        "solo-solera",
+        plan_con(
+            serde_json::json!([
+                { "tipo": "nodo", "codigo": "P1", "familia": "saneamiento.pozo", "e": 760000.0, "n": 9796000.0, "cota": 2498.5 }
+            ]),
+            serde_json::json!([]),
+        ),
+    );
+    let n = nodo(&p, "P1");
+    assert_eq!(n.cota_solera(), Some(2498.5));
+    assert_eq!(n.cota_terreno(), None, "antes: terreno = solera");
+    assert_eq!(n.cota_tapa(), None, "antes: tapa = terreno");
+    assert_eq!(n.altura_dato(), None);
+    assert!(n.sin_altura());
+    assert!(
+        rep.avisos
+            .iter()
+            .any(|a| a.contains("P1") && a.contains("cota_terreno")),
+        "{:?}",
+        rep.avisos
+    );
+    // Se dibuja un símbolo plano, no un pozo con profundidad.
+    let malla = redes_core::view::pieza_para_exportar(n);
+    let alto = malla
+        .tris
+        .iter()
+        .flat_map(|t| t.p.iter().map(|v| v[2]))
+        .fold(0.0f32, f32::max);
+    assert!(alto <= 0.051, "símbolo plano: {alto}");
+}
+
+#[test]
+fn un_pozo_solo_con_terreno_no_recibe_solera() {
+    let (p, rep) = plan_en_memoria(
+        "solo-terreno",
+        plan_con(
+            serde_json::json!([
+                { "tipo": "nodo", "codigo": "P1", "familia": "saneamiento.pozo", "e": 760000.0, "n": 9796000.0, "cota_terreno": 2500.0 }
+            ]),
+            serde_json::json!([]),
+        ),
+    );
+    let n = nodo(&p, "P1");
+    assert_eq!(n.cota_terreno(), Some(2500.0));
+    assert_eq!(n.cota_solera(), None, "antes: solera = terreno − 1,5");
+    assert_eq!(n.cota_tapa(), None);
+    assert!(n.sin_altura());
+    assert!(!rep.avisos.is_empty());
+}
+
+#[test]
+fn con_solera_y_terreno_la_tapa_sigue_ausente_pero_el_pozo_tiene_altura() {
+    let (p, _) = plan_en_memoria(
+        "sin-tapa",
+        plan_con(
+            serde_json::json!([
+                { "tipo": "nodo", "codigo": "P1", "familia": "saneamiento.pozo", "e": 760000.0, "n": 9796000.0, "cota": 2498.0, "cota_terreno": 2500.0 },
+                { "tipo": "nodo", "codigo": "P2", "familia": "saneamiento.pozo", "e": 760010.0, "n": 9796000.0, "cota": 2497.0, "cota_terreno": 2500.0, "cota_tapa": 2500.2 }
+            ]),
+            serde_json::json!([]),
+        ),
+    );
+    let p1 = nodo(&p, "P1");
+    assert_eq!(p1.cota_tapa(), None, "la tapa no se copia del terreno");
+    assert!(!p1.sin_altura());
+    assert_eq!(p1.altura_dato(), Some(2.0));
+    assert_eq!(nodo(&p, "P2").cota_tapa(), Some(2500.2));
+    let h = nodo(&p, "P2").altura_dato().unwrap();
+    assert!((h - 3.2).abs() < 1e-9, "tapa − solera: {h}");
+}
+
+#[test]
+fn un_nodo_sin_ninguna_cota_se_descarta_con_motivo() {
+    let mut p = Project::new("sin-cota", "EPSG:32717");
+    let ruta = std::env::temp_dir().join(format!("redes-sin-cota-{}.json", std::process::id()));
+    std::fs::write(
+        &ruta,
+        plan_con(
+            serde_json::json!([
+                { "tipo": "nodo", "codigo": "P1", "familia": "saneamiento.pozo", "e": 760000.0, "n": 9796000.0 }
+            ]),
+            serde_json::json!([]),
+        )
+        .to_string(),
+    )
+    .unwrap();
+    let rep = redes_core::ingest::import_plan(&mut p, &ruta).expect("importa");
+    let _ = std::fs::remove_file(&ruta);
+    assert_eq!(rep.nodos, 0, "antes entraba a cota 0");
+    assert!(
+        rep.descartados
+            .iter()
+            .any(|d| d.contains("P1") && d.contains("sin ninguna cota")),
+        "{:?}",
+        rep.descartados
+    );
+}
+
+#[test]
+fn la_cota_de_terreno_del_tin_del_plan_entra_con_aviso() {
+    let (p, rep) = plan_en_memoria(
+        "tin",
+        plan_con(
+            serde_json::json!([
+                { "tipo": "nodo", "codigo": "P1", "familia": "saneamiento.pozo", "e": 760010.0, "n": 9796010.0, "cota": 2498.0 }
+            ]),
+            serde_json::json!([
+                [760000.0, 9796000.0, 2500.0],
+                [760100.0, 9796000.0, 2500.0],
+                [760000.0, 9796100.0, 2500.0]
+            ]),
+        ),
+    );
+    assert!((nodo(&p, "P1").cota_terreno().unwrap() - 2500.0).abs() < 1e-6);
+    assert!(
+        rep.avisos.iter().any(|a| a.contains("TIN")),
+        "{:?}",
+        rep.avisos
+    );
+}
+
+#[test]
+fn un_tramo_sin_diametro_queda_sin_dn_y_se_dibuja_sin_dato() {
+    let (p, rep) = plan_en_memoria(
+        "sin-dn",
+        plan_con(
+            serde_json::json!([
+                { "tipo": "nodo", "codigo": "P1", "familia": "saneamiento.pozo", "e": 760000.0, "n": 9796000.0, "cota": 2498.5, "cota_terreno": 2500.0 },
+                { "tipo": "nodo", "codigo": "P2", "familia": "saneamiento.pozo", "e": 760050.0, "n": 9796000.0, "cota": 2498.2, "cota_terreno": 2500.0 },
+                { "tipo": "arco", "codigo": "C1", "familia": "saneamiento.tuberia", "desde": "P1", "hasta": "P2" },
+                { "tipo": "arco", "codigo": "C2", "familia": "saneamiento.tuberia", "desde": "P2", "hasta": "P1", "diametro_mm": 315 }
+            ]),
+            serde_json::json!([]),
+        ),
+    );
+    let c1 = tramo(&p, "C1");
+    assert_eq!(c1.dn(), None, "antes: DN 200");
+    assert_eq!(c1.d_mm, 0);
+    assert!(c1.dibujo_sin_dato());
+    assert!(
+        rep.avisos.iter().any(|a| a.contains("C1")),
+        "{:?}",
+        rep.avisos
+    );
+    assert_eq!(tramo(&p, "C2").dn(), Some(315));
+    assert!(!tramo(&p, "C2").dibujo_sin_dato());
+    // Cantidades: el tramo sin DN va en su grupo «DN —», no en «DN 200».
+    let filas = redes_core::cantidades::longitudes(&p);
+    assert!(filas.iter().any(|f| f.clave.contains("DN —")), "{filas:?}");
+    assert!(filas.iter().all(|f| !f.clave.contains("DN 200")));
+}
+
+#[test]
+fn un_tramo_entre_pozos_sin_solera_no_tiene_cotas_de_dato() {
+    let (p, _) = plan_en_memoria(
+        "tramo-sin-cota",
+        plan_con(
+            serde_json::json!([
+                { "tipo": "nodo", "codigo": "P1", "familia": "saneamiento.pozo", "e": 760000.0, "n": 9796000.0, "cota_terreno": 2500.0 },
+                { "tipo": "nodo", "codigo": "P2", "familia": "saneamiento.pozo", "e": 760050.0, "n": 9796000.0, "cota_terreno": 2499.0 },
+                { "tipo": "arco", "codigo": "C1", "familia": "saneamiento.tuberia", "desde": "P1", "hasta": "P2", "diametro_mm": 200 }
+            ]),
+            serde_json::json!([]),
+        ),
+    );
+    let c1 = tramo(&p, "C1");
+    assert_eq!(c1.cotas_trazado(), None);
+    assert!(c1.dibujo_sin_dato());
+    let filas = redes_core::cantidades::longitudes(&p);
+    assert!(filas.iter().all(|f| f.cantidad_3d.is_none()), "{filas:?}");
 }

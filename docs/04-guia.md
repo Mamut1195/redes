@@ -164,11 +164,20 @@ Excel los adapta un agente con la skill `skills/redes-ingesta`, que escribe un `
 `importar dxf` con un DXF que no exportó Redes devuelve `E_FMT_NOT_REDES` (y uno vacío o
 truncado, `E_FMT_PARSE`) sin tocar el proyecto.
 
-Cada importación devuelve cuántos entraron y **por qué** se descartó el resto:
+Cada importación devuelve cuántos entraron, **por qué** se descartó el resto y qué datos
+faltaban en lo que entró:
 
 ```json
-{ "formato": "dxf", "nodos": 24, "arcos": 20, "descartados": 0, "detalle_descartes": [] }
+{ "formato": "plan", "nodos": 24, "arcos": 20, "descartados": 0, "detalle_descartes": [],
+  "avisos": 1, "detalle_avisos": ["arco C7: sin diametro_nominal (se muestra «—» y se dibuja como línea sin dato)"] }
 ```
+
+**No se rellena nada (F12-03).** Lo que el plan no trae queda ausente: sin `cota_terreno` no se
+usa la solera, sin `cota` (solera) no se pone «terreno − 1,5», la tapa (`cota_tapa`) no se copia
+del terreno y sin `diametro_mm` no hay DN 200. El inspector y `objeto lista` muestran `—` (o
+`null`) y la vista dibuja «sin dato»: un disco gris plano para el nodo sin altura y una línea gris
+fina para el tramo sin DN o sin cota. La única cota que se completa es la de terreno desde el TIN
+del propio plan, y se avisa. Un nodo sin ninguna cota se descarta con motivo.
 
 ### 5.3 Revisar
 
@@ -271,8 +280,10 @@ Detalle completo del contrato y del procedimiento: `skills/redes-ingesta/SKILL.m
 | Todo apilado en un punto | El origen no traía coordenadas | Pasar `--coords` a la skill |
 | «E_TOPO_ORPHAN_LINK» | Un arco apunta a un nodo que no entró | Revisar `desde`/`hasta` en el plan |
 | «E_STATE_DUPLICATE_NAME» | Código repetido | Renombrar en el origen |
-| El pozo no tiene altura | Sólo llegó la clave, sin tapa | Añadir `cota_terreno` o el TIN |
+| El pozo sale como un disco gris plano | Falta la solera, o faltan a la vez tapa y terreno | Declarar `cota` (solera) y `cota_terreno`/`cota_tapa` en el plan, o el TIN |
+| El tramo sale como una línea gris fina | Le falta el DN o la cota de solera (ni la suya ni la de los pozos) | Declarar `diametro_mm` y `cota_solera_inicio/fin` |
 | El inspector muestra `—` | El origen no traía ese dato | Es correcto: no se inventa |
+| Un nodo aparece en `detalle_descartes` «sin ninguna cota» | No trae solera, tapa ni terreno, y no hay TIN en su planta | Darle al menos una cota en el plan |
 | La app va lenta al girar | Compilada en debug | `cargo build --release` y usar `--release` |
 | «E_FMT_NOT_REDES» al importar un DXF | El DXF no lo exportó Redes (no trae la capa `REDES_INFO`) | Adaptarlo con la skill de ingesta e `importar plan` |
 

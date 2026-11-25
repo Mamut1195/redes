@@ -1218,7 +1218,9 @@ fn importar(p: &mut Project, cmd: ImportarCmd, dry: bool) -> Envelope {
             "puntos_terreno": rep.puntos_terreno,
             "descartados": rep.descartados.len(),
             "detalle_descartes": rep.descartados,
-                    "renombrados": rep.renombrados,
+            "renombrados": rep.renombrados,
+            "avisos": rep.avisos.len(),
+            "detalle_avisos": rep.avisos,
             "objetos_totales": p.count(),
             "siguiente": "redes vista --salida vista.svg"
         })),
@@ -1269,7 +1271,7 @@ fn objeto(p: &mut Project, cmd: ObjetoCmd, dry: bool) -> Envelope {
                 items.push(json!({
                     "codigo": n.code, "familia": n.family, "subtipo": n.ty,
                     "estado": n.estado.key(), "e": round(n.pos.x, 3), "n": round(n.pos.y, 3),
-                    "cota_solera": round(n.z_invert, 3), "nota": n.nota
+                    "cota_solera": n.cota_solera().map(|z| round(z, 3)), "nota": n.nota
                 }));
             }
             for l in p.links.iter().filter(|l| !l.deleted) {
@@ -1285,7 +1287,7 @@ fn objeto(p: &mut Project, cmd: ObjetoCmd, dry: bool) -> Envelope {
                 }
                 items.push(json!({
                     "codigo": l.code, "familia": l.family, "subtipo": l.ty,
-                    "estado": l.estado.key(), "diametro_mm": l.d_mm, "nota": l.nota,
+                    "estado": l.estado.key(), "diametro_mm": l.dn(), "nota": l.nota,
                     "longitud_m": round(l.length_2d(), 2)
                 }));
             }

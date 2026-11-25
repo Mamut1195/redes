@@ -50,6 +50,7 @@ fn nodo(
         nota: None,
         modelo: None,
         deleted: false,
+        sin_dato: Vec::new(),
     })
     .unwrap_or_else(|e| panic!("{code}: {e}"))
 }
@@ -93,6 +94,7 @@ fn tuberia(
         cota_solera_inicio: None,
         cota_solera_fin: None,
         deleted: false,
+        sin_dato: Vec::new(),
     })
     .unwrap_or_else(|e| panic!("{code}: {e}"))
 }

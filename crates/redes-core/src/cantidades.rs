@@ -84,27 +84,35 @@ pub fn por_familia(p: &Project) -> Vec<Fila> {
 
 /// Longitud de tubería agrupada por familia, diámetro y material.
 pub fn longitudes(p: &Project) -> Vec<Fila> {
-    let mut acumula: BTreeMap<(String, u32, String), (f64, f64)> = BTreeMap::new();
+    // Sin DN el tramo va en su propio grupo «DN —»; sin cotas no hay longitud inclinada (F12-03).
+    let mut acumula: BTreeMap<(String, Option<u32>, String), (f64, Option<f64>)> = BTreeMap::new();
     for l in p.links.iter().filter(|l| !l.deleted) {
         let material = l
             .get("material")
             .and_then(|v| v.as_str())
             .unwrap_or("sin_material")
             .to_string();
-        let clave = (l.family.clone(), l.d_mm, material);
-        let e = acumula.entry(clave).or_default();
+        let clave = (l.family.clone(), l.dn(), material);
+        let e = acumula.entry(clave).or_insert((0.0, Some(0.0)));
         e.0 += l.length_2d();
-        e.1 += l.length_3d();
+        e.1 = match (e.1, l.cotas_trazado()) {
+            (Some(acum), Some(_)) => Some(acum + l.length_3d()),
+            _ => None,
+        };
     }
     acumula
         .into_iter()
         .map(|((familia, dn, material), (m, m3d))| Fila {
             grupo: "longitud".into(),
-            clave: format!("{familia} · DN {dn} · {material}"),
+            clave: format!(
+                "{familia} · DN {} · {material}",
+                dn.map(|d| d.to_string())
+                    .unwrap_or_else(|| crate::model::SIN_DATO.to_string())
+            ),
             unidad: "m",
             cantidad: m,
             fuente: "geometria".into(),
-            cantidad_3d: Some(m3d),
+            cantidad_3d: m3d,
         })
         .collect()
 }

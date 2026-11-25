@@ -197,6 +197,7 @@ mod tests {
                 estado: redes_core::model::EstadoObjeto::Pendiente,
                 nota: None,
                 deleted: false,
+                sin_dato: Vec::new(),
             };
             n.modelo = Some("cubo".into());
             p.add_node(n).expect("nodo");

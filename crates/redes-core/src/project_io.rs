@@ -337,6 +337,7 @@ mod tests {
             nota: None,
             modelo: None,
             deleted: false,
+            sin_dato: Vec::new(),
         };
         let id = p.add_node(n).expect("añade");
         assert!(
