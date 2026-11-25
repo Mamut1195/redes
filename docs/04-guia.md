@@ -286,7 +286,8 @@ Detalle completo del contrato y del procedimiento: `skills/redes-ingesta/SKILL.m
 | **Vertedero / descarga** | Estructura de entrega o alivio |
 | **Llave** | Dispositivo en la frontera red–usuario (corporación, banqueta, hidrante) |
 | **Válvula** | Dispositivo dentro de la red (compuerta, mariposa, retención, aire…) |
-| **Cota clave (invert)** | Fondo interior de la tubería o solera del pozo |
+| **Cota de solera (invert)** | Fondo interior de la tubería o del pozo |
+| **Cota de clave** | Punto más alto del interior de la tubería (clave = solera + DI). No es la solera |
 | **Cota de tapa** | Boca del pozo / rasante |
 | **CRS** | Sistema de referencia de coordenadas (aquí UTM) |
 | **TIN** | Malla triangular del terreno |

@@ -661,8 +661,10 @@ pub fn build_opts(
         } else {
             crate::parts::Material::new(0.78, 0.62, 0.44)
         };
-        // El tubo no atraviesa el pozo: se recorta en su pared.
-        let mut traza = l.path.clone();
+        // El tubo se dibuja por su eje (solera + DI/2) con el diámetro exterior; no atraviesa
+        // el pozo: se recorta en su pared.
+        let mut traza = l.eje();
+        let d_ext = l.diametro_exterior_m();
         let r0 = p
             .node(l.from)
             .map(|n| n.diametro() * 0.5 + 0.15)
@@ -684,7 +686,7 @@ pub fn build_opts(
                 continue;
             };
             let depth = ((cam.depth(a) + cam.depth(b)) * 0.5) as f32;
-            let r_px = (l.d_m() * 0.5 * cam.focal() / depth.max(1.0) as f64) as f32;
+            let r_px = (d_ext * 0.5 * cam.focal() / depth.max(1.0) as f64) as f32;
 
             if r_px < 2.2 {
                 // A lo lejos, la tubería es una línea: mismo color, mucho menos coste.
@@ -707,7 +709,7 @@ pub fn build_opts(
 
             // De cerca, tubo con juntas.
             let lod = if r_px > 6.0 { 2 } else { 1 };
-            let malla = crate::parts::tuberia(wa, wb, l.d_m() as f32, lod, mat);
+            let malla = crate::parts::tuberia(wa, wb, d_ext as f32, lod, mat);
             for tri in &malla.tris {
                 // La malla ya está en local: se aplica solo la exageración vertical.
                 let verts = [

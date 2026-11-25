@@ -1275,7 +1275,7 @@ fn objeto(p: &mut Project, cmd: ObjetoCmd, dry: bool) -> Envelope {
                 items.push(json!({
                     "codigo": n.code, "familia": n.family, "subtipo": n.ty,
                     "estado": n.estado.key(), "e": round(n.pos.x, 3), "n": round(n.pos.y, 3),
-                    "cota_clave": round(n.z_invert, 3), "nota": n.nota
+                    "cota_solera": round(n.z_invert, 3), "nota": n.nota
                 }));
             }
             for l in p.links.iter().filter(|l| !l.deleted) {

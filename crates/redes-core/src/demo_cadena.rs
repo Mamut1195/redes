@@ -90,6 +90,8 @@ fn tuberia(
         datos: BTreeMap::new(),
         estado: EstadoObjeto::Pendiente,
         nota: None,
+        cota_solera_inicio: None,
+        cota_solera_fin: None,
         deleted: false,
     })
     .unwrap_or_else(|e| panic!("{code}: {e}"))

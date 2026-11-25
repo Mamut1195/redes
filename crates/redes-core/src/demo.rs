@@ -89,7 +89,7 @@ pub fn project() -> Project {
                 attrs: BTreeMap::from([
                     ("diametro_interior".to_string(), Value::Num(1.20)),
                     ("cota_tapa".to_string(), Value::Num(z_t)),
-                    ("cota_clave".to_string(), Value::Num(z_t - depth)),
+                    ("cota_solera".to_string(), Value::Num(z_t - depth)),
                     (
                         "altura_caida".to_string(),
                         Value::Num(if i == 2 { 0.6 } else { 0.0 }),
@@ -158,6 +158,8 @@ pub fn project() -> Project {
                 EstadoObjeto::Pendiente
             },
             nota: None,
+            cota_solera_inicio: None,
+            cota_solera_fin: None,
             deleted: false,
         })
         .ok();
@@ -185,7 +187,7 @@ pub fn project() -> Project {
                 z_invert: z_c,
                 attrs: BTreeMap::from([
                     ("diametro_interior".to_string(), Value::Num(0.90)),
-                    ("cota_clave".to_string(), Value::Num(z_c)),
+                    ("cota_solera".to_string(), Value::Num(z_c)),
                 ]),
                 datos: BTreeMap::new(),
                 estado: EstadoObjeto::Pendiente,
@@ -207,6 +209,8 @@ pub fn project() -> Project {
             datos: BTreeMap::new(),
             estado: EstadoObjeto::Pendiente,
             nota: None,
+            cota_solera_inicio: None,
+            cota_solera_fin: None,
             deleted: false,
         })
         .ok();
@@ -257,6 +261,8 @@ pub fn project() -> Project {
         datos: BTreeMap::new(),
         estado: EstadoObjeto::Pendiente,
         nota: None,
+        cota_solera_inicio: None,
+        cota_solera_fin: None,
         deleted: false,
     })
     .ok();
@@ -309,7 +315,7 @@ pub fn project() -> Project {
                 attrs: BTreeMap::from([
                     ("tipo_camara".to_string(), Value::Text("valvulas".into())),
                     ("diametro_interior".to_string(), Value::Num(1.50)),
-                    ("cota_clave".to_string(), Value::Num(z_t - 1.2)),
+                    ("cota_solera".to_string(), Value::Num(z_t - 1.2)),
                 ]),
                 datos: BTreeMap::new(),
                 estado: EstadoObjeto::Pendiente,
@@ -342,6 +348,8 @@ pub fn project() -> Project {
             datos: BTreeMap::new(),
             estado: EstadoObjeto::Pendiente,
             nota: None,
+            cota_solera_inicio: None,
+            cota_solera_fin: None,
             deleted: false,
         })
         .ok();
@@ -474,7 +482,7 @@ pub fn plantilla() -> Project {
                     ("diametro_interior".to_string(), Value::Num(1.2)),
                     ("cota_tapa".to_string(), Value::Num(z)),
                     (
-                        "cota_clave".to_string(),
+                        "cota_solera".to_string(),
                         Value::Num(z - 2.0 - 0.15 * i as f64),
                     ),
                 ]),
@@ -520,6 +528,8 @@ pub fn plantilla() -> Project {
             datos: BTreeMap::new(),
             estado: EstadoObjeto::Pendiente,
             nota: None,
+            cota_solera_inicio: None,
+            cota_solera_fin: None,
             deleted: false,
         })
         .expect("colector de plantilla");

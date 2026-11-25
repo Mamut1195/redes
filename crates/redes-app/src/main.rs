@@ -536,11 +536,11 @@ impl State {
         {
             match clave {
                 "profundidad" => {
-                    // Más profundo = clave más baja; los límites se ordenan para no invertir el clamp.
+                    // Más profundo = solera más baja; los límites se ordenan para no invertir el clamp.
                     let (bajo, alto) = (n.z_terrain - 12.0, n.z_rim - 0.6);
                     n.z_invert = (n.z_invert + delta).clamp(bajo.min(alto), bajo.max(alto));
                     n.attrs
-                        .insert("cota_clave".to_string(), families::Value::Num(n.z_invert));
+                        .insert("cota_solera".to_string(), families::Value::Num(n.z_invert));
                 }
                 "diametro" => {
                     let actual = n.diametro();

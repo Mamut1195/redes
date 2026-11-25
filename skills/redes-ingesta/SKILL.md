@@ -122,11 +122,13 @@ Lo que no se puede traducir se descarta y aparece en `descartados`: nunca se pie
 | `subtipo` | no | Si falta se usa el primero de la familia |
 | `codigo` | no | Si falta se asigna `PZ-001`, `CL-001`… |
 | `e`, `n` | sí (nodo) | Coordenadas del proyecto en metros |
-| `cota` | no | Clave/solera; si falta y hay TIN se usa `z_terreno − 1.5` |
+| `cota` | no | Solera del nodo (fondo interior), nunca la clave; si falta y hay TIN se usa `z_terreno − 1.5` |
 | `cota_terreno` | no | Si falta, se interpola del TIN |
 | `diametro` | no | Metros (interior del pozo) |
-| `diametro_mm` | no | Milímetros (tubería), por defecto 200 |
-| `vertices` | no | Si falta, el arco es recto entre las cotas de sus nodos |
+| `diametro_mm` | no | Milímetros (tubería), por defecto 200. Es el DN: ni el interior ni el exterior |
+| `cota_solera_inicio`, `cota_solera_fin` | no | Solera (fondo interior) del tramo en sus extremos. Mandan sobre la solera del pozo (caídas, entradas a otra cota). Si faltan, el trazado usa la solera del pozo y el tramo queda sin solera declarada |
+| `attrs.diametro_interior` | no | DI del tubo en mm; con él se dibuja el eje en solera + DI/2. Si falta, se dibuja con el DN |
+| `vertices` | no | `[E, N, solera]`. Si falta, el arco es recto entre las soleras de sus extremos |
 | `attrs` | no | Atributos de la familia con su clave exacta |
 | `datos` | no | Números del origen: `{valor, unidad, fuente}`. **Nunca se recalculan** |
 
@@ -182,7 +184,7 @@ Lo que no se puede traducir se descarta y aparece en `descartados`: nunca se pie
 | `ERROR: no se puede saber si la red es pluvial…` | SWMM sin subcuencas ni `[DWF]` | Pasar `--sistema` |
 | Tubos de un SWMM 3,3 veces más largos | Era un archivo en CFS leído como metros (script viejo) | Regenerar el plan con el script actual |
 | El proyecto aparece a 10 000 km | CRS del hemisferio equivocado | Usar `32717`/`32718`, nunca `32617` |
-| El pozo no tiene altura | Sólo llegó la clave, sin tapa | Añadir `cota_terreno` o traer el TIN |
+| El pozo no tiene altura | Sólo llegó la solera, sin tapa | Añadir `cota_terreno` o traer el TIN |
 | El inspector muestra `—` en un dato | El origen no traía ese número | Es correcto: no se inventa |
 
 ## Reglas de oro

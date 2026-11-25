@@ -100,11 +100,13 @@ pub fn triangulos_exportables(p: &Project, con_terreno: bool) -> Malla {
         } else {
             parts::Material::new(0.78, 0.62, 0.44)
         };
-        for w in l.path.windows(2) {
+        // Eje = solera + DI/2; sección = diámetro exterior (F12-02).
+        let d_ext = l.diametro_exterior_m() as f32;
+        for w in l.eje().windows(2) {
             // En local: construir tubos con coordendas UTM en f32 los colapsa.
             let wa = P3::new(w[0].x - p.origin.x, w[0].y - p.origin.y, w[0].z);
             let wb = P3::new(w[1].x - p.origin.x, w[1].y - p.origin.y, w[1].z);
-            let malla = parts::tuberia(wa, wb, l.d_m() as f32, 1, mat);
+            let malla = parts::tuberia(wa, wb, d_ext, 1, mat);
             for tri in &malla.tris {
                 // `tuberia` ya devuelve coordenadas locales (x,y) y z absoluta: no hay que
                 // volver a restar el origen.

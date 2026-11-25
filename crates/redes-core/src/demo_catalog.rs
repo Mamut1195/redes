@@ -72,7 +72,7 @@ pub fn catalogo() -> Project {
                         Value::Num(if *tipo == "inspeccion" { 1.2 } else { 1.5 }),
                     ),
                     ("cota_tapa".to_string(), Value::Num(z)),
-                    ("cota_clave".to_string(), Value::Num(z - 2.2)),
+                    ("cota_solera".to_string(), Value::Num(z - 2.2)),
                     (
                         "altura_caida".to_string(),
                         Value::Num(if tipo.starts_with("caida") { 0.8 } else { 0.0 }),
@@ -109,6 +109,8 @@ pub fn catalogo() -> Project {
             datos: BTreeMap::new(),
             estado: EstadoObjeto::Pendiente,
             nota: None,
+            cota_solera_inicio: None,
+            cota_solera_fin: None,
             deleted: false,
         })
         .ok();
@@ -297,7 +299,7 @@ pub fn catalogo() -> Project {
                 z_invert: z - 1.2,
                 attrs: BTreeMap::from([
                     ("diametro_interior".to_string(), Value::Num(1.2)),
-                    ("cota_clave".to_string(), Value::Num(z - 1.2)),
+                    ("cota_solera".to_string(), Value::Num(z - 1.2)),
                 ]),
                 datos: BTreeMap::new(),
                 estado: EstadoObjeto::Pendiente,
@@ -341,6 +343,8 @@ pub fn catalogo() -> Project {
             datos: BTreeMap::new(),
             estado: EstadoObjeto::Pendiente,
             nota: None,
+            cota_solera_inicio: None,
+            cota_solera_fin: None,
             deleted: false,
         })
         .ok();
@@ -502,6 +506,8 @@ pub fn catalogo_completo() -> Project {
                 datos: BTreeMap::new(),
                 estado: EstadoObjeto::Pendiente,
                 nota: None,
+                cota_solera_inicio: None,
+                cota_solera_fin: None,
                 deleted: false,
             };
             let _ = p.add_link(arco);

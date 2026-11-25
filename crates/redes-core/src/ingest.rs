@@ -99,6 +99,11 @@ pub enum PlanObjeto {
         hasta: String,
         #[serde(default)]
         diametro_mm: Option<u32>,
+        /// Solera (fondo interior) del tramo en su inicio y su fin, si el origen la declara.
+        #[serde(default)]
+        cota_solera_inicio: Option<f64>,
+        #[serde(default)]
+        cota_solera_fin: Option<f64>,
         #[serde(default)]
         vertices: Vec<[f64; 3]>,
         #[serde(default)]
@@ -214,6 +219,8 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
             desde,
             hasta,
             diametro_mm,
+            cota_solera_inicio,
+            cota_solera_fin,
             vertices,
             attrs,
             datos,
@@ -229,9 +236,10 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
             let path = if vertices.len() >= 2 {
                 vertices.iter().map(|v| P3::new(v[0], v[1], v[2])).collect()
             } else {
+                // La solera declarada del tramo manda sobre la del pozo (F12-02).
                 vec![
-                    P3::new(a.pos.x, a.pos.y, a.z_invert),
-                    P3::new(b.pos.x, b.pos.y, b.z_invert),
+                    P3::new(a.pos.x, a.pos.y, cota_solera_inicio.unwrap_or(a.z_invert)),
+                    P3::new(b.pos.x, b.pos.y, cota_solera_fin.unwrap_or(b.z_invert)),
                 ]
             };
             let code = if codigo.is_empty() {
@@ -256,6 +264,8 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
                 datos: to_datos(datos),
                 estado: EstadoObjeto::Pendiente,
                 nota: None,
+                cota_solera_inicio: *cota_solera_inicio,
+                cota_solera_fin: *cota_solera_fin,
                 deleted: false,
             };
             match p.add_link(link) {
@@ -541,6 +551,8 @@ pub fn import_dxf(p: &mut Project, path: &Path, tolerance: f64) -> Result<Import
             datos: BTreeMap::new(),
             estado: EstadoObjeto::Pendiente,
             nota: None,
+            cota_solera_inicio: None,
+            cota_solera_fin: None,
             deleted: false,
         };
         match p.add_link(link) {
@@ -787,6 +799,8 @@ fn importar_de_capa_info(
             datos: datos.get(&code).cloned().unwrap_or_default(),
             estado: EstadoObjeto::Pendiente,
             nota: None,
+            cota_solera_inicio: None,
+            cota_solera_fin: None,
             deleted: false,
         };
         match p.add_link(link) {
@@ -1086,6 +1100,8 @@ pub fn import_geojson(p: &mut Project, path: &Path) -> Result<ImportReport, Stri
                 datos: BTreeMap::new(),
                 estado: EstadoObjeto::Pendiente,
                 nota: None,
+                cota_solera_inicio: None,
+                cota_solera_fin: None,
                 deleted: false,
             };
             match p.add_link(link) {
