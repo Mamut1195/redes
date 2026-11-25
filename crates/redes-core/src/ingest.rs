@@ -51,8 +51,32 @@ pub struct Plan {
     pub objetos: Vec<PlanObjeto>,
 }
 
+/// Única versión del plan que se importa (D10): antes de v1 no hay conversiones.
+pub const PLAN_SCHEMA: &str = "redes.plan/1";
+
 fn schema_plan() -> String {
-    "redes.plan/1".into()
+    PLAN_SCHEMA.into()
+}
+
+/// Rechaza un plan de otra versión antes de leer sus campos: un `redes.plan/2` (o futuro) no se
+/// interpreta como si fuera `/1`. Sin `schema` se toma `/1`, como hasta ahora.
+fn comprobar_version_plan(crudo: &serde_json::Value) -> Result<(), String> {
+    let schema = match crudo.get("schema") {
+        None => return Ok(()),
+        Some(serde_json::Value::String(s)) => s.clone(),
+        Some(otro) => otro.to_string(),
+    };
+    if schema == PLAN_SCHEMA {
+        return Ok(());
+    }
+    if schema.starts_with("redes.plan/") {
+        return Err(format!(
+            "E_FMT_VERSION: el plan es `{schema}` y esta app solo importa `{PLAN_SCHEMA}`; reescríbalo con la skill `skills/redes-ingesta` (contrato `{PLAN_SCHEMA}`)"
+        ));
+    }
+    Err(format!(
+        "E_FMT_UNSUPPORTED: `{schema}` no es un plan; se espera `\"schema\": \"{PLAN_SCHEMA}\"`"
+    ))
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -490,11 +514,9 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
     let text = std::fs::read_to_string(path).map_err(|e| format!("E_IO_NOT_FOUND: {e}"))?;
     let crudo: serde_json::Value =
         serde_json::from_str(&text).map_err(|e| format!("E_FMT_PARSE: {e}"))?;
+    comprobar_version_plan(&crudo)?;
     revisar_campos(&crudo)?;
     let plan: Plan = serde_json::from_str(&text).map_err(|e| format!("E_FMT_PARSE: {e}"))?;
-    if !plan.schema.starts_with("redes.plan/") {
-        return Err(format!("E_FMT_UNSUPPORTED: esquema {}", plan.schema));
-    }
     // F12-13: el CRS se comprueba antes de tocar nada.
     let epsg = comprobar_crs(p, &plan.proyecto.crs, "el plan")?;
     let terreno = plan
@@ -1395,6 +1417,33 @@ mod tests {
         assert_eq!(rep.puntos_terreno, 3);
         assert!(p.links[0].datos.contains_key("caudal"));
         let _ = std::fs::remove_file(&path);
+    }
+
+    /// D10: solo `redes.plan/1`. Un `/2` o uno futuro dan `E_FMT_VERSION` y no tocan el proyecto;
+    /// algo que no es un plan, `E_FMT_UNSUPPORTED`.
+    #[test]
+    fn rechaza_un_plan_de_otra_version() {
+        let ruta = std::env::temp_dir().join(format!("redes-plan-v-{}.json", std::process::id()));
+        for (schema, codigo) in [
+            ("redes.plan/2", "E_FMT_VERSION:"),
+            ("redes.plan/0", "E_FMT_VERSION:"),
+            ("redes.plan/1.1", "E_FMT_VERSION:"),
+            ("redes.project/3", "E_FMT_UNSUPPORTED:"),
+        ] {
+            let plan = serde_json::json!({
+                "schema": schema,
+                "proyecto": { "nombre": "x", "crs": "EPSG:32717" },
+                "objetos": [{ "tipo": "nodo", "codigo": "P1", "familia": "saneamiento.pozo",
+                              "e": 760000.0, "n": 9796000.0, "cota": 2498.5 }]
+            });
+            std::fs::write(&ruta, plan.to_string()).unwrap();
+            let mut p = Project::new("x", "EPSG:32717");
+            let err = import_plan(&mut p, &ruta).unwrap_err();
+            assert!(err.starts_with(codigo), "{schema}: {err}");
+            assert!(err.contains(schema), "dice qué versión trae: {err}");
+            assert_eq!(p.count(), 0, "{schema}: no se importa nada");
+        }
+        let _ = std::fs::remove_file(&ruta);
     }
 
     /// En la vuelta del DXF, una cota o un DN vacíos quedan ausentes: ni 0, ni «tapa − 1», ni 200.

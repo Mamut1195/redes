@@ -1,5 +1,5 @@
 {
-  "schema": "redes.project/2",
+  "schema": "redes.project/3",
   "id": "prj_5eb4ede1",
   "name": "Proyecto nuevo",
   "crs": "EPSG:32717",
@@ -3068,7 +3068,7 @@
       "z_rim": 2499.6,
       "z_invert": 2497.6,
       "attrs": {
-        "cota_clave": 2497.6,
+        "cota_solera": 2497.6,
         "cota_tapa": 2499.6,
         "diametro_interior": 1.2
       },
@@ -3092,7 +3092,7 @@
       "z_rim": 2499.1,
       "z_invert": 2496.95,
       "attrs": {
-        "cota_clave": 2496.95,
+        "cota_solera": 2496.95,
         "cota_tapa": 2499.1,
         "diametro_interior": 1.2
       },
@@ -3116,7 +3116,7 @@
       "z_rim": 2498.6,
       "z_invert": 2496.2999999999997,
       "attrs": {
-        "cota_clave": 2496.2999999999997,
+        "cota_solera": 2496.2999999999997,
         "cota_tapa": 2498.6,
         "diametro_interior": 1.2
       },
@@ -3215,7 +3215,8 @@
   "journal": [
     {
       "revision": 1,
-      "command": "proyecto.plantilla"
+      "command": "proyecto.plantilla",
+      "cuando": "2026-11-25T22:05:59Z"
     }
   ]
 }

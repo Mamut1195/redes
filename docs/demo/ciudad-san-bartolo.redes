@@ -1,5 +1,5 @@
 {
-  "schema": "redes.project/2",
+  "schema": "redes.project/3",
   "id": "prj_07647c3b",
   "name": "Ciudad Cerro San Bartolo",
   "crs": "EPSG:32717",
@@ -70350,7 +70350,7 @@
       "z_rim": 2510.189758823752,
       "z_invert": 2507.889758823752,
       "attrs": {
-        "cota_clave": 2507.889758823752,
+        "cota_solera": 2507.889758823752,
         "cota_tapa": 2510.189758823752,
         "diametro_interior": 1.3,
         "material": "hormigon"
@@ -70375,7 +70375,7 @@
       "z_rim": 2506.4376568919465,
       "z_invert": 2505.2376568919467,
       "attrs": {
-        "cota_clave": 2505.2376568919467,
+        "cota_solera": 2505.2376568919467,
         "cota_tapa": 2506.4376568919465,
         "diametro_interior": 1.3,
         "material": "hormigon"
@@ -70400,7 +70400,7 @@
       "z_rim": 2504.299376806958,
       "z_invert": 2503.0993768069584,
       "attrs": {
-        "cota_clave": 2503.0993768069584,
+        "cota_solera": 2503.0993768069584,
         "cota_tapa": 2504.299376806958,
         "diametro_interior": 1.3,
         "material": "hormigon"
@@ -70425,7 +70425,7 @@
       "z_rim": 2498.5585933481616,
       "z_invert": 2497.358593348162,
       "attrs": {
-        "cota_clave": 2497.358593348162,
+        "cota_solera": 2497.358593348162,
         "cota_tapa": 2498.5585933481616,
         "diametro_interior": 1.3,
         "material": "hormigon"
@@ -70450,7 +70450,7 @@
       "z_rim": 2495.482544481864,
       "z_invert": 2494.282544481864,
       "attrs": {
-        "cota_clave": 2494.282544481864,
+        "cota_solera": 2494.282544481864,
         "cota_tapa": 2495.482544481864,
         "diametro_interior": 1.3,
         "material": "hormigon"
@@ -70475,7 +70475,7 @@
       "z_rim": 2490.689542188565,
       "z_invert": 2489.4895421885653,
       "attrs": {
-        "cota_clave": 2489.4895421885653,
+        "cota_solera": 2489.4895421885653,
         "cota_tapa": 2490.689542188565,
         "diametro_interior": 1.3,
         "material": "hormigon"
@@ -70500,7 +70500,7 @@
       "z_rim": 2489.195610832497,
       "z_invert": 2487.9956108324973,
       "attrs": {
-        "cota_clave": 2487.9956108324973,
+        "cota_solera": 2487.9956108324973,
         "cota_tapa": 2489.195610832497,
         "diametro_interior": 1.3,
         "material": "hormigon"
@@ -70525,7 +70525,7 @@
       "z_rim": 2524.7942175168823,
       "z_invert": 2518.7942175168823,
       "attrs": {
-        "cota_clave": 2518.7942175168823,
+        "cota_solera": 2518.7942175168823,
         "cota_tapa": 2524.7942175168823,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -70550,7 +70550,7 @@
       "z_rim": 2544.3913932011114,
       "z_invert": 2538.3913932011114,
       "attrs": {
-        "cota_clave": 2538.3913932011114,
+        "cota_solera": 2538.3913932011114,
         "cota_tapa": 2544.3913932011114,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -70575,7 +70575,7 @@
       "z_rim": 2522.452629432625,
       "z_invert": 2516.452629432625,
       "attrs": {
-        "cota_clave": 2516.452629432625,
+        "cota_solera": 2516.452629432625,
         "cota_tapa": 2522.452629432625,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -70600,7 +70600,7 @@
       "z_rim": 2533.299052512499,
       "z_invert": 2527.299052512499,
       "attrs": {
-        "cota_clave": 2527.299052512499,
+        "cota_solera": 2527.299052512499,
         "cota_tapa": 2533.299052512499,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -70625,7 +70625,7 @@
       "z_rim": 2521.8754782296537,
       "z_invert": 2515.8754782296537,
       "attrs": {
-        "cota_clave": 2515.8754782296537,
+        "cota_solera": 2515.8754782296537,
         "cota_tapa": 2521.8754782296537,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -70650,7 +70650,7 @@
       "z_rim": 2541.926144472983,
       "z_invert": 2535.926144472983,
       "attrs": {
-        "cota_clave": 2535.926144472983,
+        "cota_solera": 2535.926144472983,
         "cota_tapa": 2541.926144472983,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -70675,7 +70675,7 @@
       "z_rim": 2517.695887337414,
       "z_invert": 2511.695887337414,
       "attrs": {
-        "cota_clave": 2511.695887337414,
+        "cota_solera": 2511.695887337414,
         "cota_tapa": 2517.695887337414,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -70700,7 +70700,7 @@
       "z_rim": 2527.580533066146,
       "z_invert": 2521.580533066146,
       "attrs": {
-        "cota_clave": 2521.580533066146,
+        "cota_solera": 2521.580533066146,
         "cota_tapa": 2527.580533066146,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -70725,7 +70725,7 @@
       "z_rim": 2519.2514127873415,
       "z_invert": 2513.2514127873415,
       "attrs": {
-        "cota_clave": 2513.2514127873415,
+        "cota_solera": 2513.2514127873415,
         "cota_tapa": 2519.2514127873415,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -70750,7 +70750,7 @@
       "z_rim": 2539.037729440814,
       "z_invert": 2533.037729440814,
       "attrs": {
-        "cota_clave": 2533.037729440814,
+        "cota_solera": 2533.037729440814,
         "cota_tapa": 2539.037729440814,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -70775,7 +70775,7 @@
       "z_rim": 2516.143234030802,
       "z_invert": 2510.143234030802,
       "attrs": {
-        "cota_clave": 2510.143234030802,
+        "cota_solera": 2510.143234030802,
         "cota_tapa": 2516.143234030802,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -70800,7 +70800,7 @@
       "z_rim": 2526.5885208648574,
       "z_invert": 2520.5885208648574,
       "attrs": {
-        "cota_clave": 2520.5885208648574,
+        "cota_solera": 2520.5885208648574,
         "cota_tapa": 2526.5885208648574,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -70825,7 +70825,7 @@
       "z_rim": 2512.0198484962666,
       "z_invert": 2506.0198484962666,
       "attrs": {
-        "cota_clave": 2506.0198484962666,
+        "cota_solera": 2506.0198484962666,
         "cota_tapa": 2512.0198484962666,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -70850,7 +70850,7 @@
       "z_rim": 2530.9949276440434,
       "z_invert": 2524.9949276440434,
       "attrs": {
-        "cota_clave": 2524.9949276440434,
+        "cota_solera": 2524.9949276440434,
         "cota_tapa": 2530.9949276440434,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -70875,7 +70875,7 @@
       "z_rim": 2512.199625317823,
       "z_invert": 2506.199625317823,
       "attrs": {
-        "cota_clave": 2506.199625317823,
+        "cota_solera": 2506.199625317823,
         "cota_tapa": 2512.199625317823,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -70900,7 +70900,7 @@
       "z_rim": 2524.365410723938,
       "z_invert": 2518.365410723938,
       "attrs": {
-        "cota_clave": 2518.365410723938,
+        "cota_solera": 2518.365410723938,
         "cota_tapa": 2524.365410723938,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -70925,7 +70925,7 @@
       "z_rim": 2507.412096361423,
       "z_invert": 2501.412096361423,
       "attrs": {
-        "cota_clave": 2501.412096361423,
+        "cota_solera": 2501.412096361423,
         "cota_tapa": 2507.412096361423,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -70950,7 +70950,7 @@
       "z_rim": 2525.5536692605706,
       "z_invert": 2519.5536692605706,
       "attrs": {
-        "cota_clave": 2519.5536692605706,
+        "cota_solera": 2519.5536692605706,
         "cota_tapa": 2525.5536692605706,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -70975,7 +70975,7 @@
       "z_rim": 2510.9700842497978,
       "z_invert": 2504.9700842497978,
       "attrs": {
-        "cota_clave": 2504.9700842497978,
+        "cota_solera": 2504.9700842497978,
         "cota_tapa": 2510.9700842497978,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -71000,7 +71000,7 @@
       "z_rim": 2524.9035964936165,
       "z_invert": 2518.9035964936165,
       "attrs": {
-        "cota_clave": 2518.9035964936165,
+        "cota_solera": 2518.9035964936165,
         "cota_tapa": 2524.9035964936165,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -71025,7 +71025,7 @@
       "z_rim": 2502.03700553182,
       "z_invert": 2496.03700553182,
       "attrs": {
-        "cota_clave": 2496.03700553182,
+        "cota_solera": 2496.03700553182,
         "cota_tapa": 2502.03700553182,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -71050,7 +71050,7 @@
       "z_rim": 2519.8618235854115,
       "z_invert": 2513.8618235854115,
       "attrs": {
-        "cota_clave": 2513.8618235854115,
+        "cota_solera": 2513.8618235854115,
         "cota_tapa": 2519.8618235854115,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -71075,7 +71075,7 @@
       "z_rim": 2506.8788047011344,
       "z_invert": 2500.8788047011344,
       "attrs": {
-        "cota_clave": 2500.8788047011344,
+        "cota_solera": 2500.8788047011344,
         "cota_tapa": 2506.8788047011344,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -71100,7 +71100,7 @@
       "z_rim": 2521.4841008006615,
       "z_invert": 2515.4841008006615,
       "attrs": {
-        "cota_clave": 2515.4841008006615,
+        "cota_solera": 2515.4841008006615,
         "cota_tapa": 2521.4841008006615,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -71125,7 +71125,7 @@
       "z_rim": 2501.287031200305,
       "z_invert": 2495.287031200305,
       "attrs": {
-        "cota_clave": 2495.287031200305,
+        "cota_solera": 2495.287031200305,
         "cota_tapa": 2501.287031200305,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -71150,7 +71150,7 @@
       "z_rim": 2519.5166879987178,
       "z_invert": 2513.5166879987178,
       "attrs": {
-        "cota_clave": 2513.5166879987178,
+        "cota_solera": 2513.5166879987178,
         "cota_tapa": 2519.5166879987178,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -71175,7 +71175,7 @@
       "z_rim": 2504.488013962687,
       "z_invert": 2498.488013962687,
       "attrs": {
-        "cota_clave": 2498.488013962687,
+        "cota_solera": 2498.488013962687,
         "cota_tapa": 2504.488013962687,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -71200,7 +71200,7 @@
       "z_rim": 2518.234715042273,
       "z_invert": 2512.234715042273,
       "attrs": {
-        "cota_clave": 2512.234715042273,
+        "cota_solera": 2512.234715042273,
         "cota_tapa": 2518.234715042273,
         "diametro_interior": 1.1,
         "material": "hormigon"
@@ -71215,7 +71215,7 @@
         "generation": 1
       },
       "family": "agua.tanque",
-      "ty": "apoyado",
+      "ty": "apoyado_cilindrico",
       "code": "TQ-001",
       "pos": {
         "x": 758862.0,
@@ -71227,7 +71227,7 @@
       "attrs": {
         "cota_nivel_max": 2556.5381211048084,
         "cota_piso": 2550.5381211048084,
-        "tipo_tanque": "apoyado",
+        "tipo_tanque": "apoyado_cilindrico",
         "volumen_util": 850.0
       },
       "datos": {
@@ -71245,9 +71245,9 @@
         "slot": 71,
         "generation": 1
       },
-      "family": "saneamiento.camara",
+      "family": "agua.camara",
       "ty": "valvulas",
-      "code": "CM-001",
+      "code": "CA-001",
       "pos": {
         "x": 758820.0,
         "y": 9797540.0
@@ -71256,7 +71256,7 @@
       "z_rim": 2544.3913932011114,
       "z_invert": 2542.9913932011114,
       "attrs": {
-        "cota_clave": 2542.9913932011114,
+        "cota_solera": 2542.9913932011114,
         "diametro_interior": 1.2,
         "tipo_camara": "valvulas"
       },
@@ -71269,9 +71269,9 @@
         "slot": 72,
         "generation": 1
       },
-      "family": "saneamiento.camara",
+      "family": "agua.camara",
       "ty": "valvulas",
-      "code": "CM-002",
+      "code": "CA-002",
       "pos": {
         "x": 758700.0,
         "y": 9797540.0
@@ -71280,7 +71280,7 @@
       "z_rim": 2541.926144472983,
       "z_invert": 2540.526144472983,
       "attrs": {
-        "cota_clave": 2540.526144472983,
+        "cota_solera": 2540.526144472983,
         "diametro_interior": 1.2,
         "tipo_camara": "valvulas"
       },
@@ -71293,9 +71293,9 @@
         "slot": 73,
         "generation": 1
       },
-      "family": "saneamiento.camara",
+      "family": "agua.camara",
       "ty": "valvulas",
-      "code": "CM-003",
+      "code": "CA-003",
       "pos": {
         "x": 758580.0,
         "y": 9797540.0
@@ -71304,7 +71304,7 @@
       "z_rim": 2539.037729440814,
       "z_invert": 2537.637729440814,
       "attrs": {
-        "cota_clave": 2537.637729440814,
+        "cota_solera": 2537.637729440814,
         "diametro_interior": 1.2,
         "tipo_camara": "valvulas"
       },
@@ -71317,9 +71317,9 @@
         "slot": 74,
         "generation": 1
       },
-      "family": "saneamiento.camara",
+      "family": "agua.camara",
       "ty": "valvulas",
-      "code": "CM-004",
+      "code": "CA-004",
       "pos": {
         "x": 758460.0,
         "y": 9797540.0
@@ -71328,7 +71328,7 @@
       "z_rim": 2530.9949276440434,
       "z_invert": 2529.5949276440433,
       "attrs": {
-        "cota_clave": 2529.5949276440433,
+        "cota_solera": 2529.5949276440433,
         "diametro_interior": 1.2,
         "tipo_camara": "valvulas"
       },
@@ -71341,9 +71341,9 @@
         "slot": 75,
         "generation": 1
       },
-      "family": "saneamiento.camara",
+      "family": "agua.camara",
       "ty": "valvulas",
-      "code": "CM-005",
+      "code": "CA-005",
       "pos": {
         "x": 758340.0,
         "y": 9797540.0
@@ -71352,7 +71352,7 @@
       "z_rim": 2525.5536692605706,
       "z_invert": 2524.1536692605705,
       "attrs": {
-        "cota_clave": 2524.1536692605705,
+        "cota_solera": 2524.1536692605705,
         "diametro_interior": 1.2,
         "tipo_camara": "valvulas"
       },
@@ -71365,9 +71365,9 @@
         "slot": 76,
         "generation": 1
       },
-      "family": "saneamiento.camara",
+      "family": "agua.camara",
       "ty": "valvulas",
-      "code": "CM-006",
+      "code": "CA-006",
       "pos": {
         "x": 758220.0,
         "y": 9797540.0
@@ -71376,7 +71376,7 @@
       "z_rim": 2519.8618235854115,
       "z_invert": 2518.4618235854114,
       "attrs": {
-        "cota_clave": 2518.4618235854114,
+        "cota_solera": 2518.4618235854114,
         "diametro_interior": 1.2,
         "tipo_camara": "valvulas"
       },
@@ -71389,9 +71389,9 @@
         "slot": 77,
         "generation": 1
       },
-      "family": "saneamiento.camara",
+      "family": "agua.camara",
       "ty": "valvulas",
-      "code": "CM-007",
+      "code": "CA-007",
       "pos": {
         "x": 758100.0,
         "y": 9797540.0
@@ -71400,78 +71400,9 @@
       "z_rim": 2519.5166879987178,
       "z_invert": 2518.1166879987177,
       "attrs": {
-        "cota_clave": 2518.1166879987177,
+        "cota_solera": 2518.1166879987177,
         "diametro_interior": 1.2,
         "tipo_camara": "valvulas"
-      },
-      "datos": {},
-      "estado": "pendiente",
-      "deleted": false
-    },
-    {
-      "id": {
-        "slot": 85,
-        "generation": 1
-      },
-      "family": "agua.llave",
-      "ty": "hidrante",
-      "code": "LL-001",
-      "pos": {
-        "x": 758229.0,
-        "y": 9797364.0
-      },
-      "z_terrain": 2490.8153941940827,
-      "z_rim": 2490.8153941940827,
-      "z_invert": 2489.615394194083,
-      "attrs": {
-        "diametro_nominal": 100,
-        "tipo_llave": "hidrante"
-      },
-      "datos": {},
-      "estado": "pendiente",
-      "deleted": false
-    },
-    {
-      "id": {
-        "slot": 86,
-        "generation": 1
-      },
-      "family": "agua.llave",
-      "ty": "hidrante",
-      "code": "LL-002",
-      "pos": {
-        "x": 758469.0,
-        "y": 9797364.0
-      },
-      "z_terrain": 2498.9432765086162,
-      "z_rim": 2498.9432765086162,
-      "z_invert": 2497.7432765086164,
-      "attrs": {
-        "diametro_nominal": 100,
-        "tipo_llave": "hidrante"
-      },
-      "datos": {},
-      "estado": "pendiente",
-      "deleted": false
-    },
-    {
-      "id": {
-        "slot": 87,
-        "generation": 1
-      },
-      "family": "agua.llave",
-      "ty": "hidrante",
-      "code": "LL-003",
-      "pos": {
-        "x": 758709.0,
-        "y": 9797364.0
-      },
-      "z_terrain": 2507.0643681028882,
-      "z_rim": 2507.0643681028882,
-      "z_invert": 2505.8643681028884,
-      "attrs": {
-        "diametro_nominal": 100,
-        "tipo_llave": "hidrante"
       },
       "datos": {},
       "estado": "pendiente",
@@ -71779,7 +71710,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-007",
       "from": {
         "slot": 15,
@@ -71828,7 +71759,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-008",
       "from": {
         "slot": 14,
@@ -71877,7 +71808,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-009",
       "from": {
         "slot": 17,
@@ -71926,7 +71857,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-010",
       "from": {
         "slot": 16,
@@ -71975,7 +71906,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-011",
       "from": {
         "slot": 23,
@@ -72024,7 +71955,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-012",
       "from": {
         "slot": 22,
@@ -72073,7 +72004,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-013",
       "from": {
         "slot": 25,
@@ -72122,7 +72053,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-014",
       "from": {
         "slot": 24,
@@ -72171,7 +72102,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-015",
       "from": {
         "slot": 31,
@@ -72220,7 +72151,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-016",
       "from": {
         "slot": 30,
@@ -72269,7 +72200,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-017",
       "from": {
         "slot": 33,
@@ -72318,7 +72249,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-018",
       "from": {
         "slot": 32,
@@ -72367,7 +72298,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-019",
       "from": {
         "slot": 39,
@@ -72416,7 +72347,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-020",
       "from": {
         "slot": 38,
@@ -72465,7 +72396,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-021",
       "from": {
         "slot": 41,
@@ -72514,7 +72445,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-022",
       "from": {
         "slot": 40,
@@ -72563,7 +72494,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-023",
       "from": {
         "slot": 47,
@@ -72612,7 +72543,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-024",
       "from": {
         "slot": 46,
@@ -72661,7 +72592,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-025",
       "from": {
         "slot": 49,
@@ -72710,7 +72641,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-026",
       "from": {
         "slot": 48,
@@ -72759,7 +72690,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-027",
       "from": {
         "slot": 55,
@@ -72808,7 +72739,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-028",
       "from": {
         "slot": 54,
@@ -72857,7 +72788,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-029",
       "from": {
         "slot": 57,
@@ -72906,7 +72837,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-030",
       "from": {
         "slot": 56,
@@ -72955,7 +72886,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-031",
       "from": {
         "slot": 63,
@@ -73004,7 +72935,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-032",
       "from": {
         "slot": 62,
@@ -73053,7 +72984,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-033",
       "from": {
         "slot": 65,
@@ -73102,7 +73033,7 @@
         "generation": 1
       },
       "family": "saneamiento.tuberia",
-      "ty": "colector",
+      "ty": "colector_sanitario",
       "code": "CL-034",
       "from": {
         "slot": 64,
@@ -73405,11 +73336,12 @@
       "deleted": false
     }
   ],
-  "next_slot": 88,
+  "next_slot": 85,
   "journal": [
     {
       "revision": 1,
-      "command": "demo ciudad"
+      "command": "demo ciudad",
+      "cuando": "2026-11-25T22:05:58Z"
     }
   ]
 }

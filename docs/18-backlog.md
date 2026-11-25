@@ -243,7 +243,7 @@ Objetivo: fluidez con 5k–50k tramos y 2k–20k pozos (hoy solo con cientos).
 
 | ID | P | Ticket | Alcance | Aceptación | Días |
 |---|---|---|---|---|---|
-| F15-01 · [MAM-1115](https://linear.app/mamutsystems/issue/MAM-1115) | P0 | **Migración de formato `.redes`** | hoy `load` deserializa directo (`project_io.rs:107`) y depende de `serde(default)`; pasar por `serde_json::Value` → `migrar_vN→vN+1` → `Project`. `redes.plan/*` acepta versiones futuras (`ingest.rs:124`): rechazarlas | fixtures v1 y v2 en `tests/fixtures` abren; plan `/2` → error `E_FMT_VERSION` | 2 |
+| F15-01 · [MAM-1115](https://linear.app/mamutsystems/issue/MAM-1115) | P0 | **Solo la versión vigente del `.redes` (sin migraciones hasta v1)** — **hecho** | replanteado el 25/11/2026 (D10): no hay nada en producción, no se mantiene compatibilidad. `project_io::load` mira `schema` antes que los campos y abre **solo** `redes.project/3`; otra versión (anterior, futura, ajena o ausente) → `E_PROJ_SCHEMA` (código 4; se funde `E_PROJ_SCHEMA_TOO_NEW`) con la versión que trae, la que entiende y la pista de regenerar con `redes importar`. Se retira la corrección `cota_clave`→`cota_solera` al abrir. `redes.plan/*` solo `/1`; otra versión → `E_FMT_VERSION` (código 7, en `redes esquema`). Los `.redes` de `demo/` y `docs/demo/` regenerados con `redes proyecto cadena\|catalogo\|ciudad\|plantilla`. Mutación `proyecto-acepta-version-anterior` en `scripts/mutar.ps1`. Migraciones (`migrar_vN→vN+1`) al congelar v1 | un `.redes` `/2` da `E_PROJ_SCHEMA` y no abre; un plan `/2` da `E_FMT_VERSION` (contrato con el binario real); los `.redes` de `demo/` abren | 1 |
 | F15-02 · [MAM-1116](https://linear.app/mamutsystems/issue/MAM-1116) | P1 | **Encapsular el agregado `Project`** | `nodes`/`links` y campos de `Node` son `pub` (`model.rs:249-250`); ~80 filtros manuales de `!deleted`. Campos privados, iteradores `vivos()`, alta solo por `add_*` | ningún `.deleted` fuera de `model.rs` | 3 |
 | F15-03 · [MAM-1117](https://linear.app/mamutsystems/issue/MAM-1117) | P1 | **Catálogo de familias como datos** | `families.rs` (8.553 líneas, `build()` ≈ 7.950) + `families_extra.rs` que lo parchea: pasar a JSON/TOML con `include_str!` y validación en prueba | el catálogo se carga y valida; diffs legibles | 4 |
 | F15-04 · [MAM-1118](https://linear.app/mamutsystems/issue/MAM-1118) | P1 | **Sin `match` por cadena de familia** | claves de familia literales en `view.rs` (36), `ingest.rs` (20), `parts_cadena.rs` (17), `biblioteca.rs` (11), app (6); `view.rs:1209/1280` repiten pozo → entero mágico. `enum TipoPozo` y tabla familia → constructor | añadir una familia geométrica toca un solo sitio | 3 |
@@ -306,7 +306,8 @@ F16-01, F16-02 ≈ **27 días** (≈ 5,5 semanas a una persona).
 2. `cargo test --workspace` y `cargo build --release` en verde.
 3. Documento actualizado (`docs/`), no solo el código.
 4. Si toca la interfaz: captura headless con `--snap` en el ticket.
-5. Si toca datos: compatibilidad con archivos anteriores comprobada.
+5. Si toca datos: antes de v1 (D10), si cambia el esquema se sube `SCHEMA_VERSION` y se regeneran
+   los `.redes` de `demo/`; desde v1, migración y fixture de la versión anterior.
 
 ## Riesgos que cambian la lista
 

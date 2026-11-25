@@ -136,6 +136,15 @@ $mutaciones = @(
         Destino = "reimportar"
         Prueba = "las_bajas_con_revision_no_se_pierden_en_silencio"
         Que = "dar de baja en silencio objetos con revision (F13-06)"
+    },
+    @{
+        # Prueba de la biblioteca (src/project_io.rs): sin `Destino`, el binario lib corre primero.
+        Nombre = "proyecto-acepta-version-anterior"
+        Archivo = "crates/redes-core/src/project_io.rs"
+        Patron = 'if schema == vigente \{'
+        Reemplazo = 'if schema.starts_with("redes.project/") {'
+        Prueba = "rechaza_un_esquema_anterior_sin_migrar"
+        Que = "volver a abrir un .redes de otra version sin migrar (F15-01, D10)"
     }
 )
 
