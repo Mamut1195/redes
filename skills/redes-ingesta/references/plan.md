@@ -84,7 +84,7 @@ es un **nodo**. Para que la red no quede cortada, el nodo declara `desde` y `has
 códigos del origen (`Node1`/`Node2`, `From`/`To`). Redes no crea tramos: la topología los ve
 unidos. Si el propio dispositivo es un extremo (la cámara húmeda que representa a la bomba de
 SWMM), declara solo el otro lado. Un código inexistente o el propio nodo → aviso, sin unir ese
-lado. Hoy esa unión vive en el `.redes`; el DXF de ida y vuelta todavía no la lleva.
+lado. La unión viaja en el `.redes` y en el DXF de ida y vuelta (`REDES|1|E`).
 
 ```json
 { "tipo": "nodo", "codigo": "PRV1", "familia": "agua.valvula", "subtipo": "reduccion_presion",

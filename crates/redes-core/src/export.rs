@@ -295,6 +295,24 @@ pub fn export_dxf_filtered(
     for link in &arcos {
         info_tramo(&mut d, link);
     }
+    // Dispositivos de enlace (F12-15): `REDES|1|E|dispositivo|desde|hasta`, con los códigos de los
+    // nodos exportados (vacío si falta ese lado). Un importador anterior ignora la línea.
+    let codigo = |id| nodos.iter().find(|n| n.id == id).map(|n| n.code.as_str());
+    for e in &p.enlaces {
+        let Some(disp) = codigo(e.dispositivo) else {
+            continue;
+        };
+        let lado = |x: Option<crate::model::ElementId>| x.and_then(codigo).unwrap_or("");
+        let (desde, hasta) = (lado(e.desde), lado(e.hasta));
+        if desde.is_empty() && hasta.is_empty() {
+            continue;
+        }
+        let n = nodos.iter().find(|n| n.id == e.dispositivo).unwrap();
+        d.info(
+            [n.pos.x, n.pos.y, n.z_invert],
+            &format!("REDES|1|E|{disp}|{desde}|{hasta}"),
+        );
+    }
     let n = nodos.len() + arcos.len();
 
     let mut s = String::with_capacity(d.ent.len() + 16 * 1024);
@@ -635,14 +653,22 @@ fn info_tramo(d: &mut Dibujo, link: &Link) {
         .iter()
         .map(|v| format!("{:.4},{:.4},{:.4}", v.x, v.y, v.z))
         .collect();
+    // Campos 7 y 8: soleras propias del tramo (caídas), vacías si el origen no las declaró (F12-15).
+    let solera = |z: Option<f64>| {
+        z.filter(|z| z.is_finite())
+            .map(|z| z.to_string())
+            .unwrap_or_default()
+    };
     let carga = format!(
-        "REDES|1|L|{}|{}|{}|{}|{}|{}",
+        "REDES|1|L|{}|{}|{}|{}|{}|{}|{}|{}",
         link.family,
         link.ty,
         link.code,
         link.estado.key(),
         dn_mm(link).map(|d| d.to_string()).unwrap_or_default(),
-        trazado.join(";")
+        trazado.join(";"),
+        solera(link.cota_solera_inicio),
+        solera(link.cota_solera_fin)
     );
     d.info(q, &carga);
     info_attrs_datos(d, q, &link.code, &link.attrs, &link.datos);

@@ -77,7 +77,7 @@ Contrato sólido (F12-15):
   unidos sin tramos inventados.
 - Nudos a presión: `cota_eje` → `datos.cota_eje`; no es solera.
 - `redes esquema` publica los `valores` de cada atributo de lista.
-- La vuelta del DXF de Redes no convierte en dato las Z de dibujo de un tramo sin soleras.
+- La vuelta del DXF de Redes no convierte en dato las Z de dibujo de un tramo sin soleras. `REDES|1|L` lleva en los campos 7 y 8 las soleras propias del tramo (vacías si faltan) y `REDES|1|E|dispositivo|desde|hasta` los dispositivos de enlace; un DXF anterior sin ellos abre igual.
 
 ### Cotas: solera y clave no son lo mismo (F12-01, F12-02)
 
