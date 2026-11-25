@@ -42,7 +42,11 @@ puntos de terreno `E,N,Z` con `redes importar terreno --archivo t.csv --epsg 327
    `E_FMT_CAMPO` con el campo válido sugerido, `E_FMT_PARSE`) y repite
    hasta que lo único descartado sea lo que tú decidiste descartar.
 8. **Importa** en el proyecto real del usuario (proyecto nuevo o sin esos códigos: los repetidos se
-   descartan).
+   descartan). Si es **otra entrega** de un proyecto que ya se está revisando, no uses `importar
+   plan`: usa `redes -p <proyecto> --dry-run importar reimportar --archivo plan.json`, muestra al
+   usuario el informe (`resumen`, `reiniciados`, `bajas`) y luego sin `--dry-run`. Conserva estados
+   y observaciones por código, así que **mantén los códigos del origen** entre entregas. Si falla con
+   `E_STATE_BAJAS_CON_REVISION`, pregunta al usuario antes de repetir con `--aceptar-bajas`.
 9. **Revisa:** `redes -p <proyecto> objeto lista` (cuenta nodos y arcos frente al origen) y
    `redes -p <proyecto> vista --salida out\vista.svg` (míralo: saltos de cota, nodos sueltos,
    tramos que cruzan la ciudad = CRS o unidades mal).

@@ -109,6 +109,33 @@ $mutaciones = @(
         Destino = "acta"
         Prueba = "el_csv_abre_en_excel_con_tildes_y_una_fila_por_observacion"
         Que = "sacar columnas de autor aunque no se registro (D2, F13-04)"
+    },
+    @{
+        Nombre = "reimportar-no-reinicia"
+        Archivo = "crates/redes-core/src/reimportar.rs"
+        Patron = 'if estado == EstadoObjeto::Aprobado && !solo_procedencia \{'
+        Reemplazo = 'if false {'
+        Destino = "reimportar"
+        Prueba = "cambiar_la_cota_de_un_tramo_aprobado_lo_devuelve_a_pendiente"
+        Que = "conservar aprobado un objeto cuyo diseno cambio al reimportar (F13-06)"
+    },
+    @{
+        Nombre = "reimportar-pierde-observaciones"
+        Archivo = "crates/redes-core/src/reimportar.rs"
+        Patron = 'n\.observaciones = viejo\.observaciones\.clone\(\);'
+        Reemplazo = 'n.observaciones = Vec::new();'
+        Destino = "reimportar"
+        Prueba = "reimportar_la_misma_entrega_conserva_toda_la_revision"
+        Que = "perder las observaciones de los nodos al reimportar (F13-06)"
+    },
+    @{
+        Nombre = "reimportar-bajas-silenciosas"
+        Archivo = "crates/redes-core/src/reimportar.rs"
+        Patron = '\(!aceptar_bajas && !codigos\.is_empty\(\)\)'
+        Reemplazo = '(false)'
+        Destino = "reimportar"
+        Prueba = "las_bajas_con_revision_no_se_pierden_en_silencio"
+        Que = "dar de baja en silencio objetos con revision (F13-06)"
     }
 )
 

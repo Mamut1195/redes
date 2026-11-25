@@ -186,6 +186,45 @@ del terreno y sin `diametro_mm` no hay DN 200. El inspector y `objeto lista` mue
 fina para el tramo sin DN o sin cota. La única cota que se completa es la de terreno desde el TIN
 del propio plan, y se avisa. Un nodo sin ninguna cota se descarta con motivo.
 
+#### Reimportar una entrega nueva sin perder la revisión (F13-06, D9)
+
+```powershell
+redes --dry-run importar reimportar --archivo plan-v2.json   # informe, sin escribir
+redes importar reimportar --archivo plan-v2.json
+redes importar reimportar --archivo plano-devuelto.dxf      # el formato sale de la extensión
+redes importar reimportar --archivo plan-v3.json --aceptar-bajas
+```
+
+`importar plan` sobre un proyecto que ya tiene esos códigos los descarta como repetidos. Cuando
+llega **otra versión del diseño** se usa `importar reimportar`: el diseño se sustituye entero por el
+de la entrega (Redes no edita el diseño) y la revisión se traslada emparejando por **código**, con
+la misma comparación que `proyecto diff` (tolerancia 0,001 m en cotas y `--tolerancia-pos`, 0,01 m
+por defecto, en planta):
+
+| Objeto | Estado | Observaciones |
+|---|---|---|
+| sin cambios de diseño | se conserva | se conservan |
+| con cambios de diseño, **aprobado** | vuelve a **pendiente** (se aprobó otra cosa) | se conservan |
+| con cambios de diseño, observado o pendiente | se conserva | se conservan |
+| solo cambia la procedencia de un dato (`datos.X.fuente`) | se conserva (se informa) | se conservan |
+| alta (código nuevo) | pendiente | — |
+| baja (código que ya no viene) | sale del modelo; si tenía revisión, falla con `E_STATE_BAJAS_CON_REVISION` (salida 3) salvo `--aceptar-bajas` | van completas en `data.bajas` |
+
+El sobre trae `data.resumen` (`altas`, `bajas`, `bajas_con_revision`, `cambiados`, `sin_cambios`,
+`revision_conservada`, `revision_reiniciada`, `observaciones_conservadas`, `cambia_el_diseno`) y el
+detalle en `data.altas`, `data.bajas` (con su estado y observaciones), `data.cambiados` (estado antes
+y después, `revision: conservada|reiniciada` y los `cambios` por campo, como en `proyecto diff`),
+`data.reiniciados`, `data.estado_proyecto` y `data.importacion` (descartes y avisos de la ingesta).
+`--dry-run` hace todo en memoria y devuelve el mismo informe (con la revisión como quedaría) sin
+escribir. Un error de la entrega (`E_FMT_*`, `E_CRS`) no toca el proyecto.
+
+Se anota un único `commit` en el journal: `importar.reimportar plan-v2.json: altas 1, bajas 0,
+cambiados 2, reiniciados 1 [CL-014]`, y la revisión del proyecto sube en uno. Un proyecto
+**aprobado** pasa a `en_revision` si cambió el diseño. Se conservan el terreno (salvo que la entrega
+traiga uno), el entorno, la biblioteca y el modelo 3D asignado con `biblioteca aplicar` (y sus datos
+con fuente `modelo:<id>`); si el modelo movía los extremos de los tramos a sus anclas, vuelva a
+ejecutar `biblioteca aplicar` tras reimportar.
+
 ### 5.3 Revisar
 
 ```powershell

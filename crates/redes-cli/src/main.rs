@@ -7,6 +7,7 @@ mod acta;
 mod diff;
 mod observaciones;
 mod perfil;
+mod reimportar;
 mod svg;
 mod validar;
 
@@ -214,6 +215,9 @@ enum ImportarCmd {
         #[arg(long)]
         epsg: Option<u32>,
     },
+    /// Carga una entrega nueva (plan o DXF de Redes) sobre el proyecto sin perder la revisión:
+    /// empareja por código, conserva estados y observaciones e informa altas, bajas y cambios.
+    Reimportar(reimportar::ReimportarArgs),
 }
 
 #[derive(Subcommand)]
@@ -658,6 +662,9 @@ fn run(cli: Cli, t0: Instant) -> i32 {
                 Envelope::ok("proyecto.aprobar").with_data(json!({ "estado": p.estado.key() }))
             }
         }
+        Cmd::Importar {
+            cmd: ImportarCmd::Reimportar(a),
+        } => reimportar::ejecutar(&mut p, &a, dry),
         Cmd::Importar { cmd } => importar(&mut p, cmd, dry),
         Cmd::Objeto { cmd } => objeto(&mut p, cmd, dry),
         Cmd::Exportar { cmd } => exportar(&p, cmd, dry),
@@ -1001,7 +1008,11 @@ fn elapsed(t0: Instant) -> u64 {
 fn mutates(id: &str) -> bool {
     matches!(
         id,
-        "importar.plan" | "importar.dxf" | "importar.terreno" | "proyecto.aprobar"
+        "importar.plan"
+            | "importar.dxf"
+            | "importar.terreno"
+            | "importar.reimportar"
+            | "proyecto.aprobar"
     ) || observaciones::muta(id)
 }
 
@@ -1036,6 +1047,7 @@ fn command_id(c: &Cmd) -> &'static str {
             ImportarCmd::Plan { .. } => "importar.plan",
             ImportarCmd::Dxf { .. } => "importar.dxf",
             ImportarCmd::Terreno { .. } => "importar.terreno",
+            ImportarCmd::Reimportar(_) => reimportar::CMD,
         },
         Cmd::Objeto { cmd } => match cmd {
             ObjetoCmd::Lista { .. } => "objeto.lista",
@@ -1168,7 +1180,11 @@ fn esquema(filtro: Option<&str>) -> Envelope {
                 "html (acta)"
             ]
         },
-        "codigos_error": CODIGOS.iter().chain(observaciones::CODIGOS).collect::<Vec<_>>()
+        "codigos_error": CODIGOS
+            .iter()
+            .chain(observaciones::CODIGOS)
+            .chain(reimportar::CODIGOS)
+            .collect::<Vec<_>>()
     }))
 }
 
@@ -1286,6 +1302,7 @@ fn importar(p: &mut Project, cmd: ImportarCmd, dry: bool) -> Envelope {
             };
             ("importar.terreno", resultado)
         }
+        ImportarCmd::Reimportar(_) => unreachable!("se despacha en `run`"),
     };
     match result {
         Ok(rep) => Envelope::ok(command).with_data(json!({

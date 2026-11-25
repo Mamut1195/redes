@@ -68,6 +68,10 @@ Contrato sólido (F12-15):
   nombre válido más parecido (`«trazado» (¿quiso decir «vertices»?)`). Antes se perdía en silencio.
 - `--dry-run` de `importar plan` (y de `dxf` y `terreno`) importa en una copia en memoria y da el
   mismo informe sin escribir.
+- Una **entrega nueva** sobre un proyecto ya revisado entra con `redes importar reimportar
+  --archivo plan-v2.json` (F13-06, D9): sustituye el diseño y conserva estados y observaciones
+  emparejando por **código**. Por eso el plan debe mantener los códigos del origen entre entregas
+  (no renumerar ni generar códigos nuevos); un código distinto es una baja y un alta.
 - Unidades fijas: diámetro de nodo en m; DN (`diametro_mm`) y DI (`diametro_interior_mm`) del tubo
   en mm. Lo que parece otra unidad (nodo > 20 m, tubo < 10 mm) se avisa, no se corrige.
 - `seccion` (lista de la familia), `alto_m`/`ancho_m` → `datos.altura_seccion/ancho_seccion`; sin
