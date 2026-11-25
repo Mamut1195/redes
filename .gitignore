@@ -28,3 +28,6 @@ desktop.ini
 # Secretos y locales
 .env
 .env.*
+
+# Worktrees de agentes
+.claude/worktrees/
