@@ -245,7 +245,7 @@ impl Dibujo {
         nube: f64,
     ) {
         let nota = nota.map(str::trim).filter(|s| !s.is_empty());
-        if nota.is_none() && estado == EstadoObjeto::Pendiente {
+        if nota.is_none() && estado != EstadoObjeto::Observado {
             return;
         }
         let mut t = format!("{code} {}", estado.key().to_uppercase());
@@ -1297,6 +1297,30 @@ mod tests {
                 .iter()
                 .any(|t| t.starts_with(&format!("{} ", pendiente.code)))
         );
+    }
+
+    /// F12-08: un aprobado sin nota no entra en OBSERVACIONES; con nota, sí; observado, siempre.
+    #[test]
+    fn observaciones_solo_si_observado_o_con_nota() {
+        let mut p = crate::demo::project();
+        p.nodes[0].estado = EstadoObjeto::Aprobado;
+        p.nodes[0].nota = None;
+        p.nodes[1].estado = EstadoObjeto::Aprobado;
+        p.nodes[1].nota = Some("Cumple".into());
+        p.nodes[2].estado = EstadoObjeto::Observado;
+        p.nodes[2].nota = None;
+        let c: Vec<String> = (0..3).map(|i| p.nodes[i].code.clone()).collect();
+        let l = lee_dxf(&exporta(&p, "obsregla"));
+        let textos: Vec<&str> = l
+            .entidades
+            .iter()
+            .filter(|(_, e)| g(e, 8) == Some(CAPA_OBSERVACIONES))
+            .filter_map(|(_, e)| g(e, 1))
+            .collect();
+        let hay = |code: &str| textos.iter().any(|t| t.starts_with(&format!("{code} ")));
+        assert!(!hay(&c[0]), "aprobado sin nota: {textos:?}");
+        assert!(hay(&c[1]), "aprobado con nota: {textos:?}");
+        assert!(hay(&c[2]), "observado sin nota: {textos:?}");
     }
 
     /// F12-03: un pozo sin terreno y un tramo sin DN no se rotulan y siguen sin ese dato tras
