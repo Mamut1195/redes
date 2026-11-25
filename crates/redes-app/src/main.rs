@@ -1580,24 +1580,7 @@ fn main() {
                     s.rebuild();
                 }) as fn(&mut State),
             ),
-            (
-                "pozos",
-                (|s: &mut State| {
-                    // Hilera de pozos: se ven cono, marco, tapa y escalera.
-                    s.cam.target = [32.0, 36.0, 2502.6];
-                    s.cam.distance = 16.0;
-                    s.cam.azimuth = -64.0;
-                    s.cam.elevation = 22.0;
-                    s.sel = s
-                        .project
-                        .nodes
-                        .iter()
-                        .find(|n| !n.deleted && n.family == "saneamiento.pozo")
-                        .map(|n| n.code.clone());
-                    s.fitted = true;
-                    s.rebuild();
-                }) as fn(&mut State),
-            ),
+            ("pozos", camara_pozos as fn(&mut State)),
             (
                 "pieza",
                 (|s: &mut State| {
@@ -1685,6 +1668,31 @@ fn main() {
     } else {
         rune::run(spec);
     }
+}
+
+/// Escena `pozos`: primer plano del primer pozo (cono, marco, tapa y escalera). El objetivo sale
+/// del pozo, en coordenadas locales: un objetivo fijo quedaba lejos de la red al cambiar el demo y
+/// el lienzo salía vacío, con y sin `--gpu3d`.
+fn camara_pozos(s: &mut State) {
+    let pozo = s
+        .project
+        .nodes
+        .iter()
+        .find(|n| !n.deleted && n.family == "saneamiento.pozo")
+        .map(|n| (n.code.clone(), n.pos, n.z_rim));
+    if let Some((code, pos, z)) = pozo {
+        s.cam.target = [
+            pos.x - s.project.origin.x,
+            pos.y - s.project.origin.y,
+            z - 0.5,
+        ];
+        s.cam.distance = 16.0;
+        s.cam.azimuth = -64.0;
+        s.cam.elevation = 22.0;
+        s.sel = Some(code);
+    }
+    s.fitted = true;
+    s.rebuild();
 }
 
 #[allow(dead_code)]
@@ -1777,6 +1785,24 @@ mod tests {
             (rt.state.cam.z_scale - 1.0).abs() < 1e-9,
             "en foco se dibuja a escala real"
         );
+    }
+
+    /// La escena `pozos` mira al pozo elegido: su tapa y su solera caen dentro del lienzo.
+    #[test]
+    fn la_escena_pozos_encuadra_el_pozo() {
+        let mut st = State::new();
+        camara_pozos(&mut st);
+        let code = st.sel.clone().expect("elige un pozo");
+        let n = st.project.node_by_code(&code).expect("pozo vivo");
+        let (x, y) = (n.pos.x - st.project.origin.x, n.pos.y - st.project.origin.y);
+        let [w, h] = st.cam.viewport;
+        for z in [n.z_rim, n.z_invert] {
+            let q = st.cam.project([x, y, z]).expect("delante de la cámara");
+            assert!(
+                (0.0..=w).contains(&q[0]) && (0.0..=h).contains(&q[1]),
+                "{code} a cota {z} cae fuera del lienzo: {q:?} en {w}x{h}"
+            );
+        }
     }
 
     /// Con `--gpu3d`, arrastrar, girar con la rueda o cambiar de cámara solo mueve la matriz: la
