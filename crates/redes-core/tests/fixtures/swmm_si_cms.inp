@@ -1,0 +1,175 @@
+[TITLE]
+;;Project Title/Notes
+Colector pluvial Av. Los Cedros (fixture de prueba, unidades SI)
+
+[OPTIONS]
+;;Option             Value
+FLOW_UNITS           CMS
+INFILTRATION         HORTON
+FLOW_ROUTING         DYNWAVE
+LINK_OFFSETS         DEPTH
+MIN_SLOPE            0
+ALLOW_PONDING        NO
+SKIP_STEADY_STATE    NO
+START_DATE           01/15/2024
+START_TIME           00:00:00
+REPORT_START_DATE    01/15/2024
+REPORT_START_TIME    00:00:00
+END_DATE             01/15/2024
+END_TIME             06:00:00
+SWEEP_START          01/01
+SWEEP_END            12/31
+DRY_DAYS             0
+REPORT_STEP          00:05:00
+WET_STEP             00:01:00
+DRY_STEP             01:00:00
+ROUTING_STEP         0:00:05
+INERTIAL_DAMPING     PARTIAL
+NORMAL_FLOW_LIMITED  BOTH
+FORCE_MAIN_EQUATION  H-W
+VARIABLE_STEP        0.75
+LENGTHENING_STEP     0
+MIN_SURFAREA         1.167
+MAX_TRIALS           8
+HEAD_TOLERANCE       0.0015
+SYS_FLOW_TOL         5
+LAT_FLOW_TOL         5
+MINIMUM_STEP         0.5
+THREADS              1
+
+[EVAPORATION]
+;;Data Source    Parameters
+;;-------------- ----------------
+CONSTANT         0.0
+DRY_ONLY         NO
+
+[RAINGAGES]
+;;Name           Format    Interval SCF      Source
+;;-------------- --------- ------ ------ ----------
+RG1              INTENSITY 0:05     1.0      TIMESERIES TS-LLUVIA
+
+[SUBCATCHMENTS]
+;;Name           Rain Gage        Outlet           Area     %Imperv  Width    %Slope   CurbLen  SnowPack
+;;-------------- ---------------- ---------------- -------- -------- -------- -------- -------- ----------------
+S1               RG1              J1               2.5      65       180      1.5      0
+S2               RG1              J3               1.8      70       150      2.0      0
+
+[SUBAREAS]
+;;Subcatchment   N-Imperv   N-Perv     S-Imperv   S-Perv     PctZero    RouteTo    PctRouted
+;;-------------- ---------- ---------- ---------- ---------- ---------- ---------- ----------
+S1               0.013      0.15       1.27       5.08       25         OUTLET
+S2               0.013      0.15       1.27       5.08       25         OUTLET
+
+[INFILTRATION]
+;;Subcatchment   Param1     Param2     Param3     Param4     Param5
+;;-------------- ---------- ---------- ---------- ---------- ----------
+S1               76.2       12.7       4          7          0
+S2               76.2       12.7       4          7          0
+
+[JUNCTIONS]
+;;Name           Elevation  MaxDepth   InitDepth  SurDepth   Aponded
+;;-------------- ---------- ---------- ---------- ---------- ----------
+J1               2510.50    2.40       0          0          0
+J2               2509.80    2.80       0          0          0
+J3               2508.90    0          0          0          0
+J4               2508.20    3.10       0          0          0
+
+[OUTFALLS]
+;;Name           Elevation  Type       Stage Data       Gated    Route To
+;;-------------- ---------- ---------- ---------------- -------- ----------------
+OF1              2505.00    FREE                        NO
+
+[STORAGE]
+;;Name           Elev.    MaxDepth   InitDepth  Shape      Curve Name/Params            N/A      Fevap    Psi      Ksat     IMD
+;;-------------- -------- ---------- ----------- ---------- ---------------------------- -------- --------          -------- --------
+ST1              2506.00  4.00       0.50       FUNCTIONAL 0         0         120       0        0
+
+[CONDUITS]
+;;Name           From Node        To Node          Length     Roughness  InOffset   OutOffset  InitFlow   MaxFlow
+;;-------------- ---------------- ---------------- ---------- ---------- ---------- ---------- ---------- ----------
+C1               J1               J2               85.0       0.013      0          0.25       0          0
+C2               J2               J3               80.2       0.013      0          0          0          0
+C3               J3               J4               81.4       0.015      0.30       0          0          0
+C4               J4               OF1              80.2       0.025      0          0          0          0
+
+[PUMPS]
+;;Name           From Node        To Node          Pump Curve       Status   Sartup Shutoff
+;;-------------- ---------------- ---------------- ---------------- ------ -------- --------
+P1               ST1              OF1              CURVA-P1         OFF      1.5      0.5
+
+[ORIFICES]
+;;Name           From Node        To Node          Type         Offset     Qcoeff     Gated    CloseTime
+;;-------------- ---------------- ---------------- ------------ ---------- ---------- -------- ----------
+OR1              J2               ST1              SIDE         0.20       0.65       NO       0
+
+[WEIRS]
+;;Name           From Node        To Node          Type         CrestHt    Qcoeff     Gated    EndCon   EndCoeff   Surcharge  RoadWidth  RoadSurf
+;;-------------- ---------------- ---------------- ------------ ---------- ---------- -------- -------- ---------- ---------- ---------- ----------
+W1               J4               ST1              SIDEFLOW     0.90       1.84       NO       0        0          YES
+
+[XSECTIONS]
+;;Link           Shape        Geom1            Geom2      Geom3      Geom4      Barrels    Culvert
+;;-------------- ------------ ---------------- ---------- ---------- ---------- ---------- ----------
+C1               CIRCULAR     0.60             0          0          0          1
+C2               CIRCULAR     0.80             0          0          0          1
+C3               RECT_CLOSED  1.00             1.50       0          0          1
+C4               TRAPEZOIDAL  1.20             2.00       1.5        1.5        1
+OR1              CIRCULAR     0.30             0          0          0
+W1               RECT_OPEN    0.50             3.00       0          0
+
+[CURVES]
+;;Name           Type       X-Value    Y-Value
+;;-------------- ---------- ---------- ----------
+CURVA-P1         Pump2      0.5        0.04
+CURVA-P1                    2.0        0.08
+
+[TIMESERIES]
+;;Name           Date       Time       Value
+;;-------------- ---------- ---------- ----------
+TS-LLUVIA                   0:00       0
+TS-LLUVIA                   0:30       45
+TS-LLUVIA                   1:00       12
+TS-LLUVIA                   1:30       0
+
+[REPORT]
+;;Reporting Options
+SUBCATCHMENTS ALL
+NODES ALL
+LINKS ALL
+
+[TAGS]
+
+[MAP]
+DIMENSIONS 759950.000 9795900.000 760350.000 9796050.000
+Units      Meters
+
+[COORDINATES]
+;;Node           X-Coord            Y-Coord
+;;-------------- ------------------ ------------------
+J1               760000.000         9796000.000
+J2               760080.000         9795990.000
+J3               760160.000         9795985.000
+J4               760240.000         9795970.000
+OF1              760320.000         9795960.000
+ST1              760260.000         9795940.000
+
+[VERTICES]
+;;Link           X-Coord            Y-Coord
+;;-------------- ------------------ ------------------
+C1               760040.000         9796010.000
+C4               760280.000         9795975.000
+
+[Polygons]
+;;Subcatchment   X-Coord            Y-Coord
+;;-------------- ------------------ ------------------
+S1               759960.000         9796030.000
+S1               760040.000         9796040.000
+S1               760020.000         9795980.000
+S2               760120.000         9796020.000
+S2               760200.000         9796010.000
+S2               760180.000         9795960.000
+
+[SYMBOLS]
+;;Gage           X-Coord            Y-Coord
+;;-------------- ------------------ ------------------
+RG1              759980.000         9796045.000

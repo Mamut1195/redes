@@ -1,0 +1,341 @@
+{
+  "schema": "redes.plan/1",
+  "proyecto": {
+    "nombre": "epanet_si_lps",
+    "crs": "EPSG:32717",
+    "fuente_app": "EPANET",
+    "fuente_archivo": "epanet_si_lps.inp"
+  },
+  "terreno": [],
+  "objetos": [
+    {
+      "tipo": "nodo",
+      "codigo": "NB",
+      "familia": "comun.accesorio",
+      "subtipo": "union",
+      "e": 759505.0,
+      "n": 9795005.0,
+      "cota": 2480.0,
+      "attrs": {
+        "tipo_accesorio": "union"
+      },
+      "datos": {
+        "demanda_base": {
+          "valor": 0.0,
+          "unidad": "L/s",
+          "fuente": "EPANET (epanet_si_lps.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "N1",
+      "familia": "comun.accesorio",
+      "subtipo": "reduccion",
+      "e": 760150.0,
+      "n": 9795480.0,
+      "cota": 2520.0,
+      "attrs": {
+        "tipo_accesorio": "reduccion"
+      },
+      "datos": {
+        "demanda_base": {
+          "valor": 0.0,
+          "unidad": "L/s",
+          "fuente": "EPANET (epanet_si_lps.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "N2",
+      "familia": "comun.accesorio",
+      "subtipo": "tee",
+      "e": 760300.0,
+      "n": 9795400.0,
+      "cota": 2512.5,
+      "attrs": {
+        "tipo_accesorio": "tee"
+      },
+      "datos": {
+        "demanda_base": {
+          "valor": 1.2,
+          "unidad": "L/s",
+          "fuente": "EPANET (epanet_si_lps.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "N3",
+      "familia": "comun.accesorio",
+      "subtipo": "tapon",
+      "e": 760420.0,
+      "n": 9795480.0,
+      "cota": 2508.0,
+      "attrs": {
+        "tipo_accesorio": "tapon"
+      },
+      "datos": {
+        "demanda_base": {
+          "valor": 0.8,
+          "unidad": "L/s",
+          "fuente": "EPANET (epanet_si_lps.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "N4",
+      "familia": "comun.accesorio",
+      "subtipo": "union",
+      "e": 760420.0,
+      "n": 9795300.0,
+      "cota": 2505.2,
+      "attrs": {
+        "tipo_accesorio": "union"
+      },
+      "datos": {
+        "demanda_base": {
+          "valor": 0.95,
+          "unidad": "L/s",
+          "fuente": "EPANET (epanet_si_lps.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "N5",
+      "familia": "comun.accesorio",
+      "subtipo": "reduccion",
+      "e": 760425.0,
+      "n": 9795298.0,
+      "cota": 2504.0,
+      "attrs": {
+        "tipo_accesorio": "reduccion"
+      },
+      "datos": {
+        "demanda_base": {
+          "valor": 0.0,
+          "unidad": "L/s",
+          "fuente": "EPANET (epanet_si_lps.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "N6",
+      "familia": "comun.accesorio",
+      "subtipo": "tapon",
+      "e": 760560.0,
+      "n": 9795240.0,
+      "cota": 2490.0,
+      "attrs": {
+        "tipo_accesorio": "tapon"
+      },
+      "datos": {
+        "demanda_base": {
+          "valor": 1.5,
+          "unidad": "L/s",
+          "fuente": "EPANET (epanet_si_lps.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "CAPT",
+      "familia": "agua.captacion",
+      "subtipo": "pozo_profundo",
+      "e": 759500.0,
+      "n": 9795000.0,
+      "datos": {
+        "carga_hidraulica": {
+          "valor": 2478.0,
+          "unidad": "m",
+          "fuente": "EPANET (epanet_si_lps.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "TQ1",
+      "familia": "agua.tanque",
+      "subtipo": "apoyado_cilindrico",
+      "e": 760000.0,
+      "n": 9795600.0,
+      "cota": 2530.0,
+      "attrs": {
+        "cota_piso": 2530.0,
+        "cota_nivel_max": 2533.2,
+        "cota_nivel_min": 2530.3,
+        "diametro": 12000.0
+      },
+      "datos": {
+        "nivel_inicial": {
+          "valor": 2.5,
+          "unidad": "m",
+          "fuente": "EPANET (epanet_si_lps.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "B1",
+      "familia": "agua.bombeo",
+      "subtipo": "booster_en_linea",
+      "e": 759500.0,
+      "n": 9795000.0
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "PRV1",
+      "familia": "agua.valvula",
+      "subtipo": "reduccion_presion",
+      "e": 760420.0,
+      "n": 9795300.0,
+      "cota": 2505.2,
+      "attrs": {
+        "tipo_valvula": "reduccion_presion",
+        "diametro_nominal": 90,
+        "consigna_presion": 25.0
+      }
+    },
+    {
+      "tipo": "arco",
+      "codigo": "T1",
+      "familia": "agua.tuberia",
+      "subtipo": "distribucion_primaria",
+      "desde": "NB",
+      "hasta": "TQ1",
+      "diametro_mm": 160,
+      "vertices": [
+        [
+          759505.0,
+          9795005.0,
+          2480.0
+        ],
+        [
+          759700.0,
+          9795300.0,
+          2502.5554
+        ],
+        [
+          759850.0,
+          9795500.0,
+          2518.5013
+        ],
+        [
+          760000.0,
+          9795600.0,
+          2530.0
+        ]
+      ],
+      "attrs": {
+        "coef_hazen": 140.0
+      },
+      "datos": {
+        "longitud_origen": {
+          "valor": 850.0,
+          "unidad": "m",
+          "fuente": "EPANET (epanet_si_lps.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "arco",
+      "codigo": "T2",
+      "familia": "agua.tuberia",
+      "subtipo": "distribucion_primaria",
+      "desde": "TQ1",
+      "hasta": "N1",
+      "diametro_mm": 160,
+      "attrs": {
+        "coef_hazen": 140.0
+      },
+      "datos": {
+        "longitud_origen": {
+          "valor": 320.0,
+          "unidad": "m",
+          "fuente": "EPANET (epanet_si_lps.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "arco",
+      "codigo": "T3",
+      "familia": "agua.tuberia",
+      "subtipo": "distribucion_primaria",
+      "desde": "N1",
+      "hasta": "N2",
+      "diametro_mm": 110,
+      "attrs": {
+        "coef_hazen": 140.0
+      },
+      "datos": {
+        "longitud_origen": {
+          "valor": 210.0,
+          "unidad": "m",
+          "fuente": "EPANET (epanet_si_lps.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "arco",
+      "codigo": "T4",
+      "familia": "agua.tuberia",
+      "subtipo": "distribucion_primaria",
+      "desde": "N2",
+      "hasta": "N3",
+      "diametro_mm": 90,
+      "attrs": {
+        "coef_hazen": 140.0
+      },
+      "datos": {
+        "longitud_origen": {
+          "valor": 180.0,
+          "unidad": "m",
+          "fuente": "EPANET (epanet_si_lps.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "arco",
+      "codigo": "T5",
+      "familia": "agua.tuberia",
+      "subtipo": "distribucion_primaria",
+      "desde": "N2",
+      "hasta": "N4",
+      "diametro_mm": 90,
+      "attrs": {
+        "coef_hazen": 140.0
+      },
+      "datos": {
+        "longitud_origen": {
+          "valor": 200.0,
+          "unidad": "m",
+          "fuente": "EPANET (epanet_si_lps.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "arco",
+      "codigo": "T6",
+      "familia": "agua.tuberia",
+      "subtipo": "distribucion_primaria",
+      "desde": "N5",
+      "hasta": "N6",
+      "diametro_mm": 63,
+      "attrs": {
+        "coef_hazen": 140.0,
+        "tipo_valvula": "retencion"
+      },
+      "datos": {
+        "longitud_origen": {
+          "valor": 150.0,
+          "unidad": "m",
+          "fuente": "EPANET (epanet_si_lps.inp)"
+        }
+      }
+    }
+  ]
+}

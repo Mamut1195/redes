@@ -1,0 +1,306 @@
+{
+  "schema": "redes.plan/1",
+  "proyecto": {
+    "nombre": "swmm_si_cms",
+    "crs": "EPSG:32717",
+    "fuente_app": "SWMM",
+    "fuente_archivo": "swmm_si_cms.inp"
+  },
+  "terreno": [],
+  "objetos": [
+    {
+      "tipo": "nodo",
+      "codigo": "J1",
+      "familia": "saneamiento.pozo",
+      "subtipo": "inspeccion",
+      "e": 760000.0,
+      "n": 9796000.0,
+      "cota": 2510.5,
+      "cota_terreno": 2512.9,
+      "attrs": {
+        "profundidad": 2.4
+      },
+      "datos": {
+        "profundidad_max": {
+          "valor": 2.4,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_si_cms.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "J2",
+      "familia": "saneamiento.pozo",
+      "subtipo": "inspeccion",
+      "e": 760080.0,
+      "n": 9795990.0,
+      "cota": 2509.8,
+      "cota_terreno": 2512.6,
+      "attrs": {
+        "profundidad": 2.8
+      },
+      "datos": {
+        "profundidad_max": {
+          "valor": 2.8,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_si_cms.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "J3",
+      "familia": "saneamiento.pozo",
+      "subtipo": "inspeccion",
+      "e": 760160.0,
+      "n": 9795985.0,
+      "cota": 2508.9
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "J4",
+      "familia": "saneamiento.pozo",
+      "subtipo": "inspeccion",
+      "e": 760240.0,
+      "n": 9795970.0,
+      "cota": 2508.2,
+      "cota_terreno": 2511.3,
+      "attrs": {
+        "profundidad": 3.1
+      },
+      "datos": {
+        "profundidad_max": {
+          "valor": 3.1,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_si_cms.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "OF1",
+      "familia": "saneamiento.descarga",
+      "subtipo": "emisario_muro",
+      "e": 760320.0,
+      "n": 9795960.0,
+      "cota": 2505.0,
+      "attrs": {
+        "tipo_descarga": "emisario",
+        "cota_entrega": 2505.0
+      }
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "ST1",
+      "familia": "saneamiento.bombeo",
+      "subtipo": "camara_humeda",
+      "e": 760260.0,
+      "n": 9795940.0,
+      "cota": 2506.0,
+      "attrs": {
+        "profundidad": 4.0
+      },
+      "datos": {
+        "profundidad_max": {
+          "valor": 4.0,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_si_cms.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "W1",
+      "familia": "saneamiento.descarga",
+      "subtipo": "alivio_lateral",
+      "e": 760240.0,
+      "n": 9795970.0,
+      "cota": 2508.2,
+      "attrs": {
+        "tipo_descarga": "alivio",
+        "cota_cresta": 2509.1,
+        "longitud_vertedero": 3.0
+      }
+    },
+    {
+      "tipo": "arco",
+      "codigo": "C1",
+      "familia": "saneamiento.tuberia",
+      "subtipo": "colector_pluvial",
+      "desde": "J1",
+      "hasta": "J2",
+      "diametro_mm": 600,
+      "vertices": [
+        [
+          760000.0,
+          9796000.0,
+          2510.5
+        ],
+        [
+          760040.0,
+          9796010.0,
+          2510.2841
+        ],
+        [
+          760080.0,
+          9795990.0,
+          2510.05
+        ]
+      ],
+      "attrs": {
+        "rugosidad_n": 0.013
+      },
+      "datos": {
+        "longitud_origen": {
+          "valor": 85.0,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_si_cms.inp)"
+        },
+        "cota_solera_inicio": {
+          "valor": 2510.5,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_si_cms.inp)"
+        },
+        "cota_solera_fin": {
+          "valor": 2510.05,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_si_cms.inp)"
+        },
+        "desfase_salida": {
+          "valor": 0.25,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_si_cms.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "arco",
+      "codigo": "C2",
+      "familia": "saneamiento.tuberia",
+      "subtipo": "colector_pluvial",
+      "desde": "J2",
+      "hasta": "J3",
+      "diametro_mm": 800,
+      "attrs": {
+        "rugosidad_n": 0.013
+      },
+      "datos": {
+        "longitud_origen": {
+          "valor": 80.2,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_si_cms.inp)"
+        },
+        "cota_solera_inicio": {
+          "valor": 2509.8,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_si_cms.inp)"
+        },
+        "cota_solera_fin": {
+          "valor": 2508.9,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_si_cms.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "arco",
+      "codigo": "C3",
+      "familia": "saneamiento.canal",
+      "subtipo": "box_culvert",
+      "desde": "J3",
+      "hasta": "J4",
+      "vertices": [
+        [
+          760160.0,
+          9795985.0,
+          2509.2
+        ],
+        [
+          760240.0,
+          9795970.0,
+          2508.2
+        ]
+      ],
+      "attrs": {
+        "rugosidad_n": 0.015,
+        "seccion": "rectangular",
+        "numero_celdas": 1,
+        "ancho_celda": 1.5,
+        "altura_celda": 1.0
+      },
+      "datos": {
+        "longitud_origen": {
+          "valor": 81.4,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_si_cms.inp)"
+        },
+        "cota_solera_inicio": {
+          "valor": 2509.2,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_si_cms.inp)"
+        },
+        "desfase_entrada": {
+          "valor": 0.3,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_si_cms.inp)"
+        },
+        "cota_solera_fin": {
+          "valor": 2508.2,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_si_cms.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "arco",
+      "codigo": "C4",
+      "familia": "saneamiento.canal",
+      "subtipo": "trapezoidal",
+      "desde": "J4",
+      "hasta": "OF1",
+      "vertices": [
+        [
+          760240.0,
+          9795970.0,
+          2508.2
+        ],
+        [
+          760280.0,
+          9795975.0,
+          2506.6464
+        ],
+        [
+          760320.0,
+          9795960.0,
+          2505.0
+        ]
+      ],
+      "attrs": {
+        "rugosidad_n": 0.025,
+        "seccion": "trapezoidal",
+        "base": 2.0,
+        "ancho_plantilla": 2.0,
+        "altura_muro": 1.2,
+        "talud": 1.5
+      },
+      "datos": {
+        "longitud_origen": {
+          "valor": 80.2,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_si_cms.inp)"
+        },
+        "cota_solera_inicio": {
+          "valor": 2508.2,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_si_cms.inp)"
+        },
+        "cota_solera_fin": {
+          "valor": 2505.0,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_si_cms.inp)"
+        }
+      }
+    }
+  ]
+}
