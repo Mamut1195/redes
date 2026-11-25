@@ -9,6 +9,7 @@ se cambia aquí y en el mismo commit que el código.
 | D2 | 2026-11-21 | **La revisión no identifica a nadie.** | El journal guarda revisión, comando y fecha UTC. El usuario del sistema solo se anota si se arranca con `REDES_JOURNAL_USUARIO=1`. No hay firma ni identidad legal |
 | D3 | 2026-11-21 | **La app no valora cantidades.** | `redes cantidades` emite cantidades con procedencia; los precios son de otra aplicación. La app es gratuita |
 | D4 | 2026-11-21 | **Sin cálculo hidráulico, hidrológico ni de tierras.** | Todo número entra como `Dato{valor,unidad,fuente}`; lo que no venga de la app de origen se marca como discrepancia, nunca se calcula |
+| D5 | 2026-11-25 | **La ingesta de formatos ajenos es una skill guiada, no adaptadores.** | La app solo importa `redes.plan/1` (validado, sin inventar datos), su propio DXF de ida y vuelta (capa `REDES_INFO`) y terreno. SWMM, EPANET, DXF/GeoJSON de terceros, Excel, etc. los adapta un agente siguiendo `skills/redes-ingesta` (formato, columnas, unidades, trampas, qué no inventar), que escribe el plan; la CLI lo valida. Se retiran `inp_to_plan.py`, `plan_desde_tabla.py` y la heurística de capas de `ingest.rs`. Los fixtures `.inp` y sus planes esperados quedan como ejemplos y pruebas del contrato |
 
 ## Abiertas
 

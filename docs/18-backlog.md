@@ -165,6 +165,14 @@ Objetivo: que lo que el CAD devuelve no pierda familia, código, atributos ni da
 Objetivo: un revisor nunca ve una cota, un diámetro o un sentido de flujo que no venga del origen o
 que esté mal interpretado.
 
+> **Cambio de enfoque (D5, 25/11/2026):** la ingesta de formatos ajenos es una **skill guiada**, no
+> adaptadores. F12-04 y F12-05 pasan a ser referencias de formato en la skill (columnas, unidades,
+> offsets, trampas) con los fixtures `.inp` como ejemplos; F12-09 retira la heurística de capas de
+> `ingest.rs` y la lleva a la skill; F12-13 valida el CRS que declara el plan. F12-03 queda en Rust:
+> `import_plan` no rellena nada que el plan no traiga.
+>
+> **Hecho:** F12-01, F12-02, F12-06, F12-07, F12-11, F12-14; F12-04/05 como código (se reconvierten).
+
 | ID | P | Ticket | Alcance | Aceptación | Días |
 |---|---|---|---|---|---|
 | F12-01 · [MAM-1085](https://linear.app/mamutsystems/issue/MAM-1085) | P0 | **Clave ≠ solera** | `families.rs:443` rotula `cota_clave` como «(invert)»; `export.rs:284` escribe `cota_clave` con `z_invert`; `plan_desde_tabla.py` convierte clave en `cota` (solera). Separar `cota_solera` y `cota_clave` en todo el flujo | un Excel con cotas de clave entra con solera = clave − DI; el GeoJSON exporta `cota_solera` | 1,5 |
