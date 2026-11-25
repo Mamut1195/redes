@@ -3,6 +3,7 @@
 //! No calcula ingeniería. Importa lo que producen otras aplicaciones, lo deja revisar y aprobar,
 //! y lo devuelve al CAD. Toda salida es un sobre JSON `redes.envelope/1`.
 
+mod perfil;
 mod svg;
 
 use std::collections::BTreeMap;
@@ -97,6 +98,8 @@ enum Cmd {
         #[arg(long, default_value_t = 10.0)]
         tolerancia: f64,
     },
+    /// Perfil longitudinal de un colector (SVG y JSON): rasante, solera, clave, pozos, DN y pendiente.
+    Perfil(perfil::PerfilArgs),
     /// Vista 3D del modelo en SVG (sin GPU, apta para agentes).
     Vista {
         #[arg(long)]
@@ -627,6 +630,7 @@ fn run(cli: Cli, t0: Instant) -> i32 {
         Cmd::Objeto { cmd } => objeto(&mut p, cmd, dry),
         Cmd::Exportar { cmd } => exportar(&p, cmd, dry),
         Cmd::Biblioteca { cmd } => biblioteca(&cmd),
+        Cmd::Perfil(a) => perfil::ejecutar(&p, &a, dry),
         Cmd::Vista {
             salida,
             azimut,
@@ -1016,6 +1020,7 @@ fn command_id(c: &Cmd) -> &'static str {
             ExportarCmd::Gltf { .. } => "exportar.gltf",
         },
         Cmd::Cantidades { .. } => "cantidades",
+        Cmd::Perfil(_) => "perfil",
         Cmd::Vista { .. } => "vista",
         Cmd::Biblioteca { cmd } => match cmd {
             BibliotecaCmd::Revisar { .. } => "biblioteca.revisar",
@@ -1154,6 +1159,16 @@ const CODIGOS: &[(&str, &str, i32)] = &[
     (
         "E_TOPO_SELF_LOOP",
         "arco con el mismo nodo en ambos extremos",
+        3,
+    ),
+    (
+        "E_TOPO_NO_CONSECUTIVO",
+        "perfil: los tramos no se siguen en el sentido declarado",
+        3,
+    ),
+    (
+        "E_TOPO_SIN_RUTA",
+        "perfil: no hay recorrido entre los pozos siguiendo el sentido declarado",
         3,
     ),
     ("E_FMT_PARSE", "archivo ilegible", 7),
