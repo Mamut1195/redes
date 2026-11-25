@@ -1,0 +1,377 @@
+{
+  "schema": "redes.plan/1",
+  "proyecto": {
+    "nombre": "swmm_us_cfs",
+    "crs": "EPSG:32717",
+    "fuente_app": "SWMM",
+    "fuente_archivo": "swmm_us_cfs.inp"
+  },
+  "terreno": [],
+  "objetos": [
+    {
+      "tipo": "nodo",
+      "codigo": "MH1",
+      "familia": "saneamiento.pozo",
+      "subtipo": "inspeccion",
+      "e": 761000.0,
+      "n": 9797200.0,
+      "cota": 249.936,
+      "cota_terreno": 252.3744,
+      "attrs": {
+        "profundidad": 2.4384
+      },
+      "datos": {
+        "profundidad_max": {
+          "valor": 2.4384,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_us_cfs.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "MH2",
+      "familia": "saneamiento.pozo",
+      "subtipo": "inspeccion",
+      "e": 761090.0,
+      "n": 9797180.0,
+      "cota": 248.5644,
+      "cota_terreno": 251.6124,
+      "attrs": {
+        "profundidad": 3.048
+      },
+      "datos": {
+        "profundidad_max": {
+          "valor": 3.048,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_us_cfs.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "MH3",
+      "familia": "saneamiento.pozo",
+      "subtipo": "inspeccion",
+      "e": 761160.0,
+      "n": 9797150.0,
+      "cota": 247.4976
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "PJ1",
+      "familia": "saneamiento.pozo",
+      "subtipo": "inspeccion",
+      "e": 761215.0,
+      "n": 9797120.0,
+      "cota": 244.1448
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "MH4",
+      "familia": "saneamiento.pozo",
+      "subtipo": "inspeccion",
+      "e": 761390.0,
+      "n": 9797200.0,
+      "cota": 252.984,
+      "cota_terreno": 254.8128,
+      "attrs": {
+        "profundidad": 1.8288
+      },
+      "datos": {
+        "profundidad_max": {
+          "valor": 1.8288,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_us_cfs.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "OUT1",
+      "familia": "saneamiento.descarga",
+      "subtipo": "emisario_muro",
+      "e": 761500.0,
+      "n": 9797100.0,
+      "cota": 242.316,
+      "attrs": {
+        "tipo_descarga": "emisario",
+        "cota_entrega": 242.316
+      }
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "WW1",
+      "familia": "saneamiento.bombeo",
+      "subtipo": "camara_humeda",
+      "e": 761210.0,
+      "n": 9797120.0,
+      "cota": 243.84,
+      "attrs": {
+        "profundidad": 4.572
+      },
+      "datos": {
+        "profundidad_max": {
+          "valor": 4.572,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_us_cfs.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "WR1",
+      "familia": "saneamiento.descarga",
+      "subtipo": "vertedero_cresta",
+      "e": 761090.0,
+      "n": 9797180.0,
+      "cota": 248.5644,
+      "attrs": {
+        "tipo_descarga": "alivio",
+        "cota_cresta": 249.6312,
+        "altura_cresta": 1.0668,
+        "longitud_vertedero": 1.2192
+      }
+    },
+    {
+      "tipo": "arco",
+      "codigo": "P-1",
+      "familia": "saneamiento.tuberia",
+      "subtipo": "colector_sanitario",
+      "desde": "MH1",
+      "hasta": "MH2",
+      "diametro_mm": 305,
+      "vertices": [
+        [
+          761000.0,
+          9797200.0,
+          249.936
+        ],
+        [
+          761090.0,
+          9797180.0,
+          248.793
+        ]
+      ],
+      "attrs": {
+        "rugosidad_n": 0.013
+      },
+      "datos": {
+        "longitud_origen": {
+          "valor": 91.44,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_us_cfs.inp)"
+        },
+        "cota_solera_inicio": {
+          "valor": 249.936,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_us_cfs.inp)"
+        },
+        "cota_solera_fin": {
+          "valor": 248.793,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_us_cfs.inp)"
+        },
+        "desfase_salida": {
+          "valor": 0.2286,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_us_cfs.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "arco",
+      "codigo": "P-2",
+      "familia": "saneamiento.tuberia",
+      "subtipo": "colector_sanitario",
+      "desde": "MH2",
+      "hasta": "MH3",
+      "diametro_mm": 381,
+      "vertices": [
+        [
+          761090.0,
+          9797180.0,
+          248.5644
+        ],
+        [
+          761115.0,
+          9797175.0,
+          248.2112
+        ],
+        [
+          761140.0,
+          9797160.0,
+          247.8074
+        ],
+        [
+          761160.0,
+          9797150.0,
+          247.4976
+        ]
+      ],
+      "attrs": {
+        "rugosidad_n": 0.013
+      },
+      "datos": {
+        "longitud_origen": {
+          "valor": 76.2,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_us_cfs.inp)"
+        },
+        "cota_solera_inicio": {
+          "valor": 248.5644,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_us_cfs.inp)"
+        },
+        "cota_solera_fin": {
+          "valor": 247.4976,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_us_cfs.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "arco",
+      "codigo": "P-3",
+      "familia": "saneamiento.tuberia",
+      "subtipo": "colector_sanitario",
+      "desde": "MH3",
+      "hasta": "WW1",
+      "diametro_mm": 457,
+      "vertices": [
+        [
+          761160.0,
+          9797150.0,
+          247.4976
+        ],
+        [
+          761210.0,
+          9797120.0,
+          244.602
+        ]
+      ],
+      "attrs": {
+        "rugosidad_n": 0.013
+      },
+      "datos": {
+        "longitud_origen": {
+          "valor": 54.864,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_us_cfs.inp)"
+        },
+        "cota_solera_inicio": {
+          "valor": 247.4976,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_us_cfs.inp)"
+        },
+        "cota_solera_fin": {
+          "valor": 244.602,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_us_cfs.inp)"
+        },
+        "desfase_salida": {
+          "valor": 0.762,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_us_cfs.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "arco",
+      "codigo": "FM-1",
+      "familia": "saneamiento.tuberia",
+      "subtipo": "impulsion",
+      "desde": "PJ1",
+      "hasta": "MH4",
+      "diametro_mm": 152,
+      "vertices": [
+        [
+          761215.0,
+          9797120.0,
+          244.1448
+        ],
+        [
+          761300.0,
+          9797160.0,
+          248.46
+        ],
+        [
+          761390.0,
+          9797200.0,
+          252.984
+        ]
+      ],
+      "attrs": {
+        "rugosidad_n": 0.011,
+        "coef_hazen": 130.0
+      },
+      "datos": {
+        "longitud_origen": {
+          "valor": 182.88,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_us_cfs.inp)"
+        },
+        "cota_solera_inicio": {
+          "valor": 244.1448,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_us_cfs.inp)"
+        },
+        "cota_solera_fin": {
+          "valor": 252.984,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_us_cfs.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "arco",
+      "codigo": "G-5",
+      "familia": "saneamiento.tuberia",
+      "subtipo": "colector_sanitario",
+      "desde": "MH4",
+      "hasta": "OUT1",
+      "vertices": [
+        [
+          761390.0,
+          9797200.0,
+          252.984
+        ],
+        [
+          761500.0,
+          9797100.0,
+          242.6208
+        ]
+      ],
+      "attrs": {
+        "rugosidad_n": 0.013
+      },
+      "datos": {
+        "longitud_origen": {
+          "valor": 121.92,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_us_cfs.inp)"
+        },
+        "cota_solera_inicio": {
+          "valor": 252.984,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_us_cfs.inp)"
+        },
+        "cota_solera_fin": {
+          "valor": 242.6208,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_us_cfs.inp)"
+        },
+        "desfase_salida": {
+          "valor": 0.3048,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_us_cfs.inp)"
+        },
+        "altura_seccion": {
+          "valor": 0.6096,
+          "unidad": "m",
+          "fuente": "SWMM (swmm_us_cfs.inp)"
+        }
+      }
+    }
+  ]
+}

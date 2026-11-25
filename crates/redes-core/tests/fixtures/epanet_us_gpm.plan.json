@@ -1,0 +1,285 @@
+{
+  "schema": "redes.plan/1",
+  "proyecto": {
+    "nombre": "epanet_us_gpm",
+    "crs": "EPSG:32717",
+    "fuente_app": "EPANET",
+    "fuente_archivo": "epanet_us_gpm.inp"
+  },
+  "terreno": [],
+  "objetos": [
+    {
+      "tipo": "nodo",
+      "codigo": "J10",
+      "familia": "comun.accesorio",
+      "subtipo": "tee",
+      "e": 762100.0,
+      "n": 9798050.0,
+      "cota": 213.36,
+      "attrs": {
+        "tipo_accesorio": "tee"
+      },
+      "datos": {
+        "demanda_base": {
+          "valor": 0.0,
+          "unidad": "L/s",
+          "fuente": "EPANET (epanet_us_gpm.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "J20",
+      "familia": "comun.accesorio",
+      "subtipo": "tee",
+      "e": 762700.0,
+      "n": 9798000.0,
+      "cota": 210.312,
+      "attrs": {
+        "tipo_accesorio": "tee"
+      },
+      "datos": {
+        "demanda_base": {
+          "valor": 9.4635,
+          "unidad": "L/s",
+          "fuente": "EPANET (epanet_us_gpm.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "J30",
+      "familia": "comun.accesorio",
+      "subtipo": "tee",
+      "e": 763150.0,
+      "n": 9797900.0,
+      "cota": 208.788,
+      "attrs": {
+        "tipo_accesorio": "tee"
+      },
+      "datos": {
+        "demanda_base": {
+          "valor": 0.0,
+          "unidad": "L/s",
+          "fuente": "EPANET (epanet_us_gpm.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "J40",
+      "familia": "comun.accesorio",
+      "subtipo": "union",
+      "e": 763400.0,
+      "n": 9797800.0,
+      "cota": 195.072,
+      "attrs": {
+        "tipo_accesorio": "union"
+      },
+      "datos": {
+        "demanda_base_1": {
+          "valor": 3.1545,
+          "unidad": "L/s",
+          "fuente": "EPANET (epanet_us_gpm.inp)"
+        },
+        "demanda_base_2": {
+          "valor": 1.8927,
+          "unidad": "L/s",
+          "fuente": "EPANET (epanet_us_gpm.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "J50",
+      "familia": "comun.accesorio",
+      "subtipo": "tee",
+      "e": 763250.0,
+      "n": 9797850.0,
+      "cota": 193.548,
+      "attrs": {
+        "tipo_accesorio": "tee"
+      },
+      "datos": {
+        "demanda_base": {
+          "valor": 0.0,
+          "unidad": "L/s",
+          "fuente": "EPANET (epanet_us_gpm.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "TWR",
+      "familia": "agua.tanque",
+      "subtipo": "apoyado_cilindrico",
+      "e": 762300.0,
+      "n": 9798300.0,
+      "cota": 237.744,
+      "attrs": {
+        "cota_piso": 237.744,
+        "cota_nivel_max": 246.888,
+        "cota_nivel_min": 239.268,
+        "diametro": 12192.0
+      },
+      "datos": {
+        "nivel_inicial": {
+          "valor": 4.572,
+          "unidad": "m",
+          "fuente": "EPANET (epanet_us_gpm.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "PU1",
+      "familia": "agua.bombeo",
+      "subtipo": "booster_en_linea",
+      "e": 762000.0,
+      "n": 9798000.0,
+      "attrs": {
+        "potencia_unitaria": 18.6425
+      }
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "V1",
+      "familia": "agua.valvula",
+      "subtipo": "reduccion_presion",
+      "e": 763150.0,
+      "n": 9797900.0,
+      "cota": 208.788,
+      "attrs": {
+        "tipo_valvula": "reduccion_presion",
+        "diametro_nominal": 152,
+        "consigna_presion": 28.1375
+      }
+    },
+    {
+      "tipo": "nodo",
+      "codigo": "V2",
+      "familia": "agua.valvula",
+      "subtipo": "reguladora_caudal",
+      "e": 762700.0,
+      "n": 9798000.0,
+      "cota": 210.312,
+      "attrs": {
+        "tipo_valvula": "reguladora",
+        "diametro_nominal": 102,
+        "consigna_caudal": 6.309
+      }
+    },
+    {
+      "tipo": "arco",
+      "codigo": "101",
+      "familia": "agua.tuberia",
+      "subtipo": "distribucion_primaria",
+      "desde": "J10",
+      "hasta": "TWR",
+      "diametro_mm": 305,
+      "attrs": {
+        "rugosidad_abs": 0.2591
+      },
+      "datos": {
+        "longitud_origen": {
+          "valor": 304.8,
+          "unidad": "m",
+          "fuente": "EPANET (epanet_us_gpm.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "arco",
+      "codigo": "102",
+      "familia": "agua.tuberia",
+      "subtipo": "distribucion_primaria",
+      "desde": "J10",
+      "hasta": "J20",
+      "diametro_mm": 203,
+      "vertices": [
+        [
+          762100.0,
+          9798050.0,
+          213.36
+        ],
+        [
+          762400.0,
+          9798060.0,
+          211.8505
+        ],
+        [
+          762700.0,
+          9798000.0,
+          210.312
+        ]
+      ],
+      "attrs": {
+        "rugosidad_abs": 0.2591
+      },
+      "datos": {
+        "longitud_origen": {
+          "valor": 609.6,
+          "unidad": "m",
+          "fuente": "EPANET (epanet_us_gpm.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "arco",
+      "codigo": "103",
+      "familia": "agua.tuberia",
+      "subtipo": "distribucion_primaria",
+      "desde": "J20",
+      "hasta": "J30",
+      "diametro_mm": 203,
+      "attrs": {
+        "rugosidad_abs": 0.2591
+      },
+      "datos": {
+        "longitud_origen": {
+          "valor": 457.2,
+          "unidad": "m",
+          "fuente": "EPANET (epanet_us_gpm.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "arco",
+      "codigo": "104",
+      "familia": "agua.tuberia",
+      "subtipo": "distribucion_primaria",
+      "desde": "J30",
+      "hasta": "J40",
+      "diametro_mm": 152,
+      "attrs": {
+        "rugosidad_abs": 0.2591
+      },
+      "datos": {
+        "longitud_origen": {
+          "valor": 243.84,
+          "unidad": "m",
+          "fuente": "EPANET (epanet_us_gpm.inp)"
+        }
+      }
+    },
+    {
+      "tipo": "arco",
+      "codigo": "105",
+      "familia": "agua.tuberia",
+      "subtipo": "distribucion_primaria",
+      "desde": "J50",
+      "hasta": "J40",
+      "diametro_mm": 152,
+      "attrs": {
+        "rugosidad_abs": 0.2591
+      },
+      "datos": {
+        "longitud_origen": {
+          "valor": 152.4,
+          "unidad": "m",
+          "fuente": "EPANET (epanet_us_gpm.inp)"
+        }
+      }
+    }
+  ]
+}

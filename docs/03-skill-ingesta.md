@@ -13,8 +13,8 @@ Redes no diseña: recibe. Pero cada aplicación exporta a su manera:
 | Origen | Lo que da | Lo que le falta |
 |---|---|---|
 | Civil 3D | DXF con capas, bloques, *proxies* AECC | Nada, si el delineante explota los *proxies* |
-| SWMM | `.inp` con topología y cotas | Planta (no guarda coordenadas) |
-| EPANET | `.inp` con topología y cotas | Planta |
+| SWMM | `.inp` con topología, cotas, planta (`[COORDINATES]`, `[VERTICES]`) y secciones | Cota de terreno cuando `MaxDepth = 0`; forma constructiva de pozos y descargas |
+| EPANET | `.inp` con topología, cotas, planta (`[COORDINATES]`, `[VERTICES]`) y diámetros | Cota de terreno (la cota del nudo es hidráulica); qué es cada `RESERVOIR`; si un tanque es apoyado o elevado |
 | Excel | Inventario tabulado | Geometría 3D |
 | SIG | GeoJSON con planta | Cotas y jerarquía de familias |
 
@@ -72,12 +72,32 @@ atajos ya implementados (`importar dxf|geojson|terreno`) y con el script de SWMM
 
 Los tres producen el mismo contrato y se validan igual. Eso es lo importante.
 
+### 4.1 El script de SWMM y EPANET (F12-03/04/05)
+
+`inp_to_plan.py` lee las columnas según los manuales de SWMM 5 y EPANET 2.2 y convierte unidades
+US → SI (`FLOW_UNITS` en SWMM; `Units` en EPANET; pies, pulgadas, psi y hp). Reglas que no se
+negocian:
+
+- **Nada por defecto.** Sin `MaxDepth` no hay cota de terreno; sin coordenadas el nodo se descarta
+  (antes quedaba en (0,0)); EPANET no da volumen útil de tanque y no se escribe.
+- **Lo que no se puede decidir, se pregunta.** Si un SWMM no dice si es pluvial, sanitario o
+  combinado (ni `[SUBCATCHMENTS]`, ni `[DWF]`, ni el título), el script falla y pide `--sistema`.
+  Un `RESERVOIR` de EPANET se descarta salvo que `--reservorio familia:subtipo` diga qué es.
+- **Saltos en pozo.** `InOffset`/`OutOffset` (modo `DEPTH` o `ELEVATION`) fijan la cota del tubo
+  en cada extremo y se guardan como `datos.desfase_entrada/salida`.
+- **Dispositivos de enlace** (bombas, válvulas, vertederos): en Redes son objetos puntuales; se
+  ubican en el nodo de entrada con su cota y la conexión se anota como aviso.
+- Avisos y descartes salen por stderr y, con `--informe x.json`, a un archivo.
+
+El mapeo completo está en `skills/redes-ingesta/references/mapeos.md` §2 y §3.
+
 ## 5. Cómo se prueba
 
 | Prueba | Qué verifica |
 |---|---|
 | `cargo test -p redes-core` | El importador de plan rechaza duplicados y huérfanos; el DXF de ida y vuelta conserva los 44 objetos |
-| `python skills/…/inp_to_plan.py` + `redes importar plan` | Un `.inp` de SWMM se convierte y entra sin descartes |
+| `python -m unittest discover -s skills/redes-ingesta/scripts/tests` | El conversor SWMM/EPANET lee las columnas oficiales, convierte US → SI, no inventa terreno ni volúmenes y descarta con motivo |
+| `cargo test -p redes-core --test ingesta` | Los planes generados de cuatro `.inp` reales (SWMM CFS y CMS, EPANET GPM y LPS, en `crates/redes-core/tests/fixtures`) entran sin descartes |
 | `redes exportar dxf` → `redes importar dxf` | La geometría sobrevive el viaje de vuelta |
 | `redes vista --salida x.svg` | Lo que entró se ve (una imagen que un agente puede mirar) |
 
@@ -86,7 +106,8 @@ Los tres producen el mismo contrato y se validan igual. Eso es lo importante.
 - Rellenar caudales, presiones o volúmenes «faltantes».
 - Convertir un modelo hidráulico en un diseño.
 - Decidir si un diámetro cumple norma.
-- Inventar coordenadas: si el origen no trae planta, se piden.
+- Inventar coordenadas: si el origen no trae planta, se piden (`--coords`); mientras tanto, el
+  nodo se descarta con su motivo.
 
 Si un proyecto no se puede representar sin calcular algo, es que el origen no traía el dato y
 hay que volver a la aplicación que lo produce.

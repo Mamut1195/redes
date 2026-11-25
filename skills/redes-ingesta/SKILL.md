@@ -35,7 +35,7 @@ mejor que cualquier conversión intermedia. Usa la vía más corta.
 
 | Lo que llega | Vía | Comando |
 |---|---|---|
-| SWMM o EPANET (`.inp`) | **script** `inp_to_plan.py` | `python scripts/inp_to_plan.py red.inp --tipo swmm --salida plan.json` y luego `redes importar plan --archivo plan.json` |
+| SWMM o EPANET (`.inp`) | **script** `inp_to_plan.py` | `python scripts/inp_to_plan.py red.inp --tipo swmm --salida plan.json --informe informe.json` y luego `redes importar plan --archivo plan.json` |
 | Hoja de cálculo con pozos/tramos (CSV/TSV) | **script** `plan_desde_tabla.py` | `python scripts/plan_desde_tabla.py pozos.csv --tipo pozos --salida plan.json` |
 | DXF de Civil 3D u otro CAD | **CLI directa** | `redes importar dxf --archivo red.dxf` |
 | SIG (GeoJSON) con propiedades | **CLI directa** | `redes importar geojson --archivo red.geojson` |
@@ -142,10 +142,22 @@ Lo que no se puede traducir se descarta y aparece en `descartados`: nunca se pie
    número, **no se inventa**: se omite.
 6. **Emitir el plan** y validarlo:
    ```powershell
-   python skills/redes-ingesta/scripts/inp_to_plan.py --tipo swmm red.inp --salida plan.json --coords coords.csv
+   python skills/redes-ingesta/scripts/inp_to_plan.py --tipo swmm red.inp --salida plan.json --informe informe.json
    redes importar plan --archivo plan.json --dry-run
    redes importar plan --archivo plan.json
    ```
+   Opciones del script que **sustituyen una suposición por una decisión del usuario**:
+
+   | Opción | Cuándo |
+   |---|---|
+   | `--sistema pluvial\|sanitario\|combinado` | SWMM. Obligatoria si el archivo no lo deja claro (sin `[SUBCATCHMENTS]`, sin `[DWF]` y sin pista en `[TITLE]`); si se da, manda y se avisa si no coincide con lo detectado |
+   | `--reservorio familia:subtipo` | EPANET. Sin ella los `RESERVOIRS` se descartan: una carga fija puede ser un río, un pozo o un tanque grande |
+   | `--subtipo-tuberia`, `--subtipo-tanque` | EPANET. Sin ellas se usan `distribucion_primaria` y `apoyado_cilindrico`, con aviso |
+   | `--coords codigo,E,N` | Completa o sustituye `[COORDINATES]`. Un nodo sin planta se descarta (nunca va a (0,0)) |
+
+   El script lee `FLOW_UNITS` (SWMM; si falta, CFS) y `Units` (EPANET; si falta, GPM) y pasa todo
+   a metros, milímetros y L/s. El detalle por sección está en `references/mapeos.md` §2 y §3.
+   Pruebas del script: `python -m unittest discover -s skills/redes-ingesta/scripts/tests`.
 7. **Verificar**: `redes proyecto info` (conteos), `redes objeto lista` (códigos), y
    `redes vista --salida vista.svg` (que se vea).
 8. **Informar**: cuántos entraron, cuántos se descartaron y por qué.
@@ -166,7 +178,9 @@ Lo que no se puede traducir se descarta y aparece en `descartados`: nunca se pie
 |---|---|---|
 | `E_TOPO_ORPHAN_LINK` | El arco referencia un código que no está en `objetos` | Añadir el nodo o corregir `desde`/`hasta` |
 | `E_STATE_DUPLICATE_NAME` | Dos objetos con el mismo `codigo` | Renombrar; los códigos son únicos en el proyecto |
-| Todo apilado en el origen | El `.inp` no trae coordenadas | Pasar `--coords codigo,E,N` |
+| `descartado: nodo X: … no tiene coordenadas` | El `.inp` no trae `[COORDINATES]` de ese nodo | Pasar `--coords codigo,E,N` |
+| `ERROR: no se puede saber si la red es pluvial…` | SWMM sin subcuencas ni `[DWF]` | Pasar `--sistema` |
+| Tubos de un SWMM 3,3 veces más largos | Era un archivo en CFS leído como metros (script viejo) | Regenerar el plan con el script actual |
 | El proyecto aparece a 10 000 km | CRS del hemisferio equivocado | Usar `32717`/`32718`, nunca `32617` |
 | El pozo no tiene altura | Sólo llegó la clave, sin tapa | Añadir `cota_terreno` o traer el TIN |
 | El inspector muestra `—` en un dato | El origen no traía ese número | Es correcto: no se inventa |
