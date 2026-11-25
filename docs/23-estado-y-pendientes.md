@@ -12,8 +12,8 @@ Documento de traspaso: qué está hecho, qué falta y por dónde seguir. Las cif
 | Modelos | importación, validación, medidas, caché, dibujo en el pase 3D, política de pesados, foco sobre el modelo, **selector en el inspector** y **anclas de conexión** (se leen del `.glb` y la tubería nace en el puerto, no en el centro) |
 | Cantidades | `redes cantidades`: unidades, longitudes por DN/material, volúmenes, pesos, discrepancias y CSV |
 | CAD | ida y vuelta DXF sin pérdida (46 familias y 7 arcos vuelven idénticos), **bloques con atributos** por familia y GeoJSON con atributos |
-| Calidad | **225 pruebas** (núcleo 133 + 13 validar + 31 ingesta + 3 cotas + 2 rendimiento, app 18, CLI 17 + 3 + 4, doctest 1), arnés de 9 mutaciones, CI en GitHub **en verde** |
-| Revisor (F13) | `redes validar` geométrico con panel Validación (F13-01, D6), `redes perfil` con botón Perfil en el inspector (F13-02), observaciones con historial (`objeto observar/observaciones/cerrar-observacion`, panel en el inspector, `redes.project/3`, F13-03, D7; sin conversión de `.redes` anteriores), `redes proyecto diff` (F13-05, compara estado y cada observación por id) |
+| Calidad | **234 pruebas** (núcleo 135 + 13 validar + 5 acta + 31 ingesta + 3 cotas + 2 rendimiento, app 18, CLI 17 + 3 + 4 + 2 acta, doctest 1), arnés de 11 mutaciones, CI en GitHub **en verde** |
+| Revisor (F13) | `redes validar` geométrico con panel Validación (F13-01, D6), `redes perfil` con botón Perfil en el inspector (F13-02), observaciones con historial (`objeto observar/observaciones/cerrar-observacion`, panel en el inspector, `redes.project/3`, F13-03, D7; sin conversión de `.redes` anteriores), `redes proyecto diff` (F13-05, compara estado y cada observación por id), `redes acta` en CSV (Excel, BOM y «;») o HTML imprimible (F13-04, sin autor si no se registró, D2) |
 | Producto | plantilla, licencias de modelos, journal con fecha, paquete portable y **release 0.1.0 publicada** |
 | Documentación | 23 documentos; los informes antiguos llevan aviso de cifras corregidas |
 
@@ -25,7 +25,7 @@ y en Linear (MAM-1085…MAM-1139). Se trabaja **por fases en orden**; no se abre
 | Fase | Estado |
 |---|---|
 | F12 — Corrección de dominio | **cerrada** (F12-01…F12-15). Ingesta por skill guiada (D5) |
-| F13 — Herramientas del revisor | **en curso**: hechas F13-01 (`redes validar`), F13-02 (perfil longitudinal), F13-03 (observaciones con historial) y F13-05 (`proyecto diff`); pendientes F13-04 (acta) y F13-06 (reimportar sin perder revisión) |
+| F13 — Herramientas del revisor | **en curso**: hechas F13-01 (`redes validar`), F13-02 (perfil longitudinal), F13-03 (observaciones con historial), F13-04 (`redes acta`) y F13-05 (`proyecto diff`); **en curso** F13-06 (reimportar sin perder revisión) |
 | F14 — Rendimiento con redes reales | pendiente (índices, cámara 3D sin regenerar, LOD/instanciado) |
 | F15 — Arquitectura | pendiente (migración de formato P0, agregado, catálogo como datos, errores tipados) |
 | F16 — Release v1 | pendiente (F16-01 ya cerrada por F12-09) |
@@ -37,8 +37,8 @@ Sin validar en CAD real: el DXF de F12-08 (no hubo `ezdxf`); abrir una demo expo
 ## Cómo retomar
 
 ```powershell
-cargo test --workspace                       # 225 pruebas
-powershell -File scripts/mutar.ps1           # 9 mutaciones
+cargo test --workspace                       # 234 pruebas
+powershell -File scripts/mutar.ps1           # 11 mutaciones
 powershell -File scripts/empaquetar.ps1      # zip portable
 gh run list --limit 3                        # CI
 ```

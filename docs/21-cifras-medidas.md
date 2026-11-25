@@ -65,8 +65,9 @@ reproducible detrás: se retira como afirmación.
 
 | Suite | Pruebas |
 |---|---:|
-| Núcleo (`redes-core`, unitarias) | **133** |
+| Núcleo (`redes-core`, unitarias) | **135** |
 | Validación geométrica (`redes-core/tests/validar.rs`) | **13** |
+| Acta de revisión (`redes-core/tests/acta.rs`) | **5** |
 | Ingesta con fixtures (`tests/ingesta.rs`) | **31** |
 | Cotas de tramo (`tests/cotas_tramo.rs`) | **3** |
 | Presupuesto de frame (`tests/rendimiento.rs`) | **2** |
@@ -74,12 +75,13 @@ reproducible detrás: se retira como afirmación.
 | Contrato del CLI (`tests/contrato.rs`) | **17** |
 | Perfil del CLI (`tests/perfil.rs`) | **3** |
 | Validar del CLI (`tests/validar.rs`) | **4** |
+| Acta del CLI (`tests/acta.rs`) | **2** |
 | Doctest | **1** |
-| **Total** | **225** |
+| **Total** | **234** |
 
-Más el arnés de mutación: `powershell -File scripts/mutar.ps1` rompe nueve comportamientos (cinco
-de vista, tres de `redes validar` y el estado derivado de las observaciones) y exige que la suite
-falle.
+Más el arnés de mutación: `powershell -File scripts/mutar.ps1` rompe once comportamientos (cinco
+de vista, tres de `redes validar`, el estado derivado de las observaciones y dos del acta: escapar el
+HTML y no sacar columnas de autor sin registrarlo, D2) y exige que la suite falle.
 
 ## 6. Qué cifras de los informes anteriores son falsas
 
