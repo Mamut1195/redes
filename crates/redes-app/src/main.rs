@@ -7,6 +7,7 @@
 
 mod gpu3d;
 mod modelos;
+mod observaciones;
 
 use std::sync::{Arc, Mutex};
 
@@ -130,6 +131,8 @@ struct State {
     bib: Option<(std::path::PathBuf, redes_core::biblioteca::Biblioteca)>,
     /// Aviso de política de dibujo (modelos pesados sin `--gpu3d`).
     aviso_modelos: Option<String>,
+    /// Campo de texto del inspector para observar o cerrar observaciones (F13-03).
+    obs_texto: rune::TextEdit,
 }
 
 impl State {
@@ -171,6 +174,7 @@ impl State {
             modelos: modelos::Cache::default(),
             bib: None,
             aviso_modelos: None,
+            obs_texto: rune::TextEdit::new(""),
         };
         // Modo rayos X por línea de comandos (útil para capturas y para los agentes).
         if rune::extra_args().iter().any(|a| a == "--rayos-x") {
@@ -178,29 +182,6 @@ impl State {
         }
         estado.rebuild();
         estado
-    }
-
-    /// Cambia el estado de revision de un objeto y marca el documento como sucio.
-    fn set_estado(&mut self, code: &str, nuevo: EstadoObjeto, nota: Option<String>) {
-        // La revisión también va al historial: si no, Deshacer la borraba sin avisar.
-        self.recordar();
-        let p = Arc::make_mut(&mut self.project);
-        let mut touched = false;
-        if let Some(n) = p.nodes.iter_mut().find(|n| n.code == code && !n.deleted) {
-            n.estado = nuevo;
-            n.nota = nota;
-            touched = true;
-        } else if let Some(l) = p.links.iter_mut().find(|l| l.code == code && !l.deleted) {
-            l.estado = nuevo;
-            l.nota = nota.clone();
-            touched = true;
-        }
-        if touched {
-            p.commit("ui.revision");
-            self.dirty = true;
-            self.rebuild();
-        }
-        let _ = nota;
     }
 
     /// Guarda de forma atómica (temporal + rename) y solo marca limpio si se escribió.
@@ -989,25 +970,15 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
                         .child(
                             chip("Aprobar", n.estado == EstadoObjeto::Aprobado)
                                 .key("btn-aprobar")
-                                .on_press(move |s: &mut State| {
-                                    s.set_estado(&code_a, EstadoObjeto::Aprobado, None)
-                                }),
+                                .on_press(move |s: &mut State| s.aprobar(&code_a)),
                         )
                         .child(
                             chip("Observar", n.estado == EstadoObjeto::Observado)
                                 .key("btn-observar")
-                                .on_press(move |s: &mut State| {
-                                    s.set_estado(
-                                        &code_o,
-                                        EstadoObjeto::Observado,
-                                        Some("Observado en revisión".to_string()),
-                                    )
-                                }),
+                                .on_press(move |s: &mut State| s.observar(&code_o)),
                         ),
                 );
-                if let Some(nota) = &n.nota {
-                    right = right.child(text(nota.clone()).font(type_::LABEL).color(WARN).wrap());
-                }
+                right = right.child(observaciones::panel(s, &n.code, &n.observaciones));
             }
             right = right.child(el().h(6.0));
             right = right.child(section("Geometría"));
@@ -1126,25 +1097,15 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
                         .child(
                             chip("Aprobar", l.estado == EstadoObjeto::Aprobado)
                                 .key("btn-aprobar")
-                                .on_press(move |s: &mut State| {
-                                    s.set_estado(&code_a, EstadoObjeto::Aprobado, None)
-                                }),
+                                .on_press(move |s: &mut State| s.aprobar(&code_a)),
                         )
                         .child(
                             chip("Observar", l.estado == EstadoObjeto::Observado)
                                 .key("btn-observar")
-                                .on_press(move |s: &mut State| {
-                                    s.set_estado(
-                                        &code_o,
-                                        EstadoObjeto::Observado,
-                                        Some("Observado en revisión".to_string()),
-                                    )
-                                }),
+                                .on_press(move |s: &mut State| s.observar(&code_o)),
                         ),
                 );
-                if let Some(nota) = &l.nota {
-                    right = right.child(text(nota.clone()).font(type_::LABEL).color(WARN).wrap());
-                }
+                right = right.child(observaciones::panel(s, &l.code, &l.observaciones));
             }
             right = right.child(el().h(6.0));
             right = right.child(section("Geometría"));
@@ -1699,7 +1660,11 @@ mod tests {
             EstadoObjeto::Observado,
             "el clic debe observar el pozo"
         );
-        assert!(n.nota.is_some(), "la observacion deja nota");
+        assert_eq!(
+            n.nota_vigente(),
+            Some(observaciones::TEXTO_POR_DEFECTO),
+            "la observacion queda en el historial"
+        );
         assert!(rt.state.dirty, "queda un cambio sin guardar");
     }
 

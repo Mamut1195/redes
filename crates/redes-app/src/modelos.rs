@@ -195,7 +195,7 @@ mod tests {
                 datos: Default::default(),
                 modelo: Some("cubo".into()),
                 estado: redes_core::model::EstadoObjeto::Pendiente,
-                nota: None,
+                observaciones: Vec::new(),
                 deleted: false,
                 sin_dato: Vec::new(),
             };

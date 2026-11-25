@@ -56,6 +56,22 @@ $mutaciones = @(
         Reemplazo = 'if !def.can(caps::HYDRAULIC_NODE) && !def.can(caps::ATTACHABLE) { continue; }'
         Prueba = "el_render_dibuja_familias_no_hidraulicas"
         Que = "volver al filtro que ocultaba las familias no hidraulicas"
+    },
+    @{
+        Nombre = "obs-estado-derivado"
+        Archivo = "crates/redes-core/src/revision.rs"
+        Patron = 'if obs\.iter\(\)\.any\(Observacion::abierta\) \{'
+        Reemplazo = 'if false {'
+        Prueba = "cerrar_la_ultima_abierta_deja_pendiente"
+        Que = "dejar de derivar observado de las observaciones abiertas (F13-03)"
+    },
+    @{
+        Nombre = "obs-migracion"
+        Archivo = "crates/redes-core/src/revision.rs"
+        Patron = 'let abierta = \*estado == EstadoObjeto::Observado;'
+        Reemplazo = 'let abierta = false;'
+        Prueba = "la_migracion_abre_las_observadas"
+        Que = "migrar la nota de un observado como observacion cerrada (F13-03)"
     }
 )
 
