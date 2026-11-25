@@ -61,17 +61,35 @@ Reproducir: `redes -p demo/cadena-completa.redes cantidades`.
 En release la reconstrucción baja a ~9–12 ms. El «p95 247 ms → 2,5 ms» de `docs/16` no tiene banco
 reproducible detrás: se retira como afirmación.
 
+### 4.1 Índices del proyecto (F14-01)
+
+Red sintética de `redes.plan/1` (`plan_sintetico` en `crates/redes-core/tests/indices.rs`), release,
+2026-11-25. «Antes» es el recorrido lineal previo a F14-01 (cifras del informe de la rama); «después»,
+medido al integrar con `cargo test --release -p redes-core --test indices -- --include-ignored --nocapture`.
+
+| Medida | 50k antes | 50k después | 20k después |
+|---|---:|---:|---:|
+| Ingesta del plan | 91 s | **485 ms** | 194 ms |
+| Escena (`build_opts`, mediana de 3) | 4,0 s | **49 ms** | 21 ms |
+| Reimportar la misma entrega | 167 s | **912 ms** | 389 ms |
+| Abrir el `.redes` (incluye `reindexar`) | 279 ms | **269 ms** | 103 ms |
+| Búsquedas por código e id (3 por tramo) | — | 24 ms | 9,5 ms |
+
+Abrir no empeora de forma medible: reconstruir el índice es lineal y queda dentro del ruido de la
+deserialización.
+
 ## 5. Pruebas
 
 | Suite | Pruebas |
 |---|---:|
-| Núcleo (`redes-core`, unitarias) | **138** |
+| Núcleo (`redes-core`, unitarias) | **139** |
 | Validación geométrica (`redes-core/tests/validar.rs`) | **13** |
 | Acta de revisión (`redes-core/tests/acta.rs`) | **5** |
 | Reimportar (`redes-core/tests/reimportar.rs`) | **8** |
 | Ingesta con fixtures (`tests/ingesta.rs`) | **31** |
 | Cotas de tramo (`tests/cotas_tramo.rs`) | **3** |
 | Presupuesto de frame (`tests/rendimiento.rs`) | **2** |
+| Índices del proyecto (`tests/indices.rs`, + 1 banco ignorado) | **3** |
 | Interfaz (`redes-app`) | **18** |
 | Contrato del CLI (`tests/contrato.rs`) | **19** |
 | Perfil del CLI (`tests/perfil.rs`) | **3** |
@@ -79,13 +97,13 @@ reproducible detrás: se retira como afirmación.
 | Acta del CLI (`tests/acta.rs`) | **2** |
 | Reimportar del CLI (`tests/reimportar.rs`) | **2** |
 | Doctest | **1** |
-| **Total** | **249** |
+| **Total** | **253** |
 
-Más el arnés de mutación: `powershell -File scripts/mutar.ps1` rompe quince comportamientos (cinco
+Más el arnés de mutación: `powershell -File scripts/mutar.ps1` rompe dieciséis comportamientos (cinco
 de vista, tres de `redes validar`, el estado derivado de las observaciones y dos del acta: escapar el
 HTML y no sacar columnas de autor sin registrarlo, D2; y tres de reimportar: reiniciar el aprobado
 cuyo diseño cambió, conservar las observaciones y no dar de baja en silencio; y abrir un `.redes` de otra versión sin
-migrar, F15-01, D10) y exige que la suite falle.
+migrar, F15-01, D10; y olvidar el nodo final en el índice de tramos por nodo, F14-01) y exige que la suite falle.
 
 ## 6. Qué cifras de los informes anteriores son falsas
 
