@@ -78,32 +78,47 @@ medido al integrar con `cargo test --release -p redes-core --test indices -- --i
 Abrir no empeora de forma medible: reconstruir el índice es lineal y queda dentro del ruido de la
 deserialización.
 
+### 4.2 Pase 3D sin regenerar ni copiar (F14-02, F14-03)
+
+Ciudad (`demo/ciudad-san-bartolo.redes`), release, `--gpu3d`, 2026-11-25 (cifras de la rama).
+
+| Medida | Antes | Después |
+|---|---:|---:|
+| Cambio de cámara (arrastrar, rueda, botón de cámara) | 6,03 ms | **0,008 ms** |
+| Regeneraciones de malla en 30 cambios de cámara | 30 | **0** |
+| Bytes copiados por frame con la escena quieta | 3,6 MB (0,46 ms con el mutex) | **0** |
+
+La malla solo se regenera si cambia `ClaveMalla` (proyecto y revisión, capas, biblioteca); la
+exageración vertical va en la matriz. Pruebas `mover_la_camara_en_3d_no_regenera_la_malla` y
+`la_escena_quieta_no_se_vuelve_a_subir`.
+
 ## 5. Pruebas
 
 | Suite | Pruebas |
 |---|---:|
-| Núcleo (`redes-core`, unitarias) | **139** |
+| Núcleo (`redes-core`, unitarias) | **141** |
 | Validación geométrica (`redes-core/tests/validar.rs`) | **13** |
 | Acta de revisión (`redes-core/tests/acta.rs`) | **5** |
 | Reimportar (`redes-core/tests/reimportar.rs`) | **8** |
-| Ingesta con fixtures (`tests/ingesta.rs`) | **31** |
+| Ingesta con fixtures (`tests/ingesta.rs`) | **32** |
 | Cotas de tramo (`tests/cotas_tramo.rs`) | **3** |
 | Presupuesto de frame (`tests/rendimiento.rs`) | **2** |
-| Índices del proyecto (`tests/indices.rs`, + 1 banco ignorado) | **3** |
-| Interfaz (`redes-app`) | **18** |
+| Índices del proyecto (`tests/indices.rs`, + 1 banco ignorado) | **4** |
+| Interfaz (`redes-app`) | **22** |
 | Contrato del CLI (`tests/contrato.rs`) | **19** |
 | Perfil del CLI (`tests/perfil.rs`) | **3** |
 | Validar del CLI (`tests/validar.rs`) | **4** |
 | Acta del CLI (`tests/acta.rs`) | **2** |
 | Reimportar del CLI (`tests/reimportar.rs`) | **2** |
 | Doctest | **1** |
-| **Total** | **253** |
+| **Total** | **261** |
 
-Más el arnés de mutación: `powershell -File scripts/mutar.ps1` rompe dieciséis comportamientos (cinco
+Más el arnés de mutación: `powershell -File scripts/mutar.ps1` rompe dieciocho comportamientos (cinco
 de vista, tres de `redes validar`, el estado derivado de las observaciones y dos del acta: escapar el
 HTML y no sacar columnas de autor sin registrarlo, D2; y tres de reimportar: reiniciar el aprobado
 cuyo diseño cambió, conservar las observaciones y no dar de baja en silencio; y abrir un `.redes` de otra versión sin
-migrar, F15-01, D10; y olvidar el nodo final en el índice de tramos por nodo, F14-01) y exige que la suite falle.
+migrar, F15-01, D10; y olvidar el nodo final en el índice de tramos por nodo, F14-01; y dos del pase 3D: regenerar la malla
+al mover la cámara, F14-02, y volver a subirla en cada frame, F14-03) y exige que la suite falle.
 
 ## 6. Qué cifras de los informes anteriores son falsas
 
