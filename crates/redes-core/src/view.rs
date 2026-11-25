@@ -665,6 +665,7 @@ pub fn build_opts(
         // el pozo: se recorta en su pared.
         let mut traza = l.eje();
         let d_ext = l.diametro_exterior_m();
+        let link_material = l.get("material").and_then(|v| v.as_str()).unwrap_or("");
         let r0 = p
             .node(l.from)
             .map(|n| n.diametro() * 0.5 + 0.15)
@@ -718,7 +719,8 @@ pub fn build_opts(
 
             // De cerca, tubo con juntas.
             let lod = if r_px > 6.0 { 2 } else { 1 };
-            let malla = crate::parts::tuberia(wa, wb, d_ext as f32, lod, mat);
+            let malla =
+                crate::parts::tuberia_de_material(wa, wb, d_ext as f32, lod, mat, link_material);
             for tri in &malla.tris {
                 // La malla ya está en local: se aplica solo la exageración vertical.
                 let verts = [
@@ -1449,6 +1451,29 @@ mod tests {
         let mut c = Camera::default();
         c.fit(&p);
         c
+    }
+
+    /// F12-10: de cerca, el tubo lleva las juntas de su material (hormigón más que PVC).
+    #[test]
+    fn el_hormigon_muestra_mas_juntas_que_el_pvc() {
+        let tris = |material: &str| {
+            let mut p = crate::demo::project();
+            for l in &mut p.links {
+                l.attrs.insert(
+                    "material".into(),
+                    crate::families::Value::Text(material.into()),
+                );
+            }
+            let l = p.links.iter().find(|l| l.length_2d() > 10.0).unwrap();
+            let m = l.path[l.path.len() / 2];
+            let mut c = Camera::default();
+            c.fit(&p);
+            c.target = [m.x - p.origin.x, m.y - p.origin.y, m.z];
+            c.distance = 6.0;
+            build(&p, &c, Layers::default(), None).prims.len()
+        };
+        let (h, v) = (tris("Hormigón"), tris("PVC"));
+        assert!(h > v, "{h} vs {v}");
     }
 
     #[test]
