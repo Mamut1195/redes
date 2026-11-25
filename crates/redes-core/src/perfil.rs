@@ -199,7 +199,7 @@ pub fn desde_pozos(
         if n == b.id {
             break;
         }
-        for l in p.links.iter().filter(|l| !l.deleted && l.from == n) {
+        for l in p.tramos_de(n).filter(|l| l.from == n) {
             if visto.insert(l.to) {
                 previo.insert(l.to, l);
                 cola.push_back(l.to);

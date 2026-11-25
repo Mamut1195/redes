@@ -145,6 +145,15 @@ $mutaciones = @(
         Reemplazo = 'if schema.starts_with("redes.project/") {'
         Prueba = "rechaza_un_esquema_anterior_sin_migrar"
         Que = "volver a abrir un .redes de otra version sin migrar (F15-01, D10)"
+    },
+    @{
+        Nombre = "indice-adyacencia"
+        Archivo = "crates/redes-core/src/indice.rs"
+        Patron = 'if l\.to != l\.from \{'
+        Reemplazo = 'if false {'
+        Destino = "indices"
+        Prueba = "el_indice_coincide_con_el_recorrido_lineal_tras_cualquier_secuencia"
+        Que = "olvidar el nodo final al indexar los tramos de cada nodo (F14-01)"
     }
 )
 

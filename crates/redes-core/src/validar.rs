@@ -550,11 +550,7 @@ fn salto_pozo(p: &Project, r: &ReglasValidacion, cx: &mut Cx) {
         if es_caida(n) {
             continue;
         }
-        for l in p
-            .links
-            .iter()
-            .filter(|l| !l.deleted && l.to == n.id && es_gravedad(l))
-        {
+        for l in p.tramos_de(n.id).filter(|l| l.to == n.id && es_gravedad(l)) {
             let objetos = vec![n.code.clone(), l.code.clone()];
             let llegada = solera_vertice(l, l.path.len().saturating_sub(1));
             let (llegada, fondo) = match (llegada, n.cota_solera()) {

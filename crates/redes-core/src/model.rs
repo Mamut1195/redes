@@ -399,6 +399,9 @@ pub struct Project {
     /// campos nuevos (revisión adversarial, D-04).
     #[serde(flatten, default)]
     pub extras: std::collections::BTreeMap<String, serde_json::Value>,
+    /// Índices por id, código y nodo → tramos (F14-01). No se guardan: se reconstruyen al abrir.
+    #[serde(skip)]
+    pub(crate) indice: crate::indice::Indice,
 }
 
 impl Default for Project {
@@ -428,6 +431,7 @@ impl Project {
             journal: Vec::new(),
             biblioteca: None,
             extras: Default::default(),
+            indice: Default::default(),
         }
     }
 
@@ -454,34 +458,30 @@ impl Project {
         ElementId::new(slot, 1)
     }
 
+    /// Nodo vivo por id. O(1) con el índice (F14-01).
     pub fn node(&self, id: ElementId) -> Option<&Node> {
-        self.nodes.iter().find(|n| n.id == id && !n.deleted)
+        self.pos_nodo(id, true).map(|i| &self.nodes[i])
     }
+    /// Tramo vivo por id. O(1) con el índice.
     pub fn link(&self, id: ElementId) -> Option<&Link> {
-        self.links.iter().find(|l| l.id == id && !l.deleted)
+        self.pos_tramo(id, true).map(|i| &self.links[i])
     }
+    /// Nodo vivo por código, sin distinguir mayúsculas. O(1) con el índice.
     pub fn node_by_code(&self, code: &str) -> Option<&Node> {
-        self.nodes
-            .iter()
-            .find(|n| !n.deleted && n.code.eq_ignore_ascii_case(code))
+        self.pos_nodo_codigo(code).map(|i| &self.nodes[i])
     }
+    /// Tramo vivo por código, sin distinguir mayúsculas. O(1) con el índice.
     pub fn link_by_code(&self, code: &str) -> Option<&Link> {
-        self.links
-            .iter()
-            .find(|l| !l.deleted && l.code.eq_ignore_ascii_case(code))
+        self.pos_tramo_codigo(code).map(|i| &self.links[i])
     }
 
     /// Siguiente código libre de una familia (`PZ-001`, `PZ-002`…).
     pub fn next_code(&self, family_key: &str) -> String {
         let prefix = family(family_key).map(|f| f.code_prefix).unwrap_or("EL");
-        let mut n = self.nodes.iter().filter(|x| x.family == family_key).count()
-            + self.links.iter().filter(|x| x.family == family_key).count()
-            + 1;
+        let mut n = self.cuantos_de_familia(family_key) + 1;
         loop {
             let code = format!("{prefix}-{n:03}");
-            let taken = self.nodes.iter().any(|x| x.code == code)
-                || self.links.iter().any(|x| x.code == code);
-            if !taken {
+            if !self.codigo_usado(&code) {
                 return code;
             }
             n += 1;
@@ -498,14 +498,11 @@ impl Project {
                 node.ty, node.family
             ));
         }
+        self.asegurar_indice();
         if node.code.is_empty() {
             node.code = self.next_code(&node.family);
         }
-        if self
-            .nodes
-            .iter()
-            .any(|n| !n.deleted && n.code.eq_ignore_ascii_case(&node.code))
-        {
+        if self.node_by_code(&node.code).is_some() {
             return Err(format!(
                 "E_STATE_DUPLICATE_NAME: código duplicado {}",
                 node.code
@@ -513,6 +510,7 @@ impl Project {
         }
         node.id = self.alloc();
         let id = node.id;
+        self.indice.alta_nodo(self.nodes.len(), &node);
         self.nodes.push(node);
         Ok(id)
     }
@@ -527,6 +525,7 @@ impl Project {
                 link.ty, link.family
             ));
         }
+        self.asegurar_indice();
         if link.from == link.to {
             return Err("E_TOPO_SELF_LOOP: el arco empieza y termina en el mismo nodo".into());
         }
@@ -536,11 +535,7 @@ impl Project {
         if link.code.is_empty() {
             link.code = self.next_code(&link.family);
         }
-        if self
-            .links
-            .iter()
-            .any(|l| !l.deleted && l.code.eq_ignore_ascii_case(&link.code))
-        {
+        if self.link_by_code(&link.code).is_some() {
             return Err(format!(
                 "E_STATE_DUPLICATE_NAME: código duplicado {}",
                 link.code
@@ -548,6 +543,7 @@ impl Project {
         }
         link.id = self.alloc();
         let id = link.id;
+        self.indice.alta_tramo(self.links.len(), &link);
         self.links.push(link);
         Ok(id)
     }
@@ -563,19 +559,18 @@ impl Project {
     }
 
     pub fn remove(&mut self, id: ElementId) -> Result<(), String> {
-        if let Some(n) = self.nodes.iter_mut().find(|n| n.id == id) {
-            if self
-                .links
-                .iter()
-                .any(|l| !l.deleted && (l.from == id || l.to == id))
-            {
+        // Una baja no cambia el índice (guarda también los borrados y filtra al leer, F14-01);
+        // solo se rehace si alguien tocó los vectores a mano.
+        self.asegurar_indice();
+        if let Some(i) = self.pos_nodo(id, false) {
+            if self.tramos_de(id).next().is_some() {
                 return Err("E_STATE_REFERENCED: el nodo tiene arcos conectados".into());
             }
-            n.deleted = true;
+            self.nodes[i].deleted = true;
             return Ok(());
         }
-        if let Some(l) = self.links.iter_mut().find(|l| l.id == id) {
-            l.deleted = true;
+        if let Some(i) = self.pos_tramo(id, false) {
+            self.links[i].deleted = true;
             return Ok(());
         }
         Err("E_STATE_NOT_FOUND".into())

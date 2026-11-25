@@ -156,22 +156,16 @@ struct Revisable<'a> {
 
 impl Project {
     fn revisable(&mut self, codigo: &str) -> Result<Revisable<'_>, ErrorRevision> {
-        if let Some(n) = self
-            .nodes
-            .iter_mut()
-            .find(|n| !n.deleted && n.code.eq_ignore_ascii_case(codigo))
-        {
+        if let Some(i) = self.pos_nodo_codigo(codigo) {
+            let n = &mut self.nodes[i];
             return Ok(Revisable {
                 codigo: n.code.clone(),
                 estado: &mut n.estado,
                 obs: &mut n.observaciones,
             });
         }
-        if let Some(l) = self
-            .links
-            .iter_mut()
-            .find(|l| !l.deleted && l.code.eq_ignore_ascii_case(codigo))
-        {
+        if let Some(i) = self.pos_tramo_codigo(codigo) {
+            let l = &mut self.links[i];
             return Ok(Revisable {
                 codigo: l.code.clone(),
                 estado: &mut l.estado,
