@@ -21,8 +21,13 @@ pub struct Topology {
     pub degree: BTreeMap<ElementId, usize>,
     /// Componentes conexas (ids de nodos), en orden determinista.
     pub components: Vec<Vec<ElementId>>,
-    /// Sentido de flujo por arco: `true` si va de `from` a `to`.
+    /// Sentido de flujo por arco: `true` si va de `from` a `to`. Es el sentido **declarado**
+    /// (from→to); nunca se invierte por las cotas.
     pub flow_forward: BTreeMap<ElementId, bool>,
+    /// Arcos por gravedad cuya cota sube en el sentido declarado (contrapendiente). Es un aviso:
+    /// no cambia el sentido ni ningún dato. Las redes a presión no entran aquí.
+    #[serde(default)]
+    pub contrapendiente: Vec<ElementId>,
     /// Nodos que no alcanzan ninguna fuente.
     pub stranded: Vec<ElementId>,
 }
@@ -35,13 +40,16 @@ impl Topology {
             incident.entry(n.id).or_default();
         }
         let mut flow_forward = BTreeMap::new();
+        let mut contrapendiente = Vec::new();
         for l in p.links.iter().filter(|l| !l.deleted) {
-            // El sentido en gravedad lo imponen las cotas: aguas abajo = clave menor.
-            let (z0, z1) = (
-                l.path.first().map(|q| q.z).unwrap_or(0.0),
-                l.path.last().map(|q| q.z).unwrap_or(0.0),
-            );
-            flow_forward.insert(l.id, z0 >= z1);
+            // El sentido es el declarado (from→to). Las cotas solo sirven para avisar.
+            flow_forward.insert(l.id, true);
+            if !es_a_presion(&l.family, &l.ty)
+                && let (Some(a), Some(b)) = (l.path.first(), l.path.last())
+                && a.z < b.z - 1e-9
+            {
+                contrapendiente.push(l.id);
+            }
             incident.entry(l.from).or_default().push(l.id);
             incident.entry(l.to).or_default().push(l.id);
         }
@@ -77,7 +85,7 @@ impl Topology {
         let sources: BTreeSet<ElementId> = p
             .nodes
             .iter()
-            .filter(|n| !n.deleted && is_source(&n.family))
+            .filter(|n| !n.deleted && (is_source(&n.family) || is_sink(&n.family)))
             .map(|n| n.id)
             .collect();
         let mut stranded = Vec::new();
@@ -95,6 +103,7 @@ impl Topology {
             degree,
             components,
             flow_forward,
+            contrapendiente,
             stranded,
         }
     }
@@ -117,6 +126,30 @@ impl Topology {
             .filter(|n| !n.deleted && self.degree_of(n.id) == 0)
             .map(|n| n.id)
     }
+}
+
+/// Tramo a presión (impulsión, conducción forzada, agua potable): la regla de pendiente no aplica.
+/// Se deriva del registro: familia de agua, o subtipo que exige clase de presión.
+fn es_a_presion(family: &str, ty: &str) -> bool {
+    let Some(def) = crate::families::family(family) else {
+        return false;
+    };
+    def.category == crate::families::Category::Agua
+        || def
+            .ty(ty)
+            .is_some_and(|t| t.required.contains(&"clase_presion"))
+}
+
+/// Sumideros de una red de gravedad: descarga, cuerpo receptor y obras de tratamiento.
+fn is_sink(family: &str) -> bool {
+    matches!(
+        family,
+        "saneamiento.descarga"
+            | "comun.cuerpo_receptor"
+            | "saneamiento.reactor"
+            | "saneamiento.laguna"
+            | "saneamiento.sedimentador"
+    )
 }
 
 fn is_source(family: &str) -> bool {
@@ -226,5 +259,45 @@ mod tests {
         let t = Topology::build(&p);
         let lid = p.links[0].id;
         assert_eq!(t.flow_forward.get(&lid), Some(&true));
+        assert!(t.contrapendiente.is_empty());
+    }
+
+    #[test]
+    fn la_contrapendiente_se_avisa_y_no_invierte_el_sentido() {
+        let (mut p, _) = p_with_chain(2);
+        let lid = p.links[0].id;
+        // La cota sube en el sentido declarado.
+        p.links[0].path[0].z = 90.0;
+        let t = Topology::build(&p);
+        assert_eq!(t.flow_forward.get(&lid), Some(&true));
+        assert_eq!(t.contrapendiente, vec![lid]);
+        // A presión la regla de pendiente no aplica.
+        p.links[0].ty = "impulsion".into();
+        assert!(Topology::build(&p).contrapendiente.is_empty());
+        p.links[0].family = "agua.tuberia".into();
+        p.links[0].ty = "distribucion_primaria".into();
+        assert!(Topology::build(&p).contrapendiente.is_empty());
+    }
+
+    #[test]
+    fn la_red_con_descarga_no_queda_aislada() {
+        let (mut p, ids) = p_with_chain(2);
+        // Sin ninguna fuente ni sumidero no se marca nada.
+        assert!(Topology::build(&p).stranded.is_empty());
+        // Con un bombeo en otra red, la cadena sin sumidero queda aislada...
+        let mut n = p.nodes[0].clone();
+        n.id = ElementId::new(0, 0);
+        n.code = String::new();
+        n.family = "saneamiento.bombeo".into();
+        n.ty = crate::families::family("saneamiento.bombeo").unwrap().types[0]
+            .key
+            .into();
+        n.pos = crate::geom::P2::new(900.0, 0.0);
+        p.add_node(n).unwrap();
+        assert_eq!(Topology::build(&p).stranded.len(), 2);
+        // ...y con una descarga en la cadena deja de estarlo.
+        p.nodes[1].family = "saneamiento.descarga".into();
+        let t = Topology::build(&p);
+        assert!(!t.stranded.contains(&ids[0]), "{:?}", t.stranded);
     }
 }
