@@ -171,16 +171,9 @@ enum ImportarCmd {
         #[arg(long)]
         archivo: PathBuf,
     },
-    /// DXF ASCII (POINT, LINE, POLYLINE/LWPOLYLINE).
+    /// DXF exportado por Redes (capa `REDES_INFO`). Un DXF de otra aplicación se adapta con la
+    /// skill `skills/redes-ingesta` y entra como plan.
     Dxf {
-        #[arg(long)]
-        archivo: PathBuf,
-        /// Distancia para unir extremos de polilínea con pozos existentes (m).
-        #[arg(long, default_value_t = 1.0)]
-        tolerancia: f64,
-    },
-    /// GeoJSON de puntos y líneas.
-    Geojson {
         #[arg(long)]
         archivo: PathBuf,
     },
@@ -188,8 +181,9 @@ enum ImportarCmd {
     Terreno {
         #[arg(long)]
         archivo: PathBuf,
-        #[arg(long, default_value_t = 32717)]
-        epsg: u32,
+        /// EPSG de los puntos (UTM sur). Si se omite, el del proyecto; otro distinto → `E_CRS`.
+        #[arg(long)]
+        epsg: Option<u32>,
     },
 }
 
@@ -971,7 +965,6 @@ fn mutates(id: &str) -> bool {
         id,
         "importar.plan"
             | "importar.dxf"
-            | "importar.geojson"
             | "importar.terreno"
             | "objeto.aprobar"
             | "objeto.observar"
@@ -1009,7 +1002,6 @@ fn command_id(c: &Cmd) -> &'static str {
         Cmd::Importar { cmd } => match cmd {
             ImportarCmd::Plan { .. } => "importar.plan",
             ImportarCmd::Dxf { .. } => "importar.dxf",
-            ImportarCmd::Geojson { .. } => "importar.geojson",
             ImportarCmd::Terreno { .. } => "importar.terreno",
         },
         Cmd::Objeto { cmd } => match cmd {
@@ -1126,7 +1118,7 @@ fn esquema(filtro: Option<&str>) -> Envelope {
         "total_familias": families::families().len(),
         "comandos": comandos,
         "formatos": {
-            "entrada": ["redes.plan/1", "dxf", "geojson", "csv(E,N,Z)"],
+            "entrada": ["redes.plan/1", "dxf (exportado por Redes, capa REDES_INFO)", "csv(E,N,Z)"],
             "salida": ["dxf", "geojson", "svg"]
         },
         "codigos_error": CODIGOS
@@ -1161,7 +1153,17 @@ const CODIGOS: &[(&str, &str, i32)] = &[
     ),
     ("E_FMT_PARSE", "archivo ilegible", 7),
     ("E_FMT_UNSUPPORTED", "formato no soportado", 7),
+    (
+        "E_FMT_NOT_REDES",
+        "DXF que no exportó Redes (sin capa REDES_INFO): adáptelo con la skill de ingesta",
+        7,
+    ),
     ("E_IO_NOT_FOUND", "archivo inexistente", 7),
+    (
+        "E_CRS",
+        "CRS ausente, no admitido (solo UTM sur EPSG:327NN), distinto del proyecto o coordenadas en grados",
+        1,
+    ),
 ];
 
 fn project_info(p: &Project, path: &Path) -> Envelope {
@@ -1198,29 +1200,27 @@ fn importar(p: &mut Project, cmd: ImportarCmd, dry: bool) -> Envelope {
             }
             ("importar.plan", ingest::import_plan(p, &archivo))
         }
-        ImportarCmd::Dxf {
-            archivo,
-            tolerancia,
-        } => {
+        ImportarCmd::Dxf { archivo } => {
             if dry {
                 return dry_import(p, "importar.dxf", &archivo);
             }
-            ("importar.dxf", ingest::import_dxf(p, &archivo, tolerancia))
-        }
-        ImportarCmd::Geojson { archivo } => {
-            if dry {
-                return dry_import(p, "importar.geojson", &archivo);
-            }
-            ("importar.geojson", ingest::import_geojson(p, &archivo))
+            ("importar.dxf", ingest::import_dxf(p, &archivo, 0.0))
         }
         ImportarCmd::Terreno { archivo, epsg } => {
             if dry {
                 return dry_import(p, "importar.terreno", &archivo);
             }
-            (
-                "importar.terreno",
-                ingest::import_terreno(p, &archivo, epsg),
-            )
+            // Sin `--epsg`, el del proyecto (F12-13): antes se suponía 32717 aunque el proyecto
+            // estuviera en 18S.
+            let epsg = epsg.or_else(|| ingest::epsg_de(&p.crs));
+            let resultado = match epsg {
+                Some(epsg) => ingest::import_terreno(p, &archivo, epsg),
+                None => Err(format!(
+                    "E_CRS: el proyecto tiene un CRS ilegible ({}); indique --epsg",
+                    p.crs
+                )),
+            };
+            ("importar.terreno", resultado)
         }
     };
     match result {
@@ -1231,16 +1231,28 @@ fn importar(p: &mut Project, cmd: ImportarCmd, dry: bool) -> Envelope {
             "puntos_terreno": rep.puntos_terreno,
             "descartados": rep.descartados.len(),
             "detalle_descartes": rep.descartados,
-                    "renombrados": rep.renombrados,
+            "renombrados": rep.renombrados,
+            "avisos": rep.avisos.len(),
+            "detalle_avisos": rep.avisos,
             "objetos_totales": p.count(),
             "siguiente": "redes vista --salida vista.svg"
         })),
         Err(e) => {
             let code = e.split(':').next().unwrap_or("E_FMT_PARSE").to_string();
+            let pista = match code.as_str() {
+                "E_FMT_NOT_REDES" | "E_FMT_PARSE" if command == "importar.dxf" => {
+                    "`importar dxf` solo lee DXF exportados por Redes (capa REDES_INFO). Un DXF de otra aplicación se adapta con la skill `skills/redes-ingesta`, que escribe un `redes.plan/1`; luego `redes importar plan --archivo plan.json`."
+                }
+                "E_CRS" => {
+                    "Declare el CRS real (en el plan, `proyecto.crs`; en el terreno, `--epsg`): UTM sur en metros, p. ej. EPSG:32717 (17S) o EPSG:32718 (18S), el mismo del proyecto. Redes no reproyecta: hágalo en origen o cree un proyecto con `--crs`."
+                }
+                _ => {
+                    "Revise el archivo. Los formatos ajenos se adaptan con la skill `skills/redes-ingesta` y entran como `redes.plan/1`."
+                }
+            };
             Envelope::fail(
                 command,
-                vec![Diagnostic::new(&code, Severity::Error, e)
-                    .hint("Revise el archivo; para DXF use ASCII (no binario) y capas con nombres de red.")],
+                vec![Diagnostic::new(&code, Severity::Error, e).hint(pista)],
             )
         }
     }
@@ -1275,7 +1287,7 @@ fn objeto(p: &mut Project, cmd: ObjetoCmd, dry: bool) -> Envelope {
                 items.push(json!({
                     "codigo": n.code, "familia": n.family, "subtipo": n.ty,
                     "estado": n.estado.key(), "e": round(n.pos.x, 3), "n": round(n.pos.y, 3),
-                    "cota_solera": round(n.z_invert, 3), "nota": n.nota
+                    "cota_solera": n.cota_solera().map(|z| round(z, 3)), "nota": n.nota
                 }));
             }
             for l in p.links.iter().filter(|l| !l.deleted) {
@@ -1291,7 +1303,7 @@ fn objeto(p: &mut Project, cmd: ObjetoCmd, dry: bool) -> Envelope {
                 }
                 items.push(json!({
                     "codigo": l.code, "familia": l.family, "subtipo": l.ty,
-                    "estado": l.estado.key(), "diametro_mm": l.d_mm, "nota": l.nota,
+                    "estado": l.estado.key(), "diametro_mm": l.dn(), "nota": l.nota,
                     "longitud_m": round(l.length_2d(), 2)
                 }));
             }

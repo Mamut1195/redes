@@ -248,6 +248,7 @@ pub fn ciudad() -> Project {
             nota: None,
             modelo: None,
             deleted: false,
+            sin_dato: Vec::new(),
         })
         .unwrap();
 
@@ -274,6 +275,7 @@ pub fn ciudad() -> Project {
                 nota: None,
                 modelo: None,
                 deleted: false,
+                sin_dato: Vec::new(),
             })
             .unwrap();
         red_agua.push(id);
@@ -307,6 +309,7 @@ pub fn ciudad() -> Project {
             cota_solera_inicio: None,
             cota_solera_fin: None,
             deleted: false,
+            sin_dato: Vec::new(),
         })
         .ok();
     }
@@ -332,6 +335,7 @@ pub fn ciudad() -> Project {
             nota: None,
             modelo: None,
             deleted: false,
+            sin_dato: Vec::new(),
         })
         .ok();
     }
@@ -384,6 +388,7 @@ fn pozo(p: &mut Project, e: f64, n: f64, tipo: &str, diametro: f64) -> ElementId
         nota: None,
         modelo: None,
         deleted: false,
+        sin_dato: Vec::new(),
     })
     .unwrap()
 }
@@ -530,6 +535,7 @@ fn conectar(
         cota_solera_inicio: None,
         cota_solera_fin: None,
         deleted: false,
+        sin_dato: Vec::new(),
     })
     .ok();
 }

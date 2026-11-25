@@ -360,3 +360,49 @@ fn aprobar_el_proyecto_con_observados_devuelve_e_state_observed() {
     let guardado = std::fs::read_to_string(r).unwrap();
     assert!(guardado.contains(&format!("objeto.aprobar {}", codigos[1])));
 }
+
+#[test]
+fn un_dxf_ajeno_da_e_fmt_not_redes_sin_tocar_el_proyecto() {
+    let d = tempdir("dxf-ajeno");
+    let ruta = d.join("p.redes");
+    let r = ruta.to_str().unwrap();
+    corre(
+        &[
+            "proyecto", "nuevo", "--nombre", "x", "--salida", r, "--quiet",
+        ],
+        &d,
+    );
+    let antes = std::fs::read_to_string(&ruta).unwrap();
+    let dxf = d.join("civil3d.dxf");
+    std::fs::write(
+        &dxf,
+        "0\nSECTION\n2\nENTITIES\n0\nPOINT\n8\nPOZOS\n10\n1.0\n20\n2.0\n30\n3.0\n0\nENDSEC\n0\nEOF\n",
+    )
+    .unwrap();
+    let s = corre(
+        &[
+            "-p",
+            r,
+            "importar",
+            "dxf",
+            "--archivo",
+            dxf.to_str().unwrap(),
+        ],
+        &d,
+    );
+    let j = sobre(&s);
+    assert_eq!(j["ok"], false, "{j}");
+    assert_eq!(j["diagnostics"][0]["code"], "E_FMT_NOT_REDES");
+    assert!(
+        j["diagnostics"][0]["hint"]
+            .as_str()
+            .is_some_and(|h| h.contains("redes-ingesta")),
+        "la pista lleva a la skill: {j}"
+    );
+    assert_eq!(s.codigo, 7);
+    assert_eq!(
+        std::fs::read_to_string(&ruta).unwrap(),
+        antes,
+        "el proyecto no se toca"
+    );
+}

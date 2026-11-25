@@ -1,15 +1,15 @@
-//! Ingesta: convertir lo que exportan otras aplicaciones a un proyecto de Redes.
+//! Ingesta: lo que entra a un proyecto de Redes (D5).
 //!
-//! Es la mitad "entrada" del producto. Aquí **no se calcula nada**: se lee, se mapea y se
-//! valida estructura. Tres caminos:
+//! Es la mitad "entrada" del producto. Aquí **no se calcula nada ni se adivina nada**: se lee,
+//! se valida estructura y lo que falta queda ausente. Tres caminos y ninguno más:
 //!
-//! 1. **Plan JSON** (`redes.plan/1`): el contrato canónico. La *skill* de ingesta convierte
-//!    cualquier fuente (Civil 3D, SWMM, EPANET, Revit, Excel) a este JSON.
-//! 2. **DXF**: lo que el delineante exporta del CAD. Se leen puntos, líneas y polilíneas 3D y se
-//!    mapean por capa.
-//! 3. **GeoJSON**: puntos y líneas con propiedades.
+//! 1. **Plan JSON** (`redes.plan/1`): el contrato canónico. Los formatos ajenos (Civil 3D, SWMM,
+//!    EPANET, DXF o GeoJSON de terceros, Excel) los adapta un agente con la skill
+//!    `skills/redes-ingesta`, que escribe este JSON.
+//! 2. **DXF de Redes**: la vuelta del DXF que exporta Redes (capa `REDES_INFO`, F8).
+//! 3. **Terreno**: puntos `E,N,Z`.
 //!
-//! Todos devuelven un [`ImportReport`] con lo leído y lo descartado, con motivo.
+//! Todos devuelven un [`ImportReport`] con lo leído, lo descartado y los avisos, con motivo.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -32,6 +32,9 @@ pub struct ImportReport {
     /// Objetos que entraron con otra clave porque la suya estaba retirada (docs/20 §4.2).
     #[serde(default)]
     pub renombrados: Vec<String>,
+    /// Objetos que entraron con algún dato ausente (F12-03): se muestran con `—`, no se rellenan.
+    #[serde(default)]
+    pub avisos: Vec<String>,
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -55,7 +58,9 @@ fn schema_plan() -> String {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct PlanProyecto {
     pub nombre: String,
-    #[serde(default = "crs_default")]
+    /// CRS declarado (`EPSG:327NN`, UTM sur). Obligatorio en la práctica: vacío → `E_CRS`
+    /// (F12-13). Antes se suponía EPSG:32717 en silencio.
+    #[serde(default)]
     pub crs: String,
     #[serde(default)]
     pub fuente_app: String,
@@ -63,8 +68,87 @@ pub struct PlanProyecto {
     pub fuente_archivo: String,
 }
 
-fn crs_default() -> String {
-    "EPSG:32717".into()
+// ---------------------------------------------------------------------------------------------
+// Sistema de coordenadas (F12-13): se declara, se comprueba y no se reproyecta nunca.
+
+/// Código EPSG de un CRS escrito como `EPSG:32717` (o solo `32717`).
+pub fn epsg_de(crs: &str) -> Option<u32> {
+    let t = crs.trim();
+    let num = t
+        .get(..5)
+        .filter(|p| p.eq_ignore_ascii_case("EPSG:"))
+        .map(|_| &t[5..])
+        .unwrap_or(t);
+    num.trim().parse().ok()
+}
+
+/// ¿Es un UTM sur WGS 84 (`EPSG:32701`…`32760`)? Redes trabaja en metros UTM; 17S (32717) y 18S
+/// (32718) son los de Ecuador y Perú.
+pub fn es_utm_sur(epsg: u32) -> bool {
+    (32701..=32760).contains(&epsg)
+}
+
+/// ¿Parecen grados (lon/lat) y no metros UTM? Un UTM tiene E de cientos de miles y N de millones.
+fn parece_lonlat(e: f64, n: f64) -> bool {
+    e.abs() <= 180.0 && n.abs() <= 90.0
+}
+
+/// Comprueba el CRS de lo que entra contra el del proyecto. Devuelve el EPSG a usar.
+///
+/// - CRS ausente, ilegible o que no es UTM sur → `E_CRS`.
+/// - Distinto del proyecto → `E_CRS` (no se reproyecta), salvo que el proyecto esté vacío: entonces
+///   adopta el del plan, porque no hay nada que desalinear.
+/// - Un terreno ya cargado con otro EPSG → `E_CRS`.
+fn comprobar_crs(p: &Project, crs: &str, origen: &str) -> Result<u32, String> {
+    if crs.trim().is_empty() {
+        return Err(format!(
+            "E_CRS: {origen} no declara su sistema de coordenadas (p. ej. \"EPSG:32717\")"
+        ));
+    }
+    let Some(epsg) = epsg_de(crs) else {
+        return Err(format!("E_CRS: {origen}: CRS ilegible «{crs}»"));
+    };
+    if !es_utm_sur(epsg) {
+        return Err(format!(
+            "E_CRS: {origen} está en EPSG:{epsg}; Redes solo admite UTM sur WGS 84 (EPSG:327NN, p. ej. 32717 = 17S, 32718 = 18S). Si es 326NN es el hemisferio norte"
+        ));
+    }
+    let vacio = p.count() == 0 && p.terrain.is_none();
+    if !vacio && epsg_de(&p.crs) != Some(epsg) {
+        return Err(format!(
+            "E_CRS: {origen} está en EPSG:{epsg} y el proyecto en {}; Redes no reproyecta",
+            p.crs
+        ));
+    }
+    if let Some(t) = &p.terrain
+        && t.epsg != epsg
+    {
+        return Err(format!(
+            "E_CRS: el terreno del proyecto está en EPSG:{} y {origen} en EPSG:{epsg}",
+            t.epsg
+        ));
+    }
+    Ok(epsg)
+}
+
+/// Rechaza coordenadas en grados: un GeoJSON o un Excel en lon/lat que llega como si fuera UTM
+/// quedaría a miles de kilómetros (o todo en un punto).
+fn rechazar_lonlat<'a>(
+    puntos: impl Iterator<Item = (&'a str, f64, f64)>,
+    origen: &str,
+) -> Result<(), String> {
+    let malos: Vec<String> = puntos
+        .filter(|(_, e, n)| parece_lonlat(*e, *n))
+        .map(|(que, e, n)| format!("{que} ({e}, {n})"))
+        .take(3)
+        .collect();
+    if malos.is_empty() {
+        return Ok(());
+    }
+    Err(format!(
+        "E_CRS: {origen} trae coordenadas que parecen grados lon/lat, no metros UTM: {}. Proyéctelas a UTM en origen; Redes no reproyecta",
+        malos.join(", ")
+    ))
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -78,10 +162,14 @@ pub enum PlanObjeto {
         subtipo: String,
         e: f64,
         n: f64,
+        /// Cota de solera.
         #[serde(default)]
         cota: Option<f64>,
         #[serde(default)]
         cota_terreno: Option<f64>,
+        /// Cota de tapa. Si falta, queda ausente: no se copia el terreno (F12-03).
+        #[serde(default)]
+        cota_tapa: Option<f64>,
         #[serde(default)]
         diametro: Option<f64>,
         #[serde(default)]
@@ -129,10 +217,32 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
     if !plan.schema.starts_with("redes.plan/") {
         return Err(format!("E_FMT_UNSUPPORTED: esquema {}", plan.schema));
     }
+    // F12-13: el CRS se comprueba antes de tocar nada.
+    let epsg = comprobar_crs(p, &plan.proyecto.crs, "el plan")?;
+    let terreno = plan
+        .terreno
+        .iter()
+        .map(|v| ("punto de terreno", v[0], v[1]));
+    let objetos = plan.objetos.iter().flat_map(|o| match o {
+        PlanObjeto::Nodo { codigo, e, n, .. } => vec![(codigo.as_str(), *e, *n)],
+        PlanObjeto::Arco {
+            codigo, vertices, ..
+        } => vertices
+            .iter()
+            .map(|v| (codigo.as_str(), v[0], v[1]))
+            .collect(),
+    });
+    rechazar_lonlat(terreno.chain(objetos), "el plan")?;
     let mut rep = ImportReport {
         formato: "plan".into(),
         ..Default::default()
     };
+    if epsg_de(&p.crs) != Some(epsg) {
+        rep.avisos.push(format!(
+            "el proyecto estaba vacío y adopta el CRS del plan: EPSG:{epsg} (antes {})",
+            p.crs
+        ));
+    }
 
     if !plan.terreno.is_empty() {
         let pts = plan
@@ -141,7 +251,7 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
             .map(|v| SurfacePoint::new(v[0], v[1], v[2]))
             .collect::<Vec<_>>();
         rep.puntos_terreno = pts.len();
-        p.terrain = Some(Terrain::build(&plan.proyecto.nombre, 32717, pts));
+        p.terrain = Some(Terrain::build(&plan.proyecto.nombre, epsg, pts));
     }
 
     // Índice de códigos para resolver `desde`/`hasta`.
@@ -155,16 +265,53 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
             n,
             cota,
             cota_terreno,
+            cota_tapa,
             diametro,
             attrs,
             datos,
         } = o
         {
-            let zt = cota_terreno
-                .or(*cota)
-                .or_else(|| p.terrain.as_ref().and_then(|t| t.z_at(P2::new(*e, *n))))
-                .unwrap_or(0.0);
-            let zc = cota.unwrap_or(zt - 1.5);
+            // F12-03: nada se rellena. La cota de terreno puede salir del TIN que trae el mismo
+            // plan (es un dato del origen, y se avisa); la solera y la tapa, solo del plan.
+            let del_tin = cota_terreno
+                .is_none()
+                .then(|| p.terrain.as_ref().and_then(|t| t.z_at(P2::new(*e, *n))))
+                .flatten();
+            let zt = cota_terreno.or(del_tin);
+            let (zs, zr) = (*cota, *cota_tapa);
+            let Some(dibujo) = zr.or(zt).or(zs) else {
+                rep.descartados.push(format!(
+                    "nodo {codigo}: sin ninguna cota (solera, tapa ni terreno, y sin TIN en su planta): no se puede ubicar en altura"
+                ));
+                continue;
+            };
+            let mut sin_dato = Vec::new();
+            for (falta, clave) in [
+                (zt.is_none(), crate::model::COTA_TERRENO),
+                (zr.is_none(), crate::model::COTA_TAPA),
+                (zs.is_none(), crate::model::COTA_SOLERA),
+            ] {
+                if falta {
+                    sin_dato.push(clave.to_string());
+                }
+            }
+            if del_tin.is_some() {
+                rep.avisos.push(format!(
+                    "nodo {codigo}: cota_terreno tomada del TIN del plan"
+                ));
+            }
+            if !sin_dato.is_empty() {
+                let plano = zs.is_none() || (zt.is_none() && zr.is_none());
+                rep.avisos.push(format!(
+                    "nodo {codigo}: sin {} (se muestra «—»{})",
+                    sin_dato.join(", "),
+                    if plano {
+                        "; se dibuja plano, sin altura"
+                    } else {
+                        ""
+                    }
+                ));
+            }
             let mut a = attrs.clone();
             if let Some(d) = diametro {
                 a.insert("diametro_interior".to_string(), Value::Num(*d));
@@ -184,15 +331,18 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
                 },
                 code: code.clone(),
                 pos: P2::new(*e, *n),
-                z_terrain: zt,
-                z_rim: zt,
-                z_invert: zc,
+                // Lo ausente guarda solo un valor de dibujo (la cota de arriba que sí hay, o la
+                // solera): la pieza queda plana y `sin_dato` impide mostrarlo como dato.
+                z_terrain: zt.unwrap_or(dibujo),
+                z_rim: zr.unwrap_or(dibujo),
+                z_invert: zs.unwrap_or(dibujo),
                 attrs: a,
                 datos: to_datos(datos),
                 estado: EstadoObjeto::Pendiente,
                 nota: None,
                 modelo: None,
                 deleted: false,
+                sin_dato,
             };
             // Clave retirada: se traduce a su destino y se anota (nunca en silencio).
             if let Some((nf, nt)) = crate::families_extra::alias(&node.family, &node.ty) {
@@ -233,15 +383,32 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
                 continue;
             };
             let (a, b) = (p.node(from).unwrap(), p.node(to).unwrap());
+            let mut sin_dato = Vec::new();
             let path = if vertices.len() >= 2 {
                 vertices.iter().map(|v| P3::new(v[0], v[1], v[2])).collect()
             } else {
-                // La solera declarada del tramo manda sobre la del pozo (F12-02).
+                // La solera declarada del tramo manda sobre la del pozo (F12-02). Si no hay
+                // ninguna de las dos, el trazado va a la cota de dibujo del pozo y se marca.
+                let z0 = cota_solera_inicio.or(a.cota_solera());
+                let z1 = cota_solera_fin.or(b.cota_solera());
+                if z0.is_none() || z1.is_none() {
+                    sin_dato.push(crate::model::COTA_SOLERA.to_string());
+                }
                 vec![
-                    P3::new(a.pos.x, a.pos.y, cota_solera_inicio.unwrap_or(a.z_invert)),
-                    P3::new(b.pos.x, b.pos.y, cota_solera_fin.unwrap_or(b.z_invert)),
+                    P3::new(a.pos.x, a.pos.y, z0.unwrap_or(a.z_invert)),
+                    P3::new(b.pos.x, b.pos.y, z1.unwrap_or(b.z_invert)),
                 ]
             };
+            let dn = diametro_mm.filter(|d| *d > 0);
+            if dn.is_none() {
+                sin_dato.push(crate::model::DIAMETRO_NOMINAL.to_string());
+            }
+            if !sin_dato.is_empty() {
+                rep.avisos.push(format!(
+                    "arco {codigo}: sin {} (se muestra «—» y se dibuja como línea sin dato)",
+                    sin_dato.join(", ")
+                ));
+            }
             let code = if codigo.is_empty() {
                 p.next_code(familia)
             } else {
@@ -259,7 +426,8 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
                 from,
                 to,
                 path,
-                d_mm: diametro_mm.unwrap_or(200),
+                // Sin DN declarado queda 0 («sin dato»), no 200 (F12-03).
+                d_mm: dn.unwrap_or(0),
                 attrs: attrs.clone(),
                 datos: to_datos(datos),
                 estado: EstadoObjeto::Pendiente,
@@ -267,6 +435,7 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
                 cota_solera_inicio: *cota_solera_inicio,
                 cota_solera_fin: *cota_solera_fin,
                 deleted: false,
+                sin_dato,
             };
             match p.add_link(link) {
                 Ok(_) => rep.arcos += 1,
@@ -292,9 +461,7 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
     if !plan.proyecto.nombre.is_empty() {
         p.name = plan.proyecto.nombre.clone();
     }
-    if !plan.proyecto.crs.is_empty() {
-        p.crs = plan.proyecto.crs.clone();
-    }
+    p.crs = format!("EPSG:{epsg}");
     p.commit("importar plan");
     Ok(rep)
 }
@@ -326,245 +493,37 @@ fn default_subtype(family: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------------------------
-// DXF
+// DXF de ida y vuelta (F8)
 
-/// Importa un DXF ASCII: POINT, LINE y POLYLINE/LWPOLYLINE de 3D.
+/// Importa un DXF **exportado por Redes**: lo reconstruye desde su capa `REDES_INFO`.
 ///
-/// Mapeo por capa (heurístico y configurable):
-/// `POZO|MH|PZ` → pozo, `AGUA|AP|DIST` → agua, `ALC|SAN|COLECTOR|CL` → alcantarillado.
-pub fn import_dxf(p: &mut Project, path: &Path, tolerance: f64) -> Result<ImportReport, String> {
+/// Es la vuelta de [`crate::export::export_dxf`]. Un DXF de otra aplicación (Civil 3D, un
+/// levantamiento…) no trae esa capa y se rechaza con `E_FMT_NOT_REDES`: lo adapta un agente con
+/// la skill `skills/redes-ingesta`, que escribe un `redes.plan/1` (D5). Antes se adivinaba la
+/// familia por el nombre de la capa; esa heurística se retiró (F12-09).
+///
+/// `_tolerance` ya no se usa (era la del enganche de extremos de la heurística); se conserva para
+/// no romper a quien llama.
+pub fn import_dxf(p: &mut Project, path: &Path, _tolerance: f64) -> Result<ImportReport, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("E_IO_NOT_FOUND: {e}"))?;
     let pairs = dxf_pairs(&text);
-    if pairs.is_empty() {
-        return Err("E_FMT_PARSE: el archivo no parece un DXF ASCII".into());
+    if pairs.is_empty() || !pairs.iter().any(|(c, v)| c == "0" && v == "EOF") {
+        return Err("E_FMT_PARSE: el archivo no parece un DXF ASCII completo (falta EOF)".into());
+    }
+    let textos = textos_redes_info(&pairs);
+    if textos.is_empty() {
+        return Err(
+            "E_FMT_NOT_REDES: el DXF no trae la capa REDES_INFO, así que no lo exportó Redes"
+                .into(),
+        );
     }
     let mut rep = ImportReport {
         formato: "dxf".into(),
         ..Default::default()
     };
-
-    // Capa de datos de la ida y vuelta: si el DXF lo escribió Redes, manda lo que dice ahí.
-    if let Some(previo) = importar_de_capa_info(p, &pairs, &mut rep, tolerance) {
-        return Ok(previo);
-    }
-    let mut points: Vec<(P2, f64, String)> = Vec::new();
-    let mut circles: Vec<(P2, f64)> = Vec::new();
-    let mut lines: Vec<(Vec<P3>, String, String)> = Vec::new();
-    let mut i = 0usize;
-
-    while i + 1 < pairs.len() {
-        let (code, val) = (&pairs[i].0, &pairs[i].1);
-        if code == "0"
-            && (val == "POINT"
-                || val == "LINE"
-                || val == "POLYLINE"
-                || val == "LWPOLYLINE"
-                || val == "CIRCLE")
-        {
-            let kind = val.clone();
-            i += 1;
-            let mut layer = String::from("0");
-            let mut xs: Vec<f64> = Vec::new();
-            let mut ys: Vec<f64> = Vec::new();
-            let mut zs: Vec<f64> = Vec::new();
-            let mut elev = 0.0;
-            let mut is_3d = false;
-            while i + 1 < pairs.len() && pairs[i].0 != "0" {
-                let (c, v) = (&pairs[i].0, &pairs[i].1);
-                match c.as_str() {
-                    "8" => layer = v.clone(),
-                    "70" => is_3d = v.parse::<i32>().map(|f| f & 8 != 0).unwrap_or(false),
-                    "38" => elev = v.parse().unwrap_or(0.0),
-                    "10" => xs.push(v.parse().unwrap_or(f64::NAN)),
-                    "20" => ys.push(v.parse().unwrap_or(f64::NAN)),
-                    "30" => zs.push(v.parse().unwrap_or(0.0)),
-                    "11" => xs.push(v.parse().unwrap_or(f64::NAN)),
-                    "21" => ys.push(v.parse().unwrap_or(f64::NAN)),
-                    "31" => zs.push(v.parse().unwrap_or(0.0)),
-                    _ => {}
-                }
-                i += 1;
-            }
-            match kind.as_str() {
-                "CIRCLE" => {
-                    if let (Some(x), Some(y)) = (xs.first(), ys.first()) {
-                        circles.push((P2::new(*x, *y), zs.first().copied().unwrap_or(elev)));
-                    }
-                }
-                "POINT" => {
-                    if let (Some(x), Some(y)) = (xs.first(), ys.first()) {
-                        points.push((P2::new(*x, *y), zs.first().copied().unwrap_or(elev), layer));
-                    }
-                }
-                "LINE" => {
-                    if xs.len() >= 2 && ys.len() >= 2 {
-                        let a = P3::new(xs[0], ys[0], zs.first().copied().unwrap_or(elev));
-                        let b = P3::new(xs[1], ys[1], zs.get(1).copied().unwrap_or(elev));
-                        lines.push((vec![a, b], layer, "LINE".into()));
-                    }
-                }
-                _ => {
-                    // POLYLINE: los vértices vienen en entidades VERTEX posteriores.
-                    if kind == "POLYLINE" {
-                        let mut verts = Vec::new();
-                        let mut j = i;
-                        while j + 1 < pairs.len() {
-                            if pairs[j].0 == "0" && pairs[j].1 == "VERTEX" {
-                                let (mut vx, mut vy, mut vz) = (f64::NAN, f64::NAN, 0.0);
-                                j += 1;
-                                while j + 1 < pairs.len() && pairs[j].0 != "0" {
-                                    match pairs[j].0.as_str() {
-                                        "10" => vx = pairs[j].1.parse().unwrap_or(f64::NAN),
-                                        "20" => vy = pairs[j].1.parse().unwrap_or(f64::NAN),
-                                        "30" => vz = pairs[j].1.parse().unwrap_or(0.0),
-                                        _ => {}
-                                    }
-                                    j += 1;
-                                }
-                                if !vx.is_nan() && !vy.is_nan() {
-                                    verts.push(P3::new(vx, vy, vz));
-                                }
-                            } else if pairs[j].0 == "0" && pairs[j].1 == "SEQEND" {
-                                j += 2;
-                                break;
-                            } else {
-                                j += 1;
-                            }
-                        }
-                        i = j;
-                        if verts.len() >= 2 {
-                            lines.push((
-                                verts,
-                                layer,
-                                if is_3d { "POLYLINE3D" } else { "POLYLINE" }.into(),
-                            ));
-                        }
-                    } else {
-                        // LWPOLYLINE: x/y repetidos y una elevación.
-                        let mut verts = Vec::new();
-                        for k in 0..xs.len().min(ys.len()) {
-                            verts.push(P3::new(xs[k], ys[k], elev));
-                        }
-                        if verts.len() >= 2 {
-                            lines.push((verts, layer, "LWPOLYLINE".into()));
-                        }
-                    }
-                }
-            }
-            continue;
-        }
-        i += 1;
-    }
-
-    // Geometría no finita (un `10` con texto acaba en NaN): se descarta entera antes de usarla.
-    let finito2 = |c: &P2| c.x.is_finite() && c.y.is_finite();
-    let finito3 = |q: &P3| q.x.is_finite() && q.y.is_finite() && q.z.is_finite();
-    circles.retain(|(c, z)| finito2(c) && z.is_finite());
-    points.retain(|(c, z, _)| finito2(c) && z.is_finite());
-    lines.retain(|(v, _, _)| v.iter().all(finito3));
-
-    // Nodos desde POINT.
-    let mut node_ids: Vec<(ElementId, P2)> = Vec::new();
-    for (pos, z, layer) in &points {
-        let fam = family_for_layer(layer, true);
-        // La cota de tapa viene del CIRCLE que el CAD dibuja sobre el punto (si existe).
-        let rim = circles
-            .iter()
-            .filter(|(c, _)| c.dist(*pos) <= tolerance.max(0.5) * 4.0)
-            .map(|(_, z)| *z)
-            .fold(f64::NEG_INFINITY, f64::max);
-        let zt = p
-            .terrain
-            .as_ref()
-            .and_then(|t| t.z_at(*pos))
-            .unwrap_or(if rim.is_finite() { rim } else { *z });
-        let mut node = Node {
-            id: ElementId::new(0, 0),
-            family: fam.to_string(),
-            ty: default_subtype(fam),
-            code: String::new(),
-            pos: *pos,
-            z_terrain: zt,
-            z_rim: if rim.is_finite() { rim } else { zt },
-            z_invert: *z,
-            attrs: BTreeMap::new(),
-            datos: BTreeMap::new(),
-            estado: EstadoObjeto::Pendiente,
-            nota: None,
-            modelo: None,
-            deleted: false,
-        };
-        // Si la clave viene de una familia retirada, se traduce a su destino (nunca en silencio).
-        if let Some((nf, nt)) = crate::families_extra::alias(&node.family, &node.ty) {
-            rep.renombrados
-                .push(format!("{}:{} -> {nf}:{nt}", node.family, node.ty));
-            node.family = nf.to_string();
-            node.ty = nt.to_string();
-        }
-        // Clave retirada: se traduce a su destino y se anota (nunca en silencio).
-        if let Some((nf, nt)) = crate::families_extra::alias(&node.family, &node.ty) {
-            rep.renombrados
-                .push(format!("{}:{} -> {nf}:{nt}", node.family, node.ty));
-            node.family = nf.to_string();
-            node.ty = nt.to_string();
-        }
-        match p.add_node(node) {
-            Ok(id) => {
-                node_ids.push((id, *pos));
-                rep.nodos += 1;
-            }
-            Err(e) => rep
-                .descartados
-                .push(format!("punto ({:.2},{:.2}): {e}", pos.x, pos.y)),
-        }
-    }
-
-    // Arcos desde polilíneas, con snapping a nodos existentes.
-    for (verts, layer, _kind) in &lines {
-        let fam = family_for_layer(layer, false);
-        let first = verts[0].p2();
-        let last = verts[verts.len() - 1].p2();
-        // Las líneas verticales de tapa (misma planta, distinta cota) no son arcos: se ignoran.
-        if first.dist(last) < 1e-6 {
-            continue;
-        }
-        let from = nearest_node(p, &mut node_ids, first, tolerance, &mut rep);
-        let to = nearest_node(p, &mut node_ids, last, tolerance, &mut rep);
-        let (Some(from), Some(to)) = (from, to) else {
-            continue;
-        };
-        if from == to {
-            rep.descartados
-                .push(format!("polilínea en capa {layer}: extremos coincidentes"));
-            continue;
-        }
-        let link = Link {
-            id: ElementId::new(0, 0),
-            family: fam.to_string(),
-            ty: default_subtype(fam),
-            code: String::new(),
-            from,
-            to,
-            path: verts.clone(),
-            d_mm: 200,
-            attrs: BTreeMap::new(),
-            datos: BTreeMap::new(),
-            estado: EstadoObjeto::Pendiente,
-            nota: None,
-            cota_solera_inicio: None,
-            cota_solera_fin: None,
-            deleted: false,
-        };
-        match p.add_link(link) {
-            Ok(_) => rep.arcos += 1,
-            Err(e) => rep
-                .descartados
-                .push(format!("polilínea en capa {layer}: {e}")),
-        }
-    }
-
+    importar_de_capa_info(p, &textos, &mut rep)?;
     p.fuentes.push(Fuente {
-        app: "CAD (DXF)".into(),
+        app: "Redes (DXF)".into(),
         archivo: path
             .file_name()
             .map(|s| s.to_string_lossy().to_string())
@@ -576,63 +535,8 @@ pub fn import_dxf(p: &mut Project, path: &Path, tolerance: f64) -> Result<Import
     Ok(rep)
 }
 
-fn nearest_node(
-    p: &mut Project,
-    ids: &mut Vec<(ElementId, P2)>,
-    pos: P2,
-    tol: f64,
-    rep: &mut ImportReport,
-) -> Option<ElementId> {
-    if let Some((id, _)) = ids.iter().find(|(_, q)| q.dist(pos) <= tol) {
-        return Some(*id);
-    }
-    let zt = p.terrain.as_ref().and_then(|t| t.z_at(pos)).unwrap_or(0.0);
-    let mut node = Node {
-        id: ElementId::new(0, 0),
-        family: "saneamiento.pozo".into(),
-        ty: "inspeccion".into(),
-        code: String::new(),
-        pos,
-        z_terrain: zt,
-        z_rim: zt,
-        z_invert: zt - 1.5,
-        attrs: BTreeMap::new(),
-        datos: BTreeMap::new(),
-        estado: EstadoObjeto::Pendiente,
-        nota: None,
-        modelo: None,
-        deleted: false,
-    };
-    // Clave retirada: se traduce a su destino y se anota (nunca en silencio).
-    if let Some((nf, nt)) = crate::families_extra::alias(&node.family, &node.ty) {
-        rep.renombrados
-            .push(format!("{}:{} -> {nf}:{nt}", node.family, node.ty));
-        node.family = nf.to_string();
-        node.ty = nt.to_string();
-    }
-    match p.add_node(node) {
-        Ok(id) => {
-            ids.push((id, pos));
-            rep.nodos += 1;
-            Some(id)
-        }
-        Err(e) => {
-            rep.descartados.push(format!("nodo implícito: {e}"));
-            None
-        }
-    }
-}
-
-/// Reconstruye el proyecto desde la capa `REDES_INFO` que escribe [`crate::export::export_dxf`].
-///
-/// Devuelve `None` si el DXF no tiene esa capa (entonces se usa la heurística por capas, que es
-/// para archivos de otras aplicaciones).
-fn importar_de_capa_info(
-    p: &mut Project,
-    pairs: &[(String, String)],
-    rep: &mut ImportReport,
-    _tolerance: f64,
-) -> Option<ImportReport> {
+/// Contenido de los `TEXT` de la capa `REDES_INFO`.
+fn textos_redes_info(pairs: &[(String, String)]) -> Vec<String> {
     // Un TEXT es: código 8 (capa), 10/20/30 (posición) y 1 (contenido).
     let mut textos: Vec<String> = Vec::new();
     let mut i = 0;
@@ -657,15 +561,22 @@ fn importar_de_capa_info(
         }
         i += 1;
     }
-    if textos.is_empty() {
-        return None;
-    }
+    textos
+}
 
+/// Reconstruye el proyecto desde los textos de `REDES_INFO`.
+///
+/// Si la capa no trae ni un objeto legible devuelve `E_FMT_NOT_REDES` sin tocar el proyecto.
+fn importar_de_capa_info(
+    p: &mut Project,
+    textos: &[String],
+    rep: &mut ImportReport,
+) -> Result<(), String> {
     let mut attrs: std::collections::BTreeMap<String, std::collections::BTreeMap<String, Value>> =
         Default::default();
     let mut datos: std::collections::BTreeMap<String, std::collections::BTreeMap<String, Dato>> =
         Default::default();
-    for t in &textos {
+    for t in textos {
         if let Some(resto) = t.strip_prefix("ATTRS|") {
             let mut it = resto.splitn(2, '|');
             let (Some(code), Some(cuerpo)) = (it.next(), it.next()) else {
@@ -708,7 +619,7 @@ fn importar_de_capa_info(
 
     let mut ids: std::collections::BTreeMap<String, ElementId> = Default::default();
     let mut nodos_creados = 0usize;
-    for t in &textos {
+    for t in textos {
         let Some(resto) = t.strip_prefix("REDES|1|") else {
             continue;
         };
@@ -721,24 +632,43 @@ fn importar_de_capa_info(
         let x = campos[5].parse::<f64>().ok();
         let y = campos[6].parse::<f64>().ok();
         let (Some(x), Some(y)) = (x, y) else { continue };
-        let z_rim = campos[7].parse::<f64>().unwrap_or(0.0);
-        let z_inv = campos[8].parse::<f64>().unwrap_or(z_rim - 1.0);
-        let z_ter = campos[9].parse::<f64>().unwrap_or(z_rim);
+        // Una cota vacía o ilegible queda ausente (F12-03): ni 0 ni «tapa − 1».
+        let cota = |s: &str| s.trim().parse::<f64>().ok().filter(|v| v.is_finite());
+        let (zr, zs, zt) = (cota(campos[7]), cota(campos[8]), cota(campos[9]));
+        let Some(dibujo) = zr.or(zt).or(zs) else {
+            rep.descartados
+                .push(format!("nodo {code}: sin ninguna cota legible"));
+            continue;
+        };
+        let sin_dato: Vec<String> = [
+            (zt.is_none(), crate::model::COTA_TERRENO),
+            (zr.is_none(), crate::model::COTA_TAPA),
+            (zs.is_none(), crate::model::COTA_SOLERA),
+        ]
+        .iter()
+        .filter(|(falta, _)| *falta)
+        .map(|(_, k)| k.to_string())
+        .collect();
+        if !sin_dato.is_empty() {
+            rep.avisos
+                .push(format!("nodo {code}: sin {}", sin_dato.join(", ")));
+        }
         let node = Node {
             id: ElementId::new(0, 0),
             family: familia.to_string(),
             ty: subtipo.to_string(),
             code: code.clone(),
             pos: P2::new(x, y),
-            z_terrain: z_ter,
-            z_rim,
-            z_invert: z_inv,
+            z_terrain: zt.unwrap_or(dibujo),
+            z_rim: zr.unwrap_or(dibujo),
+            z_invert: zs.unwrap_or(dibujo),
             attrs: attrs.get(&code).cloned().unwrap_or_default(),
             datos: datos.get(&code).cloned().unwrap_or_default(),
             estado: EstadoObjeto::Pendiente,
             nota: None,
             modelo: None,
             deleted: false,
+            sin_dato,
         };
         match p.add_node(node) {
             Ok(id) => {
@@ -750,7 +680,7 @@ fn importar_de_capa_info(
     }
 
     let mut arcos_creados = 0usize;
-    for t in &textos {
+    for t in textos {
         let Some(resto) = t.strip_prefix("REDES|1|") else {
             continue;
         };
@@ -760,7 +690,8 @@ fn importar_de_capa_info(
         }
         let (familia, subtipo) = (campos[1], campos[2]);
         let code = campos[3].to_string();
-        let dn = campos[5].parse::<u32>().unwrap_or(200);
+        // DN vacío, ilegible o 0: ausente, no 200 (F12-03).
+        let dn = campos[5].trim().parse::<u32>().ok().filter(|d| *d > 0);
         let trazado: Vec<P3> = campos[6]
             .split(';')
             .filter_map(|v| {
@@ -794,7 +725,7 @@ fn importar_de_capa_info(
             from: desde,
             to: hasta,
             path: trazado,
-            d_mm: dn,
+            d_mm: dn.unwrap_or(0),
             attrs: attrs.get(&code).cloned().unwrap_or_default(),
             datos: datos.get(&code).cloned().unwrap_or_default(),
             estado: EstadoObjeto::Pendiente,
@@ -802,6 +733,15 @@ fn importar_de_capa_info(
             cota_solera_inicio: None,
             cota_solera_fin: None,
             deleted: false,
+            sin_dato: if dn.is_none() {
+                rep.avisos.push(format!(
+                    "arco {code}: sin {}",
+                    crate::model::DIAMETRO_NOMINAL
+                ));
+                vec![crate::model::DIAMETRO_NOMINAL.to_string()]
+            } else {
+                Vec::new()
+            },
         };
         match p.add_link(link) {
             Ok(_) => arcos_creados += 1,
@@ -810,73 +750,14 @@ fn importar_de_capa_info(
     }
 
     if nodos_creados == 0 && arcos_creados == 0 {
-        return None;
+        return Err(
+            "E_FMT_NOT_REDES: la capa REDES_INFO no trae ningún objeto legible (REDES|1|N/L)"
+                .into(),
+        );
     }
     rep.nodos = nodos_creados;
     rep.arcos = arcos_creados;
-    p.commit("importar dxf");
-    Some(rep.clone())
-}
-
-/// Vuelca las propiedades de un GeoJSON en los atributos de la familia y en los datos.
-///
-/// Una propiedad que la familia declara como atributo entra como atributo (así vuelve la ida y
-/// vuelta); una que venga con `{valor, unidad, fuente}` entra como dato con su procedencia.
-fn propiedades_a_atributos(
-    familia: &str,
-    props: &serde_json::Value,
-    attrs: &mut BTreeMap<String, Value>,
-    datos: &mut BTreeMap<String, Dato>,
-) {
-    let Some(obj) = props.as_object() else { return };
-    let familia_def = crate::families::family(familia);
-    for (k, v) in obj {
-        if matches!(
-            k.as_str(),
-            "codigo" | "codigo_id" | "family" | "familia" | "subtipo" | "estado" | "nota"
-        ) {
-            continue;
-        }
-        if let Some(d) = v.as_object()
-            && d.contains_key("valor")
-        {
-            if let Some(valor) = d.get("valor").and_then(|x| x.as_f64()) {
-                datos.insert(
-                    k.clone(),
-                    Dato {
-                        valor,
-                        unidad: d
-                            .get("unidad")
-                            .and_then(|x| x.as_str())
-                            .unwrap_or("")
-                            .to_string(),
-                        fuente: d
-                            .get("fuente")
-                            .and_then(|x| x.as_str())
-                            .unwrap_or("geojson")
-                            .to_string(),
-                    },
-                );
-            }
-            continue;
-        }
-        if familia_def.is_some_and(|f| f.attr(k).is_some()) {
-            let val = if let Some(n) = v.as_f64() {
-                // Un entero declarado como entero se respeta.
-                match familia_def.and_then(|f| f.attr(k)).map(|a| a.ty.key()) {
-                    Some("int") => Value::Int(n as i64),
-                    _ => Value::Num(n),
-                }
-            } else if let Some(s) = v.as_str() {
-                Value::Text(s.to_string())
-            } else if let Some(b) = v.as_bool() {
-                Value::Bool(b)
-            } else {
-                continue;
-            };
-            attrs.insert(k.clone(), val);
-        }
-    }
+    Ok(())
 }
 
 /// Interpreta el texto de un atributo exportado: número, entero, booleano o texto.
@@ -891,52 +772,6 @@ fn parse_valor(v: &str) -> Value {
     }
 }
 
-fn family_for_layer(layer: &str, point: bool) -> &'static str {
-    let l = layer.to_ascii_uppercase();
-    // Cadena de agua cruda (docs/20 §8.1): cada capa con su familia, no con la genérica.
-    if l.contains("BOCATOMA") || l.contains("BARRaje") || l.contains("AZUD") {
-        return "agua.bocatoma";
-    }
-    if l.contains("DESAREN") {
-        return "comun.desarenador";
-    }
-    if l.contains("REJA") || l.contains("REJILLA") || l.contains("CRIBA") {
-        return "comun.reja";
-    }
-    if l.contains("COMPUERTA") {
-        return "comun.compuerta";
-    }
-    if l.contains("FILTRO") {
-        return "agua.filtro";
-    }
-    if l.contains("FLOCUL") {
-        return "agua.floculador";
-    }
-    if l.contains("SEDIMENT") || l.contains("DECANT") {
-        return "agua.sedimentador";
-    }
-    if l.contains("LAGUNA") {
-        return "saneamiento.laguna";
-    }
-    if l.contains("PTAR") || l.contains("REACTOR") {
-        return "saneamiento.reactor";
-    }
-    if l.contains("POZO") || l.contains("MH") || l.contains("PZ") || l.contains("CAMARA") {
-        return "saneamiento.pozo";
-    }
-    if l.contains("AGUA") || l.contains("AP") || l.contains("DIST") || l.contains("HIDR") {
-        return "agua.tuberia";
-    }
-    if l.contains("VERT") || l.contains("DESC") || l.contains("EMIS") {
-        return "saneamiento.descarga";
-    }
-    if point {
-        "saneamiento.pozo"
-    } else {
-        "saneamiento.tuberia"
-    }
-}
-
 fn dxf_pairs(text: &str) -> Vec<(String, String)> {
     let mut out = Vec::new();
     let mut lines = text.lines();
@@ -944,174 +779,6 @@ fn dxf_pairs(text: &str) -> Vec<(String, String)> {
         out.push((c.trim().to_string(), v.trim().to_string()));
     }
     out
-}
-
-// ---------------------------------------------------------------------------------------------
-// GeoJSON
-
-/// Importa puntos y líneas de un GeoJSON. Las propiedades `familia`/`family` y `codigo` mandan.
-pub fn import_geojson(p: &mut Project, path: &Path) -> Result<ImportReport, String> {
-    let text = std::fs::read_to_string(path).map_err(|e| format!("E_IO_NOT_FOUND: {e}"))?;
-    let v: serde_json::Value =
-        serde_json::from_str(&text).map_err(|e| format!("E_FMT_PARSE: {e}"))?;
-    let mut rep = ImportReport {
-        formato: "geojson".into(),
-        ..Default::default()
-    };
-    let features = v
-        .get("features")
-        .and_then(|f| f.as_array())
-        .cloned()
-        .unwrap_or_default();
-    let mut codes: BTreeMap<String, ElementId> = BTreeMap::new();
-
-    for f in &features {
-        let Some(g) = f.get("geometry") else { continue };
-        let ty = g.get("type").and_then(|t| t.as_str()).unwrap_or("");
-        let props = f
-            .get("properties")
-            .cloned()
-            .unwrap_or(serde_json::Value::Null);
-        let fam = props
-            .get("familia")
-            .or_else(|| props.get("family"))
-            .and_then(|x| x.as_str())
-            .unwrap_or(if ty == "Point" {
-                "saneamiento.pozo"
-            } else {
-                "saneamiento.tuberia"
-            })
-            .to_string();
-        let codigo = props
-            .get("codigo")
-            .and_then(|x| x.as_str())
-            .unwrap_or("")
-            .to_string();
-        if ty == "Point" {
-            let c = g
-                .get("coordinates")
-                .and_then(|c| c.as_array())
-                .cloned()
-                .unwrap_or_default();
-            let (Some(e), Some(n)) = (
-                c.first().and_then(|x| x.as_f64()),
-                c.get(1).and_then(|x| x.as_f64()),
-            ) else {
-                continue;
-            };
-            let z = c.get(2).and_then(|x| x.as_f64()).unwrap_or(0.0);
-            let zt = p
-                .terrain
-                .as_ref()
-                .and_then(|t| t.z_at(P2::new(e, n)))
-                .unwrap_or(z);
-            let mut node = Node {
-                id: ElementId::new(0, 0),
-                family: fam.clone(),
-                ty: default_subtype(&fam),
-                code: codigo.clone(),
-                pos: P2::new(e, n),
-                z_terrain: zt,
-                z_rim: zt,
-                z_invert: z,
-                attrs: BTreeMap::new(),
-                datos: BTreeMap::new(),
-                estado: EstadoObjeto::Pendiente,
-                nota: None,
-                modelo: None,
-                deleted: false,
-            };
-            propiedades_a_atributos(&fam, &props, &mut node.attrs, &mut node.datos);
-            // Clave retirada: se traduce a su destino y se anota (nunca en silencio).
-            if let Some((nf, nt)) = crate::families_extra::alias(&node.family, &node.ty) {
-                rep.renombrados
-                    .push(format!("{}:{} -> {nf}:{nt}", node.family, node.ty));
-                node.family = nf.to_string();
-                node.ty = nt.to_string();
-            }
-            match p.add_node(node) {
-                Ok(id) => {
-                    codes.insert(
-                        if codigo.is_empty() {
-                            format!("{id}")
-                        } else {
-                            codigo
-                        },
-                        id,
-                    );
-                    rep.nodos += 1;
-                }
-                Err(e) => rep.descartados.push(e),
-            }
-        } else if ty == "LineString" {
-            let coords = g
-                .get("coordinates")
-                .and_then(|c| c.as_array())
-                .cloned()
-                .unwrap_or_default();
-            let path: Vec<P3> = coords
-                .iter()
-                .filter_map(|c| {
-                    let a = c.as_array()?;
-                    Some(P3::new(
-                        a.first()?.as_f64()?,
-                        a.get(1)?.as_f64()?,
-                        a.get(2).and_then(|z| z.as_f64()).unwrap_or(0.0),
-                    ))
-                })
-                .collect();
-            if path.len() < 2 {
-                continue;
-            }
-            let from_code = props.get("desde").and_then(|x| x.as_str()).unwrap_or("");
-            let to_code = props.get("hasta").and_then(|x| x.as_str()).unwrap_or("");
-            let from = codes.get(from_code).copied().or_else(|| {
-                let pos = path[0].p2();
-                p.nodes
-                    .iter()
-                    .find(|n| !n.deleted && n.pos.dist(pos) < 1.0)
-                    .map(|n| n.id)
-            });
-            let to = codes.get(to_code).copied().or_else(|| {
-                let pos = path[path.len() - 1].p2();
-                p.nodes
-                    .iter()
-                    .find(|n| !n.deleted && n.pos.dist(pos) < 1.0)
-                    .map(|n| n.id)
-            });
-            let (Some(from), Some(to)) = (from, to) else {
-                rep.descartados
-                    .push("línea sin nodos en sus extremos".into());
-                continue;
-            };
-            let link = Link {
-                id: ElementId::new(0, 0),
-                family: fam.clone(),
-                ty: default_subtype(&fam),
-                code: codigo,
-                from,
-                to,
-                path,
-                d_mm: props
-                    .get("diametro_mm")
-                    .and_then(|x| x.as_u64())
-                    .unwrap_or(200) as u32,
-                attrs: BTreeMap::new(),
-                datos: BTreeMap::new(),
-                estado: EstadoObjeto::Pendiente,
-                nota: None,
-                cota_solera_inicio: None,
-                cota_solera_fin: None,
-                deleted: false,
-            };
-            match p.add_link(link) {
-                Ok(_) => rep.arcos += 1,
-                Err(e) => rep.descartados.push(e),
-            }
-        }
-    }
-    p.commit("importar geojson");
-    Ok(rep)
 }
 
 /// Importa puntos de terreno `E,N,Z` desde CSV o texto.
@@ -1157,6 +824,17 @@ pub fn import_terreno(p: &mut Project, path: &Path, epsg: u32) -> Result<ImportR
     }
     if pts.len() < 3 {
         return Err("E_FMT_PARSE: se necesitan al menos 3 puntos válidos E,N,Z".into());
+    }
+    // F12-13: EPSG del terreno contra el proyecto, y nada de grados; antes de tocar nada.
+    let origen = format!("el terreno (EPSG:{epsg})");
+    comprobar_crs(p, &format!("EPSG:{epsg}"), &origen)?;
+    rechazar_lonlat(pts.iter().map(|q| ("punto", q.e, q.n)), &origen)?;
+    if epsg_de(&p.crs) != Some(epsg) {
+        rep.avisos.push(format!(
+            "el proyecto estaba vacío y adopta el CRS del terreno: EPSG:{epsg} (antes {})",
+            p.crs
+        ));
+        p.crs = format!("EPSG:{epsg}");
     }
     rep.puntos_terreno = pts.len();
     let name = path
@@ -1251,6 +929,38 @@ mod tests {
         assert_eq!(rep.puntos_terreno, 3);
         assert!(p.links[0].datos.contains_key("caudal"));
         let _ = std::fs::remove_file(&path);
+    }
+
+    /// En la vuelta del DXF, una cota o un DN vacíos quedan ausentes: ni 0, ni «tapa − 1», ni 200.
+    #[test]
+    fn la_vuelta_del_dxf_no_rellena_cotas_ni_dn() {
+        let texto = |s: &str| format!("0\nTEXT\n8\nREDES_INFO\n10\n0\n20\n0\n30\n0\n1\n{s}\n");
+        let dxf = format!(
+            "0\nSECTION\n2\nENTITIES\n{}{}{}{}0\nENDSEC\n0\nEOF\n",
+            texto("REDES|1|N|saneamiento.pozo|inspeccion|PZ-001|pendiente|0|0||98.0|"),
+            texto("REDES|1|N|saneamiento.pozo|inspeccion|PZ-002|pendiente|10|0|||100.0"),
+            texto("REDES|1|N|saneamiento.pozo|inspeccion|PZ-003|pendiente|50|50|||"),
+            texto(
+                "REDES|1|L|saneamiento.tuberia|colector_sanitario|CL-001|pendiente||0,0,98;10,0,97.9"
+            ),
+        );
+        let ruta = std::env::temp_dir().join(format!("redes-vuelta-{}.dxf", std::process::id()));
+        std::fs::write(&ruta, dxf).unwrap();
+        let mut p = Project::new("x", "EPSG:32717");
+        let rep = import_dxf(&mut p, &ruta, 0.0).expect("importa");
+        let _ = std::fs::remove_file(&ruta);
+        let pz = p.node_by_code("PZ-001").unwrap();
+        assert_eq!(pz.cota_solera(), Some(98.0));
+        assert_eq!(pz.cota_tapa(), None);
+        assert_eq!(pz.cota_terreno(), None);
+        assert_eq!(
+            p.node_by_code("PZ-002").unwrap().cota_terreno(),
+            Some(100.0)
+        );
+        assert!(p.node_by_code("PZ-003").is_none(), "sin ninguna cota");
+        assert!(rep.descartados.iter().any(|d| d.contains("PZ-003")));
+        assert_eq!(p.link_by_code("CL-001").unwrap().dn(), None);
+        assert!(!rep.avisos.is_empty());
     }
 
     #[test]

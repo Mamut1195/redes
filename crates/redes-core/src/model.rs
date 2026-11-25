@@ -138,7 +138,27 @@ pub struct Node {
     pub nota: Option<String>,
     #[serde(default)]
     pub deleted: bool,
+    /// Datos que el origen **no trajo** (F12-03): claves [`COTA_TERRENO`], [`COTA_TAPA`],
+    /// [`COTA_SOLERA`]. El campo numérico correspondiente guarda solo un valor de **dibujo** (la
+    /// otra cota conocida, de modo que la pieza sale plana) y nunca se muestra como dato: se lee
+    /// con [`Node::cota_terreno`], [`Node::cota_tapa`] y [`Node::cota_solera`], que dan `None`.
+    /// Vacío en los `.redes` anteriores: entonces todo lo guardado es dato.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sin_dato: Vec<String>,
 }
+
+/// Clave de [`Node::sin_dato`]: falta la cota de terreno.
+pub const COTA_TERRENO: &str = "cota_terreno";
+/// Clave de [`Node::sin_dato`]: falta la cota de tapa.
+pub const COTA_TAPA: &str = "cota_tapa";
+/// Clave de [`Node::sin_dato`] y [`Link::sin_dato`]: falta la cota de solera (en un tramo, la de
+/// su trazado).
+pub const COTA_SOLERA: &str = "cota_solera";
+/// Clave de [`Link::sin_dato`]: falta el diámetro nominal.
+pub const DIAMETRO_NOMINAL: &str = "diametro_nominal";
+
+/// Texto con que se muestra un dato ausente.
+pub const SIN_DATO: &str = "—";
 
 fn estado_pendiente() -> EstadoObjeto {
     EstadoObjeto::Pendiente
@@ -150,6 +170,32 @@ impl Node {
     }
     pub fn num(&self, key: &str) -> Option<f64> {
         self.attrs.get(key).and_then(|v| v.as_f64())
+    }
+    /// ¿Falta este dato en el origen? (`clave` de [`Node::sin_dato`]).
+    pub fn falta(&self, clave: &str) -> bool {
+        self.sin_dato.iter().any(|k| k == clave)
+    }
+    /// Cota de terreno, si el origen la trajo.
+    pub fn cota_terreno(&self) -> Option<f64> {
+        (!self.falta(COTA_TERRENO)).then_some(self.z_terrain)
+    }
+    /// Cota de tapa, si el origen la trajo.
+    pub fn cota_tapa(&self) -> Option<f64> {
+        (!self.falta(COTA_TAPA)).then_some(self.z_rim)
+    }
+    /// Cota de solera, si el origen la trajo.
+    pub fn cota_solera(&self) -> Option<f64> {
+        (!self.falta(COTA_SOLERA)).then_some(self.z_invert)
+    }
+    /// Sin altura dibujable: falta la solera, o faltan a la vez tapa y terreno. Se dibuja un
+    /// símbolo plano «sin dato», no una pieza con una altura inventada.
+    pub fn sin_altura(&self) -> bool {
+        self.falta(COTA_SOLERA) || (self.falta(COTA_TAPA) && self.falta(COTA_TERRENO))
+    }
+    /// Altura con datos: (tapa o, si falta, terreno) − solera. `None` si falta alguna.
+    pub fn altura_dato(&self) -> Option<f64> {
+        let arriba = self.cota_tapa().or(self.cota_terreno())?;
+        Some((arriba - self.cota_solera()?).max(0.0))
     }
     /// Diferencia geométrica terreno − solera (para dibujar la altura del pozo).
     pub fn altura(&self) -> f64 {
@@ -193,9 +239,33 @@ pub struct Link {
     /// Cota de solera declarada por el origen al final del tramo (m).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cota_solera_fin: Option<f64>,
+    /// Datos que el origen no trajo (F12-03): [`DIAMETRO_NOMINAL`] (entonces `d_mm` = 0) y
+    /// [`COTA_SOLERA`] (las cotas del trazado son solo de dibujo). Ver [`Node::sin_dato`].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sin_dato: Vec<String>,
 }
 
 impl Link {
+    /// ¿Falta este dato en el origen? (`clave` de [`Link::sin_dato`]).
+    pub fn falta(&self, clave: &str) -> bool {
+        self.sin_dato.iter().any(|k| k == clave)
+    }
+    /// Diámetro nominal (mm), si el origen lo trajo.
+    pub fn dn(&self) -> Option<u32> {
+        (!self.falta(DIAMETRO_NOMINAL) && self.d_mm > 0).then_some(self.d_mm)
+    }
+    /// Cotas del trazado al inicio y al fin, si son dato (no de dibujo).
+    pub fn cotas_trazado(&self) -> Option<(f64, f64)> {
+        if self.falta(COTA_SOLERA) {
+            return None;
+        }
+        Some((self.path.first()?.z, self.path.last()?.z))
+    }
+    /// Se dibuja como «sin dato» (línea gris): le falta el diámetro o la cota.
+    pub fn dibujo_sin_dato(&self) -> bool {
+        self.falta(COTA_SOLERA)
+            || (self.dn().is_none() && self.num("diametro_interior").is_none_or(|d| d <= 0.0))
+    }
     pub fn d_m(&self) -> f64 {
         self.d_mm as f64 / 1000.0
     }
@@ -639,6 +709,7 @@ mod tests {
             nota: None,
             modelo: None,
             deleted: false,
+            sin_dato: Vec::new(),
         })
         .unwrap()
     }
@@ -686,6 +757,7 @@ mod tests {
             cota_solera_inicio: None,
             cota_solera_fin: None,
             deleted: false,
+            sin_dato: Vec::new(),
         });
         assert!(r.is_err());
     }
@@ -723,6 +795,24 @@ mod tests {
         // Y al guardar no aparecen campos vacíos.
         let texto = serde_json::to_string(&l).unwrap();
         assert!(!texto.contains("cota_solera"), "{texto}");
+        // Sin `sin_dato` todo lo guardado es dato (F12-03).
+        assert_eq!(l.dn(), Some(300));
+        assert_eq!(l.cotas_trazado(), Some((100.0, 99.9)));
+        assert!(!texto.contains("sin_dato"));
+    }
+
+    /// Un nodo de un `.redes` anterior a F12-03 abre con todas sus cotas como dato.
+    #[test]
+    fn un_nodo_viejo_conserva_sus_cotas_como_dato() {
+        let viejo = r#"{"id":{"slot":1,"generation":1},"family":"saneamiento.pozo",
+            "ty":"inspeccion","code":"PZ-001","pos":{"x":0,"y":0},
+            "z_terrain":100.0,"z_rim":100.1,"z_invert":98.0,"attrs":{}}"#;
+        let n: Node = serde_json::from_str(viejo).expect("abre");
+        assert_eq!(n.cota_terreno(), Some(100.0));
+        assert_eq!(n.cota_tapa(), Some(100.1));
+        assert_eq!(n.cota_solera(), Some(98.0));
+        assert!(!n.sin_altura());
+        assert!(!serde_json::to_string(&n).unwrap().contains("sin_dato"));
     }
 
     /// El trazado es la solera: el eje queda DI/2 más arriba y el exterior suma la pared (F12-02).

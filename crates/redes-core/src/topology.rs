@@ -185,6 +185,7 @@ mod tests {
                     nota: None,
                     modelo: None,
                     deleted: false,
+                    sin_dato: Vec::new(),
                 })
                 .unwrap();
             ids.push(id);
@@ -209,6 +210,7 @@ mod tests {
                 cota_solera_inicio: None,
                 cota_solera_fin: None,
                 deleted: false,
+                sin_dato: Vec::new(),
             })
             .unwrap();
         }
@@ -245,6 +247,7 @@ mod tests {
                 nota: None,
                 modelo: None,
                 deleted: false,
+                sin_dato: Vec::new(),
             })
             .unwrap();
         p.commit("test");

@@ -20,7 +20,10 @@ fn proyecto() -> Project {
               "attrs": { "diametro_interior": 300.0, "espesor_pared": 0.0077 } }
         ]
     }"#;
-    let ruta = std::env::temp_dir().join(format!("redes-cotas-{}.json", std::process::id()));
+    // Un archivo por llamada: las pruebas corren en paralelo y compartirlo daba carreras.
+    static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let k = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    let ruta = std::env::temp_dir().join(format!("redes-cotas-{}-{k}.json", std::process::id()));
     std::fs::write(&ruta, plan).unwrap();
     let mut p = Project::new("cotas", "EPSG:32717");
     let rep = redes_core::ingest::import_plan(&mut p, &ruta).expect("importa");
