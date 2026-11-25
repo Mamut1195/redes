@@ -218,9 +218,30 @@ redes exportar dxf --salida aprobado.dxf --solo-aprobados # sólo lo aprobado
 redes exportar geojson --salida red.geojson               # para SIG, con los datos de origen
 ```
 
-El DXF es el que se abre en AutoCAD/Civil 3D para el **detallado y el DWG final**. Las capas
-salen nombradas (`PZ_POZO`, `CL_TUBERÍA`, `TB_TUBERÍA_DE_AGUA_POTABLE`…), y los pozos llevan
-punto, círculo de diámetro y línea de tapa a solera.
+El DXF es el que se abre en AutoCAD/Civil 3D/BricsCAD para el **detallado y el DWG final**
+(R12 ASCII, `$INSUNITS = 6` metros, `$DWGCODEPAGE = ANSI_1252`, extensión declarada para que
+«Zoom extensión» encuadre la red):
+
+- **Capas** declaradas en la tabla LAYER, una por familia y sin tildes (`PZ_POZO`, `CL_TUBERIA`,
+  `TB_TUBERIA_DE_AGUA_POTABLE`…), con color ACI por sistema: agua potable 5 (azul), sanitario 30
+  (naranja), pluvial 3 (verde, sufijo `_PLU` cuando la familia es de saneamiento), combinado 6,
+  común 8. Rotulación aparte en `ROT_<AP|SAN|PLU|COMB|COM>_TRAMOS` y `ROT_…_NODOS`.
+- **Nodos**: bloque con círculo del diámetro interior declarado (radio = DI/2; sin DI declarado,
+  símbolo a escala 1) y atributos ocultos `CODIGO`,
+  `SUBTIPO`, `COTA_TAPA`, `COTA_SOLERA`, `PROFUNDIDAD`; punto en la solera; línea vertical que baja
+  de la tapa a la solera. Rótulo: código, `CT` (tapa), `CS` (solera) y `H` (profundidad).
+- **Tramos**: polilínea 3D y rótulo `código DN200 PVC L=45.20 m i=0.50 %`. La pendiente es la
+  declarada (atributo `pendiente`); si no hay, se deriva de las soleras declaradas del tramo
+  (inicio y fin) y la longitud en planta y se marca `(soleras)`; si hay las dos y no cuadran, salen
+  ambas (`i=2.00 % (soleras 0.00 %)`): es una discrepancia, no se corrige.
+- **Solo lo que existe**: si falta un dato (DN, material, una cota) no se escribe; nunca se inventa.
+- **`OBSERVACIONES`** (rojo): código, estado y nota de cada objeto observado, aprobado o con nota;
+  los observados llevan además un círculo (nube) alrededor.
+- **`REDES_INFO`** (apagada): la carga de la ida y vuelta que lee `redes importar dxf` (familia,
+  subtipo, código, atributos y datos de nodos y tramos).
+- Texto de 1,0 m (2 mm a 1:500). Lo visible es ASCII: las tildes de los textos van como `\U+00ED`,
+  que el CAD muestra como «í». Solo la carga de `REDES_INFO` va en UTF-8 tal cual (es para el
+  importador; en el CAD puede verse con caracteres raros, como `mÂ³`).
 
 ---
 
