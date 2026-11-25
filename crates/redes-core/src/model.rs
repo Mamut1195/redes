@@ -435,23 +435,6 @@ impl Project {
         }
     }
 
-    /// Corrige al abrir los `.redes` anteriores a F12-01: los nodos guardaban su **solera** en el
-    /// atributo `cota_clave`. Solo se renombra cuando el valor coincide con `z_invert` (es la
-    /// solera mal rotulada); una clave de verdad, distinta de la solera, se deja como está.
-    pub fn migrar_cotas(&mut self) {
-        for n in &mut self.nodes {
-            let es_solera = n
-                .num("cota_clave")
-                .is_some_and(|v| (v - n.z_invert).abs() < 1e-3);
-            if es_solera
-                && !n.attrs.contains_key("cota_solera")
-                && let Some(v) = n.attrs.remove("cota_clave")
-            {
-                n.attrs.insert("cota_solera".to_string(), v);
-            }
-        }
-    }
-
     fn alloc(&mut self) -> ElementId {
         let slot = self.next_slot;
         self.next_slot += 1;
@@ -793,26 +776,6 @@ mod tests {
             sin_dato: Vec::new(),
         });
         assert!(r.is_err());
-    }
-
-    /// Un `.redes` viejo guardaba la solera del pozo como `cota_clave`: al abrirlo pasa a
-    /// `cota_solera`; una clave que no es la solera no se toca (F12-01).
-    #[test]
-    fn la_solera_rotulada_como_clave_se_migra() {
-        let mut p = Project::new("viejo", "EPSG:32717");
-        let a = pozo(&mut p, 0.0, 0.0, 100.0);
-        let b = pozo(&mut p, 10.0, 0.0, 99.0);
-        let n = p.nodes.iter_mut().find(|n| n.id == a).unwrap();
-        n.attrs.insert("cota_clave".into(), Value::Num(100.0));
-        let n = p.nodes.iter_mut().find(|n| n.id == b).unwrap();
-        n.attrs.insert("cota_clave".into(), Value::Num(99.4));
-        p.migrar_cotas();
-        let a = p.node(a).unwrap();
-        assert_eq!(a.num("cota_solera"), Some(100.0));
-        assert!(a.get("cota_clave").is_none());
-        let b = p.node(b).unwrap();
-        assert_eq!(b.num("cota_clave"), Some(99.4), "una clave real no se toca");
-        assert!(b.get("cota_solera").is_none());
     }
 
     /// Un tramo guardado antes de F12-02 (sin cotas de solera declaradas) sigue abriendo.

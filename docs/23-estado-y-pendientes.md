@@ -57,7 +57,6 @@ el pase del pintor donde hoy se cae a la pieza paramétrica.
 ## Deuda conocida
 
 - `redes-cli/src/main.rs` concentra todos los comandos; si crece, toca partirlo por dominio.
-- `Project::migrar_cotas` (`redes-core/src/model.rs`) ya no tiene llamadas fuera de su prueba tras F15-01 (D10: sin migraciones): borrarla, con su prueba, después de integrar F14-01 para no chocar con esa rama.
 - El `journal` no guarda identidad (decisión D2); si algún día se pide, es un campo opcional más.
 - El `.glb` del catálogo y de la ciudad incluyen el terreno: las cifras de triángulos de `docs/21`
   lo tienen en cuenta.
