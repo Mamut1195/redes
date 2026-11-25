@@ -155,9 +155,16 @@ redes importar plan --archivo plan.json
 # La vuelta del DXF que exportó Redes (capa REDES_INFO)
 redes importar dxf --archivo plano-devuelto.dxf
 
-# Puntos de terreno E,N,Z
+# Puntos de terreno E,N,Z (sin --epsg toma el del proyecto)
 redes importar terreno --archivo puntos.csv --epsg 32717
 ```
+
+**Sistema de coordenadas (F12-13).** Redes trabaja en UTM sur WGS 84, en metros
+(`EPSG:327NN`; 17S = 32717, 18S = 32718). El plan **declara** su CRS en `proyecto.crs` y no se
+supone ninguno. Devuelven `E_CRS` sin tocar el proyecto: un plan sin CRS o con uno que no es UTM
+sur (p. ej. 32617, que es 17**N**, o 4326); un plan o un terreno en otro CRS que el del proyecto
+(Redes no reproyecta; un proyecto vacío adopta el del primer plan o terreno, y se avisa); y
+coordenadas que parecen grados lon/lat (|E| ≤ 180 y |N| ≤ 90).
 
 La app **no adivina** formatos ajenos. Un DXF de Civil 3D, un GeoJSON de un SIG, un `.inp` o un
 Excel los adapta un agente con la skill `skills/redes-ingesta`, que escribe un `redes.plan/1`.
@@ -276,7 +283,7 @@ Detalle completo del contrato y del procedimiento: `skills/redes-ingesta/SKILL.m
 
 | Síntoma | Causa | Solución |
 |---|---|---|
-| El proyecto aparece a 10 000 km del terreno | CRS del hemisferio equivocado (`32617` es 17**N**) | Usar `32717` (17S) o `32718` (18S) |
+| «E_CRS» al importar | El plan no declara CRS, no es UTM sur (`32617` es 17**N**), no coincide con el proyecto o trae grados lon/lat | Declarar `EPSG:32717` (17S) o `EPSG:32718` (18S) y coordenadas UTM en metros; reproyectar en origen |
 | Todo apilado en un punto | El origen no traía coordenadas | Pasar `--coords` a la skill |
 | «E_TOPO_ORPHAN_LINK» | Un arco apunta a un nodo que no entró | Revisar `desde`/`hasta` en el plan |
 | «E_STATE_DUPLICATE_NAME» | Código repetido | Renombrar en el origen |

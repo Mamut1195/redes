@@ -58,7 +58,9 @@ fn schema_plan() -> String {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct PlanProyecto {
     pub nombre: String,
-    #[serde(default = "crs_default")]
+    /// CRS declarado (`EPSG:327NN`, UTM sur). Obligatorio en la práctica: vacío → `E_CRS`
+    /// (F12-13). Antes se suponía EPSG:32717 en silencio.
+    #[serde(default)]
     pub crs: String,
     #[serde(default)]
     pub fuente_app: String,
@@ -66,8 +68,87 @@ pub struct PlanProyecto {
     pub fuente_archivo: String,
 }
 
-fn crs_default() -> String {
-    "EPSG:32717".into()
+// ---------------------------------------------------------------------------------------------
+// Sistema de coordenadas (F12-13): se declara, se comprueba y no se reproyecta nunca.
+
+/// Código EPSG de un CRS escrito como `EPSG:32717` (o solo `32717`).
+pub fn epsg_de(crs: &str) -> Option<u32> {
+    let t = crs.trim();
+    let num = t
+        .get(..5)
+        .filter(|p| p.eq_ignore_ascii_case("EPSG:"))
+        .map(|_| &t[5..])
+        .unwrap_or(t);
+    num.trim().parse().ok()
+}
+
+/// ¿Es un UTM sur WGS 84 (`EPSG:32701`…`32760`)? Redes trabaja en metros UTM; 17S (32717) y 18S
+/// (32718) son los de Ecuador y Perú.
+pub fn es_utm_sur(epsg: u32) -> bool {
+    (32701..=32760).contains(&epsg)
+}
+
+/// ¿Parecen grados (lon/lat) y no metros UTM? Un UTM tiene E de cientos de miles y N de millones.
+fn parece_lonlat(e: f64, n: f64) -> bool {
+    e.abs() <= 180.0 && n.abs() <= 90.0
+}
+
+/// Comprueba el CRS de lo que entra contra el del proyecto. Devuelve el EPSG a usar.
+///
+/// - CRS ausente, ilegible o que no es UTM sur → `E_CRS`.
+/// - Distinto del proyecto → `E_CRS` (no se reproyecta), salvo que el proyecto esté vacío: entonces
+///   adopta el del plan, porque no hay nada que desalinear.
+/// - Un terreno ya cargado con otro EPSG → `E_CRS`.
+fn comprobar_crs(p: &Project, crs: &str, origen: &str) -> Result<u32, String> {
+    if crs.trim().is_empty() {
+        return Err(format!(
+            "E_CRS: {origen} no declara su sistema de coordenadas (p. ej. \"EPSG:32717\")"
+        ));
+    }
+    let Some(epsg) = epsg_de(crs) else {
+        return Err(format!("E_CRS: {origen}: CRS ilegible «{crs}»"));
+    };
+    if !es_utm_sur(epsg) {
+        return Err(format!(
+            "E_CRS: {origen} está en EPSG:{epsg}; Redes solo admite UTM sur WGS 84 (EPSG:327NN, p. ej. 32717 = 17S, 32718 = 18S). Si es 326NN es el hemisferio norte"
+        ));
+    }
+    let vacio = p.count() == 0 && p.terrain.is_none();
+    if !vacio && epsg_de(&p.crs) != Some(epsg) {
+        return Err(format!(
+            "E_CRS: {origen} está en EPSG:{epsg} y el proyecto en {}; Redes no reproyecta",
+            p.crs
+        ));
+    }
+    if let Some(t) = &p.terrain
+        && t.epsg != epsg
+    {
+        return Err(format!(
+            "E_CRS: el terreno del proyecto está en EPSG:{} y {origen} en EPSG:{epsg}",
+            t.epsg
+        ));
+    }
+    Ok(epsg)
+}
+
+/// Rechaza coordenadas en grados: un GeoJSON o un Excel en lon/lat que llega como si fuera UTM
+/// quedaría a miles de kilómetros (o todo en un punto).
+fn rechazar_lonlat<'a>(
+    puntos: impl Iterator<Item = (&'a str, f64, f64)>,
+    origen: &str,
+) -> Result<(), String> {
+    let malos: Vec<String> = puntos
+        .filter(|(_, e, n)| parece_lonlat(*e, *n))
+        .map(|(que, e, n)| format!("{que} ({e}, {n})"))
+        .take(3)
+        .collect();
+    if malos.is_empty() {
+        return Ok(());
+    }
+    Err(format!(
+        "E_CRS: {origen} trae coordenadas que parecen grados lon/lat, no metros UTM: {}. Proyéctelas a UTM en origen; Redes no reproyecta",
+        malos.join(", ")
+    ))
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -136,10 +217,32 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
     if !plan.schema.starts_with("redes.plan/") {
         return Err(format!("E_FMT_UNSUPPORTED: esquema {}", plan.schema));
     }
+    // F12-13: el CRS se comprueba antes de tocar nada.
+    let epsg = comprobar_crs(p, &plan.proyecto.crs, "el plan")?;
+    let terreno = plan
+        .terreno
+        .iter()
+        .map(|v| ("punto de terreno", v[0], v[1]));
+    let objetos = plan.objetos.iter().flat_map(|o| match o {
+        PlanObjeto::Nodo { codigo, e, n, .. } => vec![(codigo.as_str(), *e, *n)],
+        PlanObjeto::Arco {
+            codigo, vertices, ..
+        } => vertices
+            .iter()
+            .map(|v| (codigo.as_str(), v[0], v[1]))
+            .collect(),
+    });
+    rechazar_lonlat(terreno.chain(objetos), "el plan")?;
     let mut rep = ImportReport {
         formato: "plan".into(),
         ..Default::default()
     };
+    if epsg_de(&p.crs) != Some(epsg) {
+        rep.avisos.push(format!(
+            "el proyecto estaba vacío y adopta el CRS del plan: EPSG:{epsg} (antes {})",
+            p.crs
+        ));
+    }
 
     if !plan.terreno.is_empty() {
         let pts = plan
@@ -148,7 +251,7 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
             .map(|v| SurfacePoint::new(v[0], v[1], v[2]))
             .collect::<Vec<_>>();
         rep.puntos_terreno = pts.len();
-        p.terrain = Some(Terrain::build(&plan.proyecto.nombre, 32717, pts));
+        p.terrain = Some(Terrain::build(&plan.proyecto.nombre, epsg, pts));
     }
 
     // Índice de códigos para resolver `desde`/`hasta`.
@@ -358,9 +461,7 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
     if !plan.proyecto.nombre.is_empty() {
         p.name = plan.proyecto.nombre.clone();
     }
-    if !plan.proyecto.crs.is_empty() {
-        p.crs = plan.proyecto.crs.clone();
-    }
+    p.crs = format!("EPSG:{epsg}");
     p.commit("importar plan");
     Ok(rep)
 }
@@ -723,6 +824,17 @@ pub fn import_terreno(p: &mut Project, path: &Path, epsg: u32) -> Result<ImportR
     }
     if pts.len() < 3 {
         return Err("E_FMT_PARSE: se necesitan al menos 3 puntos válidos E,N,Z".into());
+    }
+    // F12-13: EPSG del terreno contra el proyecto, y nada de grados; antes de tocar nada.
+    let origen = format!("el terreno (EPSG:{epsg})");
+    comprobar_crs(p, &format!("EPSG:{epsg}"), &origen)?;
+    rechazar_lonlat(pts.iter().map(|q| ("punto", q.e, q.n)), &origen)?;
+    if epsg_de(&p.crs) != Some(epsg) {
+        rep.avisos.push(format!(
+            "el proyecto estaba vacío y adopta el CRS del terreno: EPSG:{epsg} (antes {})",
+            p.crs
+        ));
+        p.crs = format!("EPSG:{epsg}");
     }
     rep.puntos_terreno = pts.len();
     let name = path

@@ -414,3 +414,143 @@ fn un_tramo_entre_pozos_sin_solera_no_tiene_cotas_de_dato() {
     let filas = redes_core::cantidades::longitudes(&p);
     assert!(filas.iter().all(|f| f.cantidad_3d.is_none()), "{filas:?}");
 }
+
+// ---------------------------------------------------------------------------------------------
+// Sistema de coordenadas (F12-13): el plan declara su CRS, se compara con el proyecto y nunca se
+// reproyecta en silencio.
+
+fn plan_crs(crs: Option<&str>, e: f64, n: f64) -> serde_json::Value {
+    let mut proyecto = serde_json::json!({ "nombre": "crs" });
+    if let Some(c) = crs {
+        proyecto["crs"] = serde_json::json!(c);
+    }
+    serde_json::json!({
+        "schema": "redes.plan/1",
+        "proyecto": proyecto,
+        "terreno": [[e, n, 2500.0], [e + 100.0, n, 2500.0], [e, n + 100.0, 2500.0]],
+        "objetos": [
+            { "tipo": "nodo", "codigo": "P1", "familia": "saneamiento.pozo", "e": e + 1.0, "n": n + 1.0, "cota": 2498.0 }
+        ]
+    })
+}
+
+/// Importa el plan en `p`; si falla, comprueba que no tocó nada.
+fn importa_en(p: &mut Project, nombre: &str, plan: serde_json::Value) -> Result<(), String> {
+    let ruta = std::env::temp_dir().join(format!("redes-crs-{nombre}-{}.json", std::process::id()));
+    std::fs::write(&ruta, plan.to_string()).unwrap();
+    let (antes, revision, crs) = (p.count(), p.revision, p.crs.clone());
+    let r = redes_core::ingest::import_plan(p, &ruta).map(|_| ());
+    let _ = std::fs::remove_file(&ruta);
+    if r.is_err() {
+        assert_eq!(
+            (p.count(), p.revision, p.crs.clone()),
+            (antes, revision, crs),
+            "{nombre}: un error no toca el proyecto"
+        );
+    }
+    r
+}
+
+fn proyecto_17s_con_objetos() -> Project {
+    let mut p = Project::new("17s", "EPSG:32717");
+    importa_en(
+        &mut p,
+        "base17",
+        plan_crs(Some("EPSG:32717"), 760_000.0, 9_796_000.0),
+    )
+    .expect("base");
+    p
+}
+
+#[test]
+fn un_plan_en_18s_entra_en_un_proyecto_vacio_y_lo_fija() {
+    let mut p = Project::new("vacio", "EPSG:32717");
+    importa_en(
+        &mut p,
+        "18s",
+        plan_crs(Some("EPSG:32718"), 280_000.0, 8_660_000.0),
+    )
+    .expect("18S");
+    assert_eq!(p.crs, "EPSG:32718");
+    assert_eq!(p.terrain.as_ref().unwrap().epsg, 32718, "antes: 32717 fijo");
+}
+
+#[test]
+fn un_plan_en_otro_crs_que_el_proyecto_da_e_crs() {
+    let mut p = proyecto_17s_con_objetos();
+    let err = importa_en(
+        &mut p,
+        "mezcla",
+        plan_crs(Some("EPSG:32718"), 280_000.0, 8_660_000.0),
+    )
+    .unwrap_err();
+    assert!(err.starts_with("E_CRS:"), "{err}");
+    assert!(err.contains("no reproyecta"), "{err}");
+}
+
+#[test]
+fn un_plan_sin_crs_o_con_crs_no_utm_sur_da_e_crs() {
+    for (nombre, crs) in [
+        ("sin", None),
+        ("vacio", Some("")),
+        ("norte", Some("EPSG:32617")),
+        ("wgs84", Some("EPSG:4326")),
+        ("basura", Some("UTM17")),
+    ] {
+        let mut p = Project::new(nombre, "EPSG:32717");
+        let err =
+            importa_en(&mut p, nombre, plan_crs(crs, 760_000.0, 9_796_000.0)).expect_err(nombre);
+        assert!(err.starts_with("E_CRS:"), "{nombre}: {err}");
+    }
+}
+
+#[test]
+fn un_plan_en_grados_da_e_crs_legible() {
+    let mut p = Project::new("grados", "EPSG:32717");
+    let err = importa_en(&mut p, "grados", plan_crs(Some("EPSG:32717"), -78.5, -0.2)).unwrap_err();
+    assert!(err.starts_with("E_CRS:"), "{err}");
+    assert!(err.contains("lon/lat"), "dice por qué: {err}");
+}
+
+fn terreno_csv(nombre: &str, e: f64, n: f64) -> std::path::PathBuf {
+    let ruta = std::env::temp_dir().join(format!("redes-crs-{nombre}-{}.csv", std::process::id()));
+    std::fs::write(
+        &ruta,
+        format!(
+            "E,N,Z\n{e},{n},2500\n{},{n},2501\n{e},{},2502\n",
+            e + 0.001,
+            n + 0.001
+        ),
+    )
+    .unwrap();
+    ruta
+}
+
+#[test]
+fn un_terreno_en_otra_zona_que_el_proyecto_da_e_crs() {
+    let mut p = proyecto_17s_con_objetos();
+    let revision = p.revision;
+    let ruta = terreno_csv("zona", 760_000.0, 9_796_000.0);
+    let err = redes_core::ingest::import_terreno(&mut p, &ruta, 32718).unwrap_err();
+    let _ = std::fs::remove_file(&ruta);
+    assert!(err.starts_with("E_CRS:"), "{err}");
+    assert_eq!(p.revision, revision);
+    assert_eq!(
+        p.terrain.as_ref().unwrap().epsg,
+        32717,
+        "el terreno no cambia"
+    );
+}
+
+#[test]
+fn un_terreno_en_grados_da_e_crs() {
+    let mut p = Project::new("grados", "EPSG:32717");
+    let ruta = terreno_csv("grados", -78.5, -0.2);
+    let err = redes_core::ingest::import_terreno(&mut p, &ruta, 32717).unwrap_err();
+    let _ = std::fs::remove_file(&ruta);
+    assert!(
+        err.starts_with("E_CRS:") && err.contains("lon/lat"),
+        "{err}"
+    );
+    assert!(p.terrain.is_none());
+}

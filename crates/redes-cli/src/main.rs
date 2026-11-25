@@ -181,8 +181,9 @@ enum ImportarCmd {
     Terreno {
         #[arg(long)]
         archivo: PathBuf,
-        #[arg(long, default_value_t = 32717)]
-        epsg: u32,
+        /// EPSG de los puntos (UTM sur). Si se omite, el del proyecto; otro distinto → `E_CRS`.
+        #[arg(long)]
+        epsg: Option<u32>,
     },
 }
 
@@ -1158,6 +1159,11 @@ const CODIGOS: &[(&str, &str, i32)] = &[
         7,
     ),
     ("E_IO_NOT_FOUND", "archivo inexistente", 7),
+    (
+        "E_CRS",
+        "CRS ausente, no admitido (solo UTM sur EPSG:327NN), distinto del proyecto o coordenadas en grados",
+        1,
+    ),
 ];
 
 fn project_info(p: &Project, path: &Path) -> Envelope {
@@ -1204,10 +1210,17 @@ fn importar(p: &mut Project, cmd: ImportarCmd, dry: bool) -> Envelope {
             if dry {
                 return dry_import(p, "importar.terreno", &archivo);
             }
-            (
-                "importar.terreno",
-                ingest::import_terreno(p, &archivo, epsg),
-            )
+            // Sin `--epsg`, el del proyecto (F12-13): antes se suponía 32717 aunque el proyecto
+            // estuviera en 18S.
+            let epsg = epsg.or_else(|| ingest::epsg_de(&p.crs));
+            let resultado = match epsg {
+                Some(epsg) => ingest::import_terreno(p, &archivo, epsg),
+                None => Err(format!(
+                    "E_CRS: el proyecto tiene un CRS ilegible ({}); indique --epsg",
+                    p.crs
+                )),
+            };
+            ("importar.terreno", resultado)
         }
     };
     match result {
@@ -1229,6 +1242,9 @@ fn importar(p: &mut Project, cmd: ImportarCmd, dry: bool) -> Envelope {
             let pista = match code.as_str() {
                 "E_FMT_NOT_REDES" | "E_FMT_PARSE" if command == "importar.dxf" => {
                     "`importar dxf` solo lee DXF exportados por Redes (capa REDES_INFO). Un DXF de otra aplicación se adapta con la skill `skills/redes-ingesta`, que escribe un `redes.plan/1`; luego `redes importar plan --archivo plan.json`."
+                }
+                "E_CRS" => {
+                    "Declare el CRS real (en el plan, `proyecto.crs`; en el terreno, `--epsg`): UTM sur en metros, p. ej. EPSG:32717 (17S) o EPSG:32718 (18S), el mismo del proyecto. Redes no reproyecta: hágalo en origen o cree un proyecto con `--crs`."
                 }
                 _ => {
                     "Revise el archivo. Los formatos ajenos se adaptan con la skill `skills/redes-ingesta` y entran como `redes.plan/1`."
