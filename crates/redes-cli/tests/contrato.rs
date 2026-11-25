@@ -54,6 +54,24 @@ fn todo_sobre_declara_su_esquema_y_su_ok() {
     assert_eq!(j["ok"], true);
     assert_eq!(j["command"], "esquema");
     assert_eq!(s.codigo, 0);
+    // Los formatos de salida incluyen el acta (F13-04) y las cantidades.
+    let salida: Vec<&str> = j["data"]["formatos"]["salida"]
+        .as_array()
+        .expect("formatos.salida")
+        .iter()
+        .filter_map(|v| v.as_str())
+        .collect();
+    for f in [
+        "dxf",
+        "geojson",
+        "glb",
+        "svg",
+        "csv (cantidades)",
+        "csv (acta)",
+        "html (acta)",
+    ] {
+        assert!(salida.contains(&f), "falta {f} en formatos.salida");
+    }
 }
 
 #[test]

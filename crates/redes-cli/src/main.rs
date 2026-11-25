@@ -1158,7 +1158,15 @@ fn esquema(filtro: Option<&str>) -> Envelope {
         "comandos": comandos,
         "formatos": {
             "entrada": ["redes.plan/1", "dxf (exportado por Redes, capa REDES_INFO)", "csv(E,N,Z)"],
-            "salida": ["dxf", "geojson", "svg"]
+            "salida": [
+                "dxf",
+                "geojson",
+                "glb",
+                "svg",
+                "csv (cantidades)",
+                "csv (acta)",
+                "html (acta)"
+            ]
         },
         "codigos_error": CODIGOS.iter().chain(observaciones::CODIGOS).collect::<Vec<_>>()
     }))

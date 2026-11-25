@@ -230,7 +230,8 @@ No hay animación de fondo; una ventana quieta no dibuja.
 - **Determinismo**: mismo archivo de entrada + misma orden ⇒ mismos códigos y mismo orden de
   listado (orden de inserción, nunca `HashMap`).
 - **Sin GPU**: `redes vista --salida x.svg` produce una vista 3D que un agente puede leer.
-- Auto-descripción: `redes esquema` publica familias, atributos, subtipos, comandos y códigos.
+- Auto-descripción: `redes esquema` publica familias, atributos, subtipos, comandos, códigos y
+  formatos de entrada y salida (dxf, geojson, glb, svg, csv de cantidades, csv y html del acta).
 
 ---
 
