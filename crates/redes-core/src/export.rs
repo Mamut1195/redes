@@ -320,6 +320,13 @@ pub fn export_geojson(p: &Project, path: &Path) -> Result<usize, String> {
             props[k] =
                 serde_json::json!({ "valor": d.valor, "unidad": d.unidad, "fuente": d.fuente });
         }
+        // Soleras declaradas del tramo (F12-02); si el origen no las trajo, no se escriben.
+        if let Some(z) = l.cota_solera_inicio {
+            props["cota_solera_inicio"] = serde_json::json!(z);
+        }
+        if let Some(z) = l.cota_solera_fin {
+            props["cota_solera_fin"] = serde_json::json!(z);
+        }
         features.push(serde_json::json!({
             "type": "Feature",
             "geometry": { "type": "LineString", "coordinates": l.path.iter().map(|q| [q.x, q.y, q.z]).collect::<Vec<_>>() },

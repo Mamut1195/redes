@@ -158,6 +158,8 @@ pub fn project() -> Project {
                 EstadoObjeto::Pendiente
             },
             nota: None,
+            cota_solera_inicio: None,
+            cota_solera_fin: None,
             deleted: false,
         })
         .ok();
@@ -207,6 +209,8 @@ pub fn project() -> Project {
             datos: BTreeMap::new(),
             estado: EstadoObjeto::Pendiente,
             nota: None,
+            cota_solera_inicio: None,
+            cota_solera_fin: None,
             deleted: false,
         })
         .ok();
@@ -257,6 +261,8 @@ pub fn project() -> Project {
         datos: BTreeMap::new(),
         estado: EstadoObjeto::Pendiente,
         nota: None,
+        cota_solera_inicio: None,
+        cota_solera_fin: None,
         deleted: false,
     })
     .ok();
@@ -342,6 +348,8 @@ pub fn project() -> Project {
             datos: BTreeMap::new(),
             estado: EstadoObjeto::Pendiente,
             nota: None,
+            cota_solera_inicio: None,
+            cota_solera_fin: None,
             deleted: false,
         })
         .ok();
@@ -520,6 +528,8 @@ pub fn plantilla() -> Project {
             datos: BTreeMap::new(),
             estado: EstadoObjeto::Pendiente,
             nota: None,
+            cota_solera_inicio: None,
+            cota_solera_fin: None,
             deleted: false,
         })
         .expect("colector de plantilla");

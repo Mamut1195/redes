@@ -303,6 +303,8 @@ pub fn ciudad() -> Project {
             datos: BTreeMap::new(),
             estado: EstadoObjeto::Pendiente,
             nota: None,
+            cota_solera_inicio: None,
+            cota_solera_fin: None,
             deleted: false,
         })
         .ok();
@@ -524,6 +526,8 @@ fn conectar(
         datos,
         estado: EstadoObjeto::Pendiente,
         nota: None,
+        cota_solera_inicio: None,
+        cota_solera_fin: None,
         deleted: false,
     })
     .ok();

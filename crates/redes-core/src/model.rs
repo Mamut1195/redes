@@ -169,9 +169,12 @@ pub struct Link {
     pub code: String,
     pub from: ElementId,
     pub to: ElementId,
-    /// Trazado 3D (planta + cota de eje o clave en cada vértice).
+    /// Trazado 3D: planta y cota de **solera** (fondo interior del tubo) en cada vértice.
+    ///
+    /// El eje del tubo queda medio diámetro interior más arriba ([`Link::eje`]) y la clave, un
+    /// diámetro interior más arriba (F12-02).
     pub path: Vec<P3>,
-    /// Diámetro nominal (mm).
+    /// Diámetro nominal (mm). Es una designación comercial: no es el interior ni el exterior.
     pub d_mm: u32,
     pub attrs: BTreeMap<String, Value>,
     #[serde(default)]
@@ -183,11 +186,44 @@ pub struct Link {
     pub nota: Option<String>,
     #[serde(default)]
     pub deleted: bool,
+    /// Cota de solera declarada por el origen al inicio del tramo (m). `None` si no la trae: no
+    /// se toma la del pozo, que puede estar más baja (caída) o en otra entrada.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cota_solera_inicio: Option<f64>,
+    /// Cota de solera declarada por el origen al final del tramo (m).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cota_solera_fin: Option<f64>,
 }
 
 impl Link {
     pub fn d_m(&self) -> f64 {
         self.d_mm as f64 / 1000.0
+    }
+    /// Diámetro interior para dibujar (m): el declarado (`attrs.diametro_interior`, mm) o, si
+    /// falta, el nominal. El DN es la mejor aproximación geométrica que hay, no un dato nuevo.
+    pub fn diametro_interior_m(&self) -> f64 {
+        self.num("diametro_interior")
+            .filter(|d| *d > 0.0)
+            .map(|d| d / 1000.0)
+            .unwrap_or_else(|| self.d_m())
+    }
+    /// Espesor de pared para dibujar (m): el declarado (`attrs.espesor_pared`) o uno típico.
+    pub fn espesor_pared_m(&self) -> f64 {
+        self.num("espesor_pared")
+            .filter(|e| *e > 0.0)
+            .unwrap_or(0.008)
+    }
+    /// Diámetro exterior para dibujar (m): DI + 2 · espesor. El DN no es el diámetro exterior.
+    pub fn diametro_exterior_m(&self) -> f64 {
+        self.diametro_interior_m() + 2.0 * self.espesor_pared_m()
+    }
+    /// Eje del tubo: el trazado (solera) subido medio diámetro interior.
+    pub fn eje(&self) -> Vec<P3> {
+        let r = self.diametro_interior_m() * 0.5;
+        self.path
+            .iter()
+            .map(|q| P3::new(q.x, q.y, q.z + r))
+            .collect()
     }
     pub fn length_2d(&self) -> f64 {
         self.path
@@ -647,6 +683,8 @@ mod tests {
             datos: BTreeMap::new(),
             estado: EstadoObjeto::Pendiente,
             nota: None,
+            cota_solera_inicio: None,
+            cota_solera_fin: None,
             deleted: false,
         });
         assert!(r.is_err());
@@ -670,6 +708,39 @@ mod tests {
         let b = p.node(b).unwrap();
         assert_eq!(b.num("cota_clave"), Some(99.4), "una clave real no se toca");
         assert!(b.get("cota_solera").is_none());
+    }
+
+    /// Un tramo guardado antes de F12-02 (sin cotas de solera declaradas) sigue abriendo.
+    #[test]
+    fn un_tramo_viejo_sin_cotas_declaradas_abre() {
+        let viejo = r#"{"id":{"slot":3,"generation":1},"family":"saneamiento.tuberia",
+            "ty":"colector_sanitario","code":"CL-001","from":{"slot":1,"generation":1},
+            "to":{"slot":2,"generation":1},"path":[{"x":0,"y":0,"z":100},{"x":10,"y":0,"z":99.9}],"d_mm":300,
+            "attrs":{}}"#;
+        let l: Link = serde_json::from_str(viejo).expect("abre");
+        assert_eq!(l.cota_solera_inicio, None);
+        assert_eq!(l.cota_solera_fin, None);
+        // Y al guardar no aparecen campos vacíos.
+        let texto = serde_json::to_string(&l).unwrap();
+        assert!(!texto.contains("cota_solera"), "{texto}");
+    }
+
+    /// El trazado es la solera: el eje queda DI/2 más arriba y el exterior suma la pared (F12-02).
+    #[test]
+    fn el_eje_del_tubo_queda_medio_diametro_sobre_la_solera() {
+        let l: Link = serde_json::from_str(
+            r#"{"id":{"slot":3,"generation":1},"family":"saneamiento.tuberia",
+            "ty":"colector_sanitario","code":"CL-001","from":{"slot":1,"generation":1},
+            "to":{"slot":2,"generation":1},"path":[{"x":0,"y":0,"z":100},{"x":10,"y":0,"z":100}],"d_mm":315,
+            "attrs":{"diametro_interior":300.0,"espesor_pared":0.0077}}"#,
+        )
+        .unwrap();
+        assert!(
+            (l.diametro_interior_m() - 0.30).abs() < 1e-9,
+            "DI declarado, no DN"
+        );
+        assert!((l.eje()[0].z - 100.15).abs() < 1e-9);
+        assert!((l.diametro_exterior_m() - (0.30 + 2.0 * 0.0077)).abs() < 1e-9);
     }
 
     #[test]

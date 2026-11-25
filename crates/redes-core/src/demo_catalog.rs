@@ -109,6 +109,8 @@ pub fn catalogo() -> Project {
             datos: BTreeMap::new(),
             estado: EstadoObjeto::Pendiente,
             nota: None,
+            cota_solera_inicio: None,
+            cota_solera_fin: None,
             deleted: false,
         })
         .ok();
@@ -341,6 +343,8 @@ pub fn catalogo() -> Project {
             datos: BTreeMap::new(),
             estado: EstadoObjeto::Pendiente,
             nota: None,
+            cota_solera_inicio: None,
+            cota_solera_fin: None,
             deleted: false,
         })
         .ok();
@@ -502,6 +506,8 @@ pub fn catalogo_completo() -> Project {
                 datos: BTreeMap::new(),
                 estado: EstadoObjeto::Pendiente,
                 nota: None,
+                cota_solera_inicio: None,
+                cota_solera_fin: None,
                 deleted: false,
             };
             let _ = p.add_link(arco);
