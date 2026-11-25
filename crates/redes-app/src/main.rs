@@ -509,11 +509,7 @@ impl State {
         // Se copia el proyecto para no dejar el historial a medias si algo falla.
         let mut nuevo = (*self.project).clone();
         let conservados = {
-            let Some(n) = nuevo
-                .nodes
-                .iter_mut()
-                .find(|n| n.code == code && !n.deleted)
-            else {
+            let Some(n) = nuevo.node_by_code_mut(&code) else {
                 return;
             };
             redes_core::biblioteca::aplicar_a(n, &pieza, 2.4)
@@ -583,11 +579,7 @@ impl State {
         let Some(code) = self.sel.clone() else { return };
         self.recordar();
         let project = Arc::make_mut(&mut self.project);
-        if let Some(n) = project
-            .nodes
-            .iter_mut()
-            .find(|n| n.code == code && !n.deleted)
-        {
+        if let Some(n) = project.node_by_code_mut(&code) {
             match clave {
                 // Sin altura con datos no hay solera que mover: se movería un valor de dibujo.
                 "profundidad" if n.sin_altura() => {}

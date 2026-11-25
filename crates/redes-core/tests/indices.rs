@@ -411,3 +411,20 @@ fn reimportar_deja_el_indice_al_dia() {
     );
     comprueba(&p, "reimportar");
 }
+
+/// La app edita en su sitio el nodo seleccionado por código (F14-01): `node_by_code_mut` da el
+/// vivo, nunca uno borrado con el mismo código, y la edición queda en el proyecto.
+#[test]
+fn node_by_code_mut_edita_el_nodo_vivo() {
+    let mut p = Project::new("editar", "EPSG:32717");
+    let viejo = p.add_node(pozo("PZ-1", 0.0)).unwrap();
+    p.nodes.iter_mut().find(|n| n.id == viejo).unwrap().deleted = true;
+    let vivo = p.add_node(pozo("PZ-1", 10.0)).unwrap();
+    assert!(p.node_by_code_mut("NO-EXISTE").is_none());
+    let n = p.node_by_code_mut("pz-1").expect("encuentra el vivo");
+    assert_eq!(n.id, vivo);
+    n.z_invert = 2490.0;
+    assert_eq!(p.node(vivo).unwrap().z_invert, 2490.0);
+    assert!(p.indice_al_dia());
+    comprueba(&p, "node_by_code_mut");
+}

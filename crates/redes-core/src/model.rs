@@ -457,6 +457,11 @@ impl Project {
     pub fn link_by_code(&self, code: &str) -> Option<&Link> {
         self.pos_tramo_codigo(code).map(|i| &self.links[i])
     }
+    /// Nodo vivo por código, para editarlo en su sitio. O(1) con el índice. Quien cambie su id o
+    /// su código llama después a [`Project::reindexar`].
+    pub fn node_by_code_mut(&mut self, code: &str) -> Option<&mut Node> {
+        self.pos_nodo_codigo(code).map(|i| &mut self.nodes[i])
+    }
 
     /// Siguiente código libre de una familia (`PZ-001`, `PZ-002`…).
     pub fn next_code(&self, family_key: &str) -> String {

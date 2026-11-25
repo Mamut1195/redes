@@ -58,9 +58,6 @@ el pase del pintor donde hoy se cae a la pieza paramétrica.
 ## Deuda conocida
 
 - `redes-cli/src/main.rs` concentra todos los comandos; si crece, toca partirlo por dominio.
-- `redes-app/src/main.rs` aún busca por código recorriendo todos los objetos en dos sitios (~líneas
-  450 y 524): pasarlos al índice (`node_by_code`/`link_by_code`) después de integrar F14-02/03, para
-  no chocar con esa rama.
 - El índice de `Project` detecta altas y vectores cambiados de tamaño, pero no reescribir un objeto
   en su sitio (cambiarle id, código o extremos): quien lo haga debe llamar a `reindexar()` hasta que
   F15-02 cierre los campos públicos.
