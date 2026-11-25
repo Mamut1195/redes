@@ -91,6 +91,24 @@ $mutaciones = @(
         Reemplazo = 'if false {'
         Prueba = "cerrar_la_ultima_abierta_deja_pendiente"
         Que = "dejar de derivar observado de las observaciones abiertas (F13-03)"
+    },
+    @{
+        Nombre = "acta-sin-escapar"
+        Archivo = "crates/redes-core/src/acta.rs"
+        Patron = "'<' => o\.push_str\(""&lt;""\),"
+        Reemplazo = "'<' => o.push('<'),"
+        Destino = "acta"
+        Prueba = "el_html_es_autocontenido_imprimible_y_escapa_el_texto"
+        Que = "volcar el texto del usuario sin escapar en el acta HTML (F13-04)"
+    },
+    @{
+        Nombre = "acta-autor-d2"
+        Archivo = "crates/redes-core/src/acta.rs"
+        Patron = '\.any\(\|o\| o\.autor\.is_some\(\) \|\| o\.autor_cierre\.is_some\(\)\)'
+        Reemplazo = '.any(|_| true)'
+        Destino = "acta"
+        Prueba = "el_csv_abre_en_excel_con_tildes_y_una_fila_por_observacion"
+        Que = "sacar columnas de autor aunque no se registro (D2, F13-04)"
     }
 )
 

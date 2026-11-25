@@ -225,6 +225,34 @@ aprueba: lo explica la barra de estado. Después, **Guardar**.
 
 ![Inspector con el historial de observaciones](img/observaciones.png)
 
+#### Acta de revisión (`acta`, F13-04)
+
+```powershell
+redes acta --salida acta.csv                  # Excel: BOM UTF-8 y «;», las tildes se ven bien
+redes acta --formato html --salida acta.html  # imprimible desde el navegador (o «Guardar como PDF»)
+redes acta                                    # solo el resumen en el sobre JSON
+```
+
+El acta **lista** lo que hay en el proyecto, sin calcular ni valorar: cabecera (nombre, id, CRS,
+revisión y estado del proyecto, fecha de emisión UTC), resumen (objetos pendientes, aprobados y
+observados; observaciones abiertas y cerradas) y cada objeto —nodos y luego tramos, por código—
+con familia, subtipo y estado. Por cada observación: `#id`, abierta/cerrada, fecha y revisión en
+que se abrió, texto, ubicación (`E, N, Z`), y fecha, revisión y texto del cierre. Lo ausente sale
+«—».
+
+- `--formato` es `csv` o `html`; sin él se deduce de la extensión de `--salida` (`.csv`, `.html`,
+  `.htm`). Otro formato da `E_ARG_INVALID` (código de salida 2). `--dry-run` no escribe.
+- **CSV**: unas líneas de cabecera, una fila en blanco y la tabla (`codigo;elemento;familia;
+  subtipo;estado;obs_id;obs_estado;abierta_utc;revision;texto;ubicacion;cerrada_utc;
+  revision_cierre;cierre`): una fila por observación y una por objeto sin observaciones. Los
+  textos con `;`, comillas o saltos de línea van entre comillas; un texto que empieza por `=`,
+  `+`, `-` o `@` lleva un `'` delante para que Excel no lo ejecute como fórmula.
+- **HTML**: un único archivo autocontenido (CSS en línea, sin JavaScript ni recursos externos),
+  A4 apaisado al imprimir; el texto del usuario va escapado.
+- **Sin autor (D2):** las columnas `autor` y `autor_cierre` solo aparecen si alguna observación
+  las trae (se arrancó con `REDES_JOURNAL_USUARIO=1`). El acta no lleva firma.
+- El sobre trae `data.resumen`, `data.revision`, `data.emitida_utc` y el archivo en `artifacts`.
+
 #### Comparar dos entregas (`proyecto diff`)
 
 ```powershell

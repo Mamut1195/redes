@@ -3,6 +3,7 @@
 //! No calcula ingeniería. Importa lo que producen otras aplicaciones, lo deja revisar y aprobar,
 //! y lo devuelve al CAD. Toda salida es un sobre JSON `redes.envelope/1`.
 
+mod acta;
 mod diff;
 mod observaciones;
 mod perfil;
@@ -103,6 +104,8 @@ enum Cmd {
     },
     /// Perfil longitudinal de un colector (SVG y JSON): rasante, solera, clave, pozos, DN y pendiente.
     Perfil(perfil::PerfilArgs),
+    /// Acta de revisión: estados y observaciones en CSV (Excel) o HTML imprimible (F13-04).
+    Acta(acta::ActaArgs),
     /// Vista 3D del modelo en SVG (sin GPU, apta para agentes).
     Vista {
         #[arg(long)]
@@ -660,6 +663,7 @@ fn run(cli: Cli, t0: Instant) -> i32 {
         Cmd::Exportar { cmd } => exportar(&p, cmd, dry),
         Cmd::Biblioteca { cmd } => biblioteca(&cmd),
         Cmd::Perfil(a) => perfil::ejecutar(&p, &a, dry),
+        Cmd::Acta(a) => acta::ejecutar(&p, &a, dry),
         Cmd::Validar(args) => validar::ejecutar(&mut p, &path, &args, dry),
         Cmd::Vista {
             salida,
@@ -1044,6 +1048,7 @@ fn command_id(c: &Cmd) -> &'static str {
         },
         Cmd::Cantidades { .. } => "cantidades",
         Cmd::Perfil(_) => "perfil",
+        Cmd::Acta(_) => "acta",
         Cmd::Vista { .. } => "vista",
         Cmd::Validar(_) => "validar",
         Cmd::Biblioteca { cmd } => match cmd {
