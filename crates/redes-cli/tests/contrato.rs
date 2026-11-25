@@ -522,3 +522,120 @@ fn un_dxf_ajeno_da_e_fmt_not_redes_sin_tocar_el_proyecto() {
         "el proyecto no se toca"
     );
 }
+
+#[test]
+fn proyecto_diff_reporta_altas_bajas_y_cambios_y_escribe_csv() {
+    use redes_core::project_io::{load, save};
+    let d = tempdir("diff");
+    let a = d.join("a.redes");
+    let b = d.join("b.redes");
+    corre(
+        &[
+            "proyecto",
+            "demo",
+            "--salida",
+            a.to_str().unwrap(),
+            "--quiet",
+        ],
+        &d,
+    );
+    let mut p = load(&a).expect("carga la demo");
+    let baja = p.links.pop().expect("un tramo").code;
+    let mut nuevo = p.nodes[0].clone();
+    nuevo.code = "PZ-NUEVO".into();
+    nuevo.id = redes_core::model::ElementId::new(9000, 1);
+    p.nodes.push(nuevo);
+    p.nodes[1].z_invert -= 0.25;
+    p.nodes[2].pos.x += 0.004; // por debajo de la tolerancia: no se reporta
+    let li = p.links.iter().position(|l| l.dn().is_some()).unwrap();
+    p.links[li].d_mm += 100;
+    let ni = p.nodes.iter().position(|n| !n.datos.is_empty()).unwrap();
+    let clave = p.nodes[ni].datos.keys().next().unwrap().clone();
+    p.nodes[ni].datos.remove(&clave);
+    let cod_mov = p.nodes[2].code.clone();
+    save(&p, &b).expect("guarda B");
+
+    let csv = d.join("diff.csv");
+    let s = corre(
+        &[
+            "proyecto",
+            "diff",
+            "--a",
+            a.to_str().unwrap(),
+            "--b",
+            b.to_str().unwrap(),
+            "--salida",
+            csv.to_str().unwrap(),
+        ],
+        &d,
+    );
+    let j = sobre(&s);
+    assert_eq!(j["ok"], true, "{j}");
+    assert_eq!(j["command"], "proyecto.diff");
+    assert_eq!(s.codigo, 0);
+    let r = &j["data"]["resumen"];
+    assert_eq!(r["altas"], 1);
+    assert_eq!(r["bajas"], 1);
+    assert_eq!(j["data"]["bajas"][0]["codigo"], baja.as_str());
+    assert_eq!(r["modificados"], 3, "{j}");
+    let mods = j["data"]["modificados"].to_string();
+    assert!(mods.contains("cota_solera") && mods.contains("\"dn\"") && mods.contains("datos."));
+    assert!(!mods.contains(&cod_mov), "0,004 m < tolerancia");
+    let texto = std::fs::read_to_string(&csv).unwrap();
+    assert!(texto.starts_with('\u{feff}'));
+    assert_eq!(texto.lines().count(), 1 + 2 + 3);
+
+    // Con tolerancia fina aparece el movimiento; --solo revision lo deja vacio.
+    let fino = sobre(&corre(
+        &[
+            "proyecto",
+            "diff",
+            "--a",
+            a.to_str().unwrap(),
+            "--b",
+            b.to_str().unwrap(),
+            "--tolerancia-pos",
+            "0.001",
+        ],
+        &d,
+    ));
+    assert!(fino["data"]["modificados"].to_string().contains(&cod_mov));
+    let rev = sobre(&corre(
+        &[
+            "proyecto",
+            "diff",
+            "--a",
+            a.to_str().unwrap(),
+            "--b",
+            b.to_str().unwrap(),
+            "--solo",
+            "revision",
+        ],
+        &d,
+    ));
+    assert_eq!(rev["data"]["resumen"]["sin_cambios"], true);
+
+    // CRS distinto: error claro.
+    let mut q = load(&a).unwrap();
+    q.crs = "EPSG:32718".into();
+    let c = d.join("c.redes");
+    save(&q, &c).unwrap();
+    let s = corre(
+        &[
+            "proyecto",
+            "diff",
+            "--a",
+            a.to_str().unwrap(),
+            "--b",
+            c.to_str().unwrap(),
+        ],
+        &d,
+    );
+    let j = sobre(&s);
+    assert_eq!(j["ok"], false);
+    assert_eq!(j["diagnostics"][0]["code"], "E_STATE_CRS_DISTINTO");
+    assert_ne!(s.codigo, 0);
+    // El esquema lo registra.
+    let esq = corre(&["esquema"], &d).stdout;
+    assert!(esq.contains("proyecto diff") && esq.contains("E_STATE_CRS_DISTINTO"));
+}

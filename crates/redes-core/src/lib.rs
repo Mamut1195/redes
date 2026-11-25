@@ -21,6 +21,7 @@ pub mod demo;
 pub mod demo_cadena;
 pub mod demo_catalog;
 pub mod demo_city;
+pub mod diff;
 pub mod envelope;
 pub mod export;
 pub mod families;
