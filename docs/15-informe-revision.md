@@ -43,7 +43,7 @@ Estos cuatro son mejora visual de fase 6 y están anotados, no corregidos.
 | Suite | 57 verdes (49 núcleo + 7 app + 1 doctest), 25 s |
 | Catálogo | 29 familias / 216 subtipos exactos; el demo cubre 29/29 en 49 objetos |
 | Tapas vs TIN | máximo 0,187 m, media 0,046 (el criterio era ±0,35) |
-| Recubrimiento | 1,200–6,000 m |
+| Profundidad de pozo (tapa − solera; no es el recubrimiento) | 1,200–6,000 m |
 | Pendiente mínima | 1,245 % (criterio ≥0,4 %) |
 | Frame 2D release (p95) | 0,7–1,3 ms en reposo; **33,9 ms** en `ciudad`, **247 ms** en `corte` |
 | Frame 3D (`--gpu3d`, p95) | **2,3 ms** en `ciudad`, **2,5 ms** en `corte` |
