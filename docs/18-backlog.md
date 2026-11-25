@@ -201,7 +201,7 @@ que esté mal interpretado.
 
 ---
 
-## F13 — Herramientas del revisor (P0/P1)
+## F13 — Herramientas del revisor (P0/P1) — cerrada
 
 Objetivo: que el ingeniero revisor encuentre los problemas el día 1, sin cálculo hidráulico.
 

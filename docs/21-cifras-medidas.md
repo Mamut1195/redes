@@ -68,6 +68,7 @@ reproducible detrás: se retira como afirmación.
 | Núcleo (`redes-core`, unitarias) | **135** |
 | Validación geométrica (`redes-core/tests/validar.rs`) | **13** |
 | Acta de revisión (`redes-core/tests/acta.rs`) | **5** |
+| Reimportar (`redes-core/tests/reimportar.rs`) | **8** |
 | Ingesta con fixtures (`tests/ingesta.rs`) | **31** |
 | Cotas de tramo (`tests/cotas_tramo.rs`) | **3** |
 | Presupuesto de frame (`tests/rendimiento.rs`) | **2** |
@@ -76,12 +77,14 @@ reproducible detrás: se retira como afirmación.
 | Perfil del CLI (`tests/perfil.rs`) | **3** |
 | Validar del CLI (`tests/validar.rs`) | **4** |
 | Acta del CLI (`tests/acta.rs`) | **2** |
+| Reimportar del CLI (`tests/reimportar.rs`) | **2** |
 | Doctest | **1** |
-| **Total** | **234** |
+| **Total** | **244** |
 
-Más el arnés de mutación: `powershell -File scripts/mutar.ps1` rompe once comportamientos (cinco
+Más el arnés de mutación: `powershell -File scripts/mutar.ps1` rompe catorce comportamientos (cinco
 de vista, tres de `redes validar`, el estado derivado de las observaciones y dos del acta: escapar el
-HTML y no sacar columnas de autor sin registrarlo, D2) y exige que la suite falle.
+HTML y no sacar columnas de autor sin registrarlo, D2; y tres de reimportar: reiniciar el aprobado
+cuyo diseño cambió, conservar las observaciones y no dar de baja en silencio) y exige que la suite falle.
 
 ## 6. Qué cifras de los informes anteriores son falsas
 
