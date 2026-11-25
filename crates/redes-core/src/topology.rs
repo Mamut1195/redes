@@ -153,7 +153,7 @@ impl Topology {
 
 /// Tramo a presión (impulsión, conducción forzada, agua potable): la regla de pendiente no aplica.
 /// Se deriva del registro: familia de agua, o subtipo que exige clase de presión.
-fn es_a_presion(family: &str, ty: &str) -> bool {
+pub(crate) fn es_a_presion(family: &str, ty: &str) -> bool {
     let Some(def) = crate::families::family(family) else {
         return false;
     };

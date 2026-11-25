@@ -7,6 +7,7 @@
 
 mod gpu3d;
 mod modelos;
+mod validacion;
 
 use std::sync::{Arc, Mutex};
 
@@ -130,6 +131,8 @@ struct State {
     bib: Option<(std::path::PathBuf, redes_core::biblioteca::Biblioteca)>,
     /// Aviso de política de dibujo (modelos pesados sin `--gpu3d`).
     aviso_modelos: Option<String>,
+    /// Última validación geométrica (F13-01).
+    validacion: validacion::Panel,
 }
 
 impl State {
@@ -171,6 +174,7 @@ impl State {
             modelos: modelos::Cache::default(),
             bib: None,
             aviso_modelos: None,
+            validacion: Default::default(),
         };
         // Modo rayos X por línea de comandos (útil para capturas y para los agentes).
         if rune::extra_args().iter().any(|a| a == "--rayos-x") {
@@ -959,6 +963,7 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
             s.rebuild();
         }));
     }
+    left = left.child(el().h(10.0)).child(validacion::seccion(s));
 
     // --- panel derecho: inspector ---
     let mut right = col()
@@ -1639,6 +1644,7 @@ fn main() {
                     s.rebuild();
                 }) as fn(&mut State),
             ),
+            ("validar", validacion::escena as fn(&mut State)),
         ],
         ..AppSpec::new("Redes — visor 3D", (1280.0, 800.0), State::new, view)
     };
