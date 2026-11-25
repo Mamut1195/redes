@@ -41,8 +41,7 @@
   - una prueba que falle sin el cambio;
   - test y build release en verde;
   - doc actualizado en el mismo commit;
-  - captura `--snap` si toca la UI;
-  - los `.redes` anteriores siguen abriendo (serde con `default`).
+  - captura `--snap` si toca la UI.
 - Decisiones en `docs/22-decisiones.md` (D# decididas, A# abiertas): se editan en el mismo commit que el código.
 - Estado y traspaso en `docs/23-estado-y-pendientes.md`; backlog por fase en `docs/18-backlog.md`; cifras vigentes en `docs/21-cifras-medidas.md`. Actualízalos al cerrar trabajo.
 - Contrato de la CLI: `ok:false` ⇔ código de salida ≠ 0. Las pruebas de contrato usan el binario real.
