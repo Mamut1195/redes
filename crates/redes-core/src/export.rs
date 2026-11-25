@@ -281,7 +281,6 @@ pub fn export_geojson(p: &Project, path: &Path) -> Result<usize, String> {
             "familia": n.family,
             "subtipo": n.ty,
             "cota_terreno": n.z_terrain,
-            "cota_clave": n.z_invert,
             "estado": n.estado.key(),
             "nota": n.nota,
         });
@@ -292,6 +291,9 @@ pub fn export_geojson(p: &Project, path: &Path) -> Result<usize, String> {
             props[k] =
                 serde_json::json!({ "valor": d.valor, "unidad": d.unidad, "fuente": d.fuente });
         }
+        // La cota del nodo es su solera (fondo interior), no la clave (F12-01). Va después de
+        // los atributos para que el valor tipado no se pise con su copia en texto.
+        props["cota_solera"] = serde_json::json!(n.z_invert);
         features.push(serde_json::json!({
             "type": "Feature",
             "geometry": { "type": "Point", "coordinates": [n.pos.x, n.pos.y, n.z_invert] },
@@ -426,5 +428,31 @@ mod tests {
         let n = export_geojson(&p, &path).unwrap();
         assert_eq!(n, p.count());
         let _ = std::fs::remove_file(&path);
+    }
+
+    /// El GeoJSON escribe la solera del nodo como `cota_solera`, nunca como `cota_clave` (F12-01).
+    #[test]
+    fn el_geojson_exporta_la_solera_y_no_la_llama_clave() {
+        let p = crate::demo::project();
+        let path =
+            std::env::temp_dir().join(format!("redes-solera-{}.geojson", std::process::id()));
+        export_geojson(&p, &path).unwrap();
+        let fc: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let _ = std::fs::remove_file(&path);
+        let features = fc["features"].as_array().unwrap();
+        let mut puntos = 0;
+        for f in features.iter().filter(|f| f["geometry"]["type"] == "Point") {
+            let props = &f["properties"];
+            assert!(
+                props.get("cota_clave").is_none(),
+                "nodo con cota_clave: {props}"
+            );
+            let codigo = props["codigo"].as_str().unwrap();
+            let n = p.nodes.iter().find(|n| n.code == codigo).unwrap();
+            assert_eq!(props["cota_solera"].as_f64(), Some(n.z_invert), "{codigo}");
+            puntos += 1;
+        }
+        assert!(puntos > 0);
     }
 }

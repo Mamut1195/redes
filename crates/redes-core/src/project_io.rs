@@ -64,7 +64,7 @@ pub fn validar_finito(p: &Project) -> Result<(), String> {
         fin(n.pos.y, "N", &n.code)?;
         fin(n.z_terrain, "cota de terreno", &n.code)?;
         fin(n.z_rim, "cota de tapa", &n.code)?;
-        fin(n.z_invert, "cota de clave", &n.code)?;
+        fin(n.z_invert, "cota de solera", &n.code)?;
         for (k, v) in &n.attrs {
             valor(v, k, &n.code)?;
         }
@@ -109,6 +109,7 @@ pub fn load(path: &Path) -> Result<Project, String> {
     validar_esquema(&p.schema)?;
     validar_tin(&p)?;
     validar_identidad(&mut p)?;
+    p.migrar_cotas();
     // El índice espacial del TIN no se serializa: se reconstruye al abrir.
     if let Some(t) = p.terrain.as_mut() {
         t.reindexar();

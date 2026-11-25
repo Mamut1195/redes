@@ -5,7 +5,7 @@
 //! UI, ni el validador, que leen este mismo esquema.
 //!
 //! Decisión (ADR-M1): el esquema es **dato**, no código. Los campos "calientes" del dominio
-//! (cota clave, diámetro, pendiente) además existen tipados en `model`; el resto de atributos
+//! (cotas de solera, diámetro, pendiente) además existen tipados en `model`; el resto de atributos
 //! viaja por el esquema. Así el compilador protege lo que se calcula y el registro protege lo
 //! que se declara.
 //!
@@ -440,10 +440,24 @@ fn material() -> AttrDef {
     .text("PVC")
 }
 
+/// Clave del tubo al inicio: el punto más alto del **interior** (clave = solera + DI). No es la
+/// solera (F12-01).
 fn cota_clave() -> AttrDef {
     attr(
         "cota_clave",
-        "Cota clave (invert)",
+        "Cota de clave (inicio)",
+        Unit::M,
+        AttrType::Num,
+        true,
+        Group::Geometrico,
+    )
+}
+
+/// Solera de un nodo: el fondo interior del pozo, la cámara o la caja (`Node::z_invert`).
+fn cota_solera() -> AttrDef {
+    attr(
+        "cota_solera",
+        "Cota de solera",
         Unit::M,
         AttrType::Num,
         true,
@@ -556,7 +570,7 @@ fn build() -> Vec<FamilyDef> {
                     Group::Geometrico,
                 ),
                 cota_terreno(),
-                cota_clave(),
+                cota_solera(),
                 profundidad(),
                 attr(
                     "altura_caida",
@@ -2411,7 +2425,7 @@ fn build() -> Vec<FamilyDef> {
                     Group::Estructural,
                 )
                 .num(1.50),
-                cota_clave(),
+                cota_solera(),
                 estado(),
                 attr(
                     "largo",
@@ -2450,14 +2464,6 @@ fn build() -> Vec<FamilyDef> {
                     "Numero aportes",
                     Unit::None,
                     AttrType::Int,
-                    false,
-                    Group::General,
-                ),
-                attr(
-                    "cota_solera",
-                    "Cota solera",
-                    Unit::M,
-                    AttrType::Num,
                     false,
                     Group::General,
                 ),
@@ -4156,7 +4162,7 @@ fn build() -> Vec<FamilyDef> {
                     Group::Estructural,
                 )
                 .num(0.6),
-                cota_clave(),
+                cota_solera(),
                 estado(),
                 attr(
                     "profundidad",
@@ -8468,6 +8474,30 @@ mod tests {
                 f.code_prefix
             );
             assert!(!f.types.is_empty(), "{} no declara subtipos", f.key);
+        }
+    }
+
+    /// Clave y solera son cotas distintas: un nodo tiene solera y la clave es del tubo (F12-01).
+    #[test]
+    fn la_clave_no_se_confunde_con_la_solera() {
+        for f in families() {
+            if let Some(a) = f.attr("cota_clave") {
+                assert!(
+                    f.topo == TopoRole::Link,
+                    "{}: un nodo no tiene clave, tiene solera",
+                    f.key
+                );
+                let etiqueta = a.label.to_lowercase();
+                assert!(
+                    !etiqueta.contains("invert") && !etiqueta.contains("solera"),
+                    "{}: «{}»",
+                    f.key,
+                    a.label
+                );
+            }
+        }
+        for k in ["saneamiento.pozo", "saneamiento.camara", "saneamiento.caja"] {
+            assert!(family(k).unwrap().attr("cota_solera").is_some(), "{k}");
         }
     }
 

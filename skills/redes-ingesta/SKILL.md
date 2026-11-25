@@ -122,7 +122,7 @@ Lo que no se puede traducir se descarta y aparece en `descartados`: nunca se pie
 | `subtipo` | no | Si falta se usa el primero de la familia |
 | `codigo` | no | Si falta se asigna `PZ-001`, `CL-001`… |
 | `e`, `n` | sí (nodo) | Coordenadas del proyecto en metros |
-| `cota` | no | Clave/solera; si falta y hay TIN se usa `z_terreno − 1.5` |
+| `cota` | no | Solera del nodo (fondo interior), nunca la clave; si falta y hay TIN se usa `z_terreno − 1.5` |
 | `cota_terreno` | no | Si falta, se interpola del TIN |
 | `diametro` | no | Metros (interior del pozo) |
 | `diametro_mm` | no | Milímetros (tubería), por defecto 200 |
@@ -168,7 +168,7 @@ Lo que no se puede traducir se descarta y aparece en `descartados`: nunca se pie
 | `E_STATE_DUPLICATE_NAME` | Dos objetos con el mismo `codigo` | Renombrar; los códigos son únicos en el proyecto |
 | Todo apilado en el origen | El `.inp` no trae coordenadas | Pasar `--coords codigo,E,N` |
 | El proyecto aparece a 10 000 km | CRS del hemisferio equivocado | Usar `32717`/`32718`, nunca `32617` |
-| El pozo no tiene altura | Sólo llegó la clave, sin tapa | Añadir `cota_terreno` o traer el TIN |
+| El pozo no tiene altura | Sólo llegó la solera, sin tapa | Añadir `cota_terreno` o traer el TIN |
 | El inspector muestra `—` en un dato | El origen no traía ese número | Es correcto: no se inventa |
 
 ## Reglas de oro

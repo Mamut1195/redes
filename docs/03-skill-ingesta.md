@@ -60,6 +60,18 @@ atajos ya implementados (`importar dxf|geojson|terreno`) y con el script de SWMM
 | No acepta modelos rotos | Arco sin extremos → `E_TOPO_ORPHAN_LINK`; mismo nodo en ambos extremos → `E_TOPO_SELF_LOOP` |
 | Deja rastro | `fuentes[]` con app, archivo, formato y fecha |
 
+### Cotas: solera y clave no son lo mismo (F12-01)
+
+| Cota | Qué es | Dónde vive |
+|---|---|---|
+| Solera (invert) | Fondo interior del tubo o del pozo | nodo: `cota` del plan → `z_invert`; tramo: `cota_solera_inicio`/`cota_solera_fin` |
+| Clave | Punto más alto del interior del tubo: clave = solera + DI | tramo: `attrs.cota_clave` (inicio) y `attrs.cota_clave_fin` |
+| Tapa / rasante | Boca del pozo | `z_rim` |
+
+Una columna de clave nunca se copia como solera. En `plan_desde_tabla.py`, un tramo que trae
+solo la clave y declara `diametro_interior` (mm) entra con solera = clave − DI y un aviso; sin DI
+la solera queda sin dato. El GeoJSON exportado escribe `cota_solera` en los nodos.
+
 ## 4. Los tres niveles de la skill
 
 1. **Nivel 1 — atajo.** El origen ya está en un formato que el binario entiende:

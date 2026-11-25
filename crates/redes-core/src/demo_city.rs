@@ -266,7 +266,7 @@ pub fn ciudad() -> Project {
                 attrs: BTreeMap::from([
                     ("tipo_camara".to_string(), Value::Text("valvulas".into())),
                     ("diametro_interior".to_string(), Value::Num(1.20)),
-                    ("cota_clave".to_string(), Value::Num(z - 1.4)),
+                    ("cota_solera".to_string(), Value::Num(z - 1.4)),
                 ]),
                 datos: BTreeMap::new(),
                 estado: EstadoObjeto::Pendiente,
@@ -373,7 +373,7 @@ fn pozo(p: &mut Project, e: f64, n: f64, tipo: &str, diametro: f64) -> ElementId
         attrs: BTreeMap::from([
             ("diametro_interior".to_string(), Value::Num(diametro)),
             ("cota_tapa".to_string(), Value::Num(z)),
-            ("cota_clave".to_string(), Value::Num(z - 1.6)),
+            ("cota_solera".to_string(), Value::Num(z - 1.6)),
             ("material".to_string(), Value::Text("hormigon".into())),
         ]),
         datos: BTreeMap::new(),
@@ -412,7 +412,7 @@ fn disenar_troncal(p: &mut Project, cadena: &[ElementId], pendiente: f64) {
         let clave = claves[i];
         if let Some(n) = p.nodes.iter_mut().find(|n| n.id == *id) {
             n.z_invert = clave;
-            n.attrs.insert("cota_clave".to_string(), Value::Num(clave));
+            n.attrs.insert("cota_solera".to_string(), Value::Num(clave));
         }
         if i + 1 < cadena.len() {
             conectar(
@@ -454,7 +454,7 @@ fn disenar_lateral(p: &mut Project, cadena: &[ElementId], pendiente: f64) {
         if let Some(node) = p.nodes.iter_mut().find(|node| node.id == *id) {
             node.z_invert = clave;
             node.attrs
-                .insert("cota_clave".to_string(), Value::Num(clave));
+                .insert("cota_solera".to_string(), Value::Num(clave));
         }
     }
     for i in 0..n - 1 {

@@ -32,7 +32,7 @@ que debe ir en `plan.objetos[].familia`.
 
 | Entidad DXF | Se interpreta como | Nota |
 |---|---|---|
-| `POINT` en capa de nodo | nodo en (10, 20, 30) | cota 30 = clave/solera |
+| `POINT` en capa de nodo | nodo en (10, 20, 30) | cota 30 = solera |
 | `CIRCLE` en capa de nodo | tapa del pozo: (10, 20, 30) + radio 40 | la cota 30 se usa como `z_rim` |
 | `LINE` entre dos nodos | arco recto | se snapea a pozos dentro de la tolerancia |
 | `POLYLINE` con flag 70 = 8 | arco con vértices 3D | el trazado completo entra en `vertices` |
@@ -99,6 +99,15 @@ Reglas:
 - Una fila por objeto; `tipo` decide si es nodo o arco.
 - En arcos, `desde`/`hasta` son códigos de nodo, no coordenadas.
 - Las columnas vacías se omiten (no se rellenan con ceros).
+- **Solera ≠ clave.** `cota`, `cota_solera`, `solera`, `invert` son la solera (fondo interior).
+  `cota_clave`/`clave` es el punto más alto del interior del tubo (clave = solera + DI) y
+  **nunca** se copia como solera.
+- En tramos: `cota_solera_inicio`/`cota_solera_fin` (alias `solera_inicio`, `invert_inicio`…),
+  `cota_clave_inicio`/`cota_clave_fin` (alias `clave_inicio`, `clave_fin`) y
+  `diametro_interior` (alias `di`, en mm). Si el tramo trae solo la clave y declara el DI,
+  `plan_desde_tabla.py` escribe solera = clave − DI y lo avisa; sin DI la solera queda sin dato.
+  La clave declarada se conserva en `attrs.cota_clave` / `attrs.cota_clave_fin`.
+- En nodos, una columna de clave sin solera se conserva en `attrs.cota_clave` y se avisa.
 - Si el inventario trae «longitud» o «volumen», van a `datos` con su fuente.
 
 ---
