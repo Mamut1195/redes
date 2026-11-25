@@ -289,6 +289,49 @@ pub fn tubo(r_ext: f32, r_int: f32, alto: f32, caras: usize, m: Material) -> Mes
     mesh
 }
 
+/// Cono de reducción excéntrico: base de radio `r_base` centrada en el origen y boca de radio
+/// `r_boca` desplazada `dx` en X. Con `dx = -(r_base - r_boca)` la generatriz del lado −X queda
+/// vertical, alineada con la pared del fuste: es la cara por la que baja la escalera.
+///
+/// Con `espesor` se dibuja hueco (pared exterior, interior y canto de la boca), para que el corte y
+/// la vista por la boca muestren el interior; sin él es la superficie exterior con la boca tapada.
+pub fn tronco_excentrico(
+    r_base: f32,
+    r_boca: f32,
+    alto: f32,
+    dx: f32,
+    espesor: Option<f32>,
+    caras: usize,
+    m: Material,
+) -> Mesh {
+    let n = caras.max(6);
+    let mut mesh = Mesh::default();
+    let e = espesor.unwrap_or(0.0).clamp(0.0, r_boca.min(r_base) - 0.01);
+    for k in 0..n {
+        let a0 = k as f32 / n as f32 * std::f32::consts::TAU;
+        let a1 = (k + 1) as f32 / n as f32 * std::f32::consts::TAU;
+        let (c0, s0) = a0.sin_cos();
+        let (c1, s1) = a1.sin_cos();
+        let base = |r: f32, c: f32, s: f32| [r * c, r * s, 0.0];
+        let boca = |r: f32, c: f32, s: f32| [dx + r * c, r * s, alto];
+        let (eb0, eb1) = (base(r_base, c0, s0), base(r_base, c1, s1));
+        let (et0, et1) = (boca(r_boca, c0, s0), boca(r_boca, c1, s1));
+        mesh.tri(eb0, eb1, et1, m);
+        mesh.tri(eb0, et1, et0, m);
+        if espesor.is_some() {
+            let (ib0, ib1) = (base(r_base - e, c0, s0), base(r_base - e, c1, s1));
+            let (it0, it1) = (boca(r_boca - e, c0, s0), boca(r_boca - e, c1, s1));
+            mesh.tri(ib0, it1, ib1, m);
+            mesh.tri(ib0, it0, it1, m);
+            mesh.tri(et0, et1, it1, m);
+            mesh.tri(et0, it1, it0, m);
+        } else {
+            mesh.tri([dx, 0.0, alto], et0, et1, m);
+        }
+    }
+    mesh
+}
+
 /// Barra cilíndrica entre dos puntos (escalera, vástago, pasamanos).
 pub fn barra(a: [f32; 3], b: [f32; 3], radio: f32, caras: usize, m: Material) -> Mesh {
     let n = caras.max(4);
@@ -470,6 +513,16 @@ pub struct PozoParams {
     pub lod: u8,
 }
 
+/// Altura del cono de reducción de un pozo (m): 0,6–0,9 m es lo habitual en obra.
+pub const ALTO_CONO_MIN: f32 = 0.6;
+pub const ALTO_CONO_MAX: f32 = 0.9;
+/// Radio libre de la boca de acceso (m): 600 mm de paso, el de una tapa normalizada.
+pub const RADIO_BOCA_LIBRE: f32 = 0.30;
+/// Espesor de la pared del fuste y del cono (m).
+const PARED_POZO: f32 = 0.12;
+/// Separación entre la pared y el eje de los largueros de la escalera (m).
+const SEPARACION_ESCALERA: f32 = 0.15;
+
 /// Una parte del ensamblaje, con nombre, para poder separarla en la explosión.
 #[derive(Clone, Debug)]
 pub struct Parte {
@@ -503,36 +556,39 @@ pub fn pozo_partes(p: PozoParams) -> Vec<Parte> {
         ),
     });
     let arranque = 0.16;
-    // El cono es lo que hace reconocible un pozo: se dibuja en todos los niveles de detalle.
-    let alto_cono = if p.lod >= 2 {
-        (h * 0.25).clamp(0.3, 0.7)
-    } else {
-        0.35
-    };
+    let caras = if p.lod >= 2 { 16 } else { 8 };
+    // Cono excéntrico de 0,6–0,9 m (F12-11): la boca queda alineada con la pared del lado −X, que
+    // sigue vertical hasta la tapa, y la escalera baja pegada a esa pared justo bajo la boca. En
+    // pozos poco profundos el cono cede altura para que quede fuste. Es lo que hace reconocible un
+    // pozo: se dibuja en todos los niveles de detalle, con la misma altura.
+    let alto_cono = (h * 0.25)
+        .clamp(ALTO_CONO_MIN, ALTO_CONO_MAX)
+        .min(h - arranque - 0.2)
+        .max(0.0);
     let cuerpo = (h - arranque - alto_cono).max(0.2);
+    let r_int = (r - PARED_POZO).max(0.15);
+    let r_boca = (RADIO_BOCA_LIBRE + PARED_POZO).min(r);
+    // Centro de la boca (y de marco y tapa): desplazado hacia la escalera.
+    let x_boca = -(r - r_boca);
 
     // Fuste hueco: con pared, la sección muestra espesor y el pozo no parece un tambor macizo.
     partes.push(Parte {
         nombre: "fuste",
-        mesh: tubo(
-            r,
-            (r - 0.12).max(0.15),
-            cuerpo,
-            if p.lod >= 2 { 16 } else { 8 },
-            HORMIGON,
-        )
-        .mover([0.0, 0.0, arranque]),
+        mesh: tubo(r, r_int, cuerpo, caras, HORMIGON).mover([0.0, 0.0, arranque]),
     });
 
-    // Cono de reducción hasta el marco.
+    // Cono de reducción hasta el marco: hueco en el detalle completo, para ver la escalera por la
+    // boca y en el corte.
     if alto_cono > 0.05 {
         partes.push(Parte {
             nombre: "cono",
-            mesh: tronco(
+            mesh: tronco_excentrico(
                 r,
-                0.36,
+                r_boca,
                 alto_cono,
-                if p.lod >= 2 { 16 } else { 8 },
+                x_boca,
+                (p.lod >= 2).then_some(r - r_int),
+                caras,
                 HORMIGON,
             )
             .mover([0.0, 0.0, arranque + cuerpo]),
@@ -546,46 +602,60 @@ pub fn pozo_partes(p: PozoParams) -> Vec<Parte> {
     partes.push(Parte {
         nombre: "marco",
         mesh: tubo(r_tapa + 0.10, r_tapa + 0.02, 0.07, 16, HIERRO).mover([
-            0.0,
+            x_boca,
             0.0,
             z_marco - 0.07,
         ]),
     });
     // La cara superior de la tapa queda a ras de la cota de tapa (la calle), no por encima.
-    let mut tapa = cilindro(r_tapa, 0.055, 16, HIERRO).mover([0.0, 0.0, z_marco - 0.0275]);
+    let mut tapa = cilindro(r_tapa, 0.055, 16, HIERRO).mover([x_boca, 0.0, z_marco - 0.0275]);
     if p.lod >= 2 {
         // Dibujo grabado (rebajado) y bisagra del lado +X, ambos dentro del espesor de la tapa.
         tapa.extend(cilindro(r_tapa * 0.55, 0.012, 12, HORMIGON_OSCURO).mover([
-            0.0,
+            x_boca,
             0.0,
             z_marco - 0.05,
         ]));
-        tapa.extend(caja(0.10, 0.05, 0.035, HIERRO).mover([r_tapa * 0.85, 0.0, z_marco - 0.05]));
+        tapa.extend(caja(0.10, 0.05, 0.035, HIERRO).mover([
+            x_boca + r_tapa * 0.85,
+            0.0,
+            z_marco - 0.05,
+        ]));
     }
     partes.push(Parte {
         nombre: "tapa",
         mesh: tapa,
     });
 
-    // Escalera de acceso (dos largueros y peldaños) en el lado -X.
+    // Escalera de acceso (dos largueros, peldaños y anclajes a la pared) en el lado −X, separada
+    // 15 cm de la pared y bajo la boca: la pared de ese lado es vertical de la solera a la tapa,
+    // así que sube hasta 30 cm bajo el marco sin cortar el cono.
     if p.lod >= 2 {
         let mut esc = Mesh::default();
-        let x = -(r - 0.12);
-        // La escalera muere en el arranque del cono: antes subía hasta el marco y atravesaba el
-        // cono (18 cm de intersección que se veían en el corte).
-        let techo_escalera = (arranque + cuerpo - 0.10).max(arranque + 0.3);
-        for lado in [-0.16f32, 0.16] {
+        let x_pared = -r_int;
+        let x = x_pared + SEPARACION_ESCALERA;
+        // Media anchura que cabe en la boca a esa distancia del centro, con holgura.
+        let libre = r_boca - PARED_POZO;
+        let dx = x - x_boca;
+        let semi = (libre * libre - dx * dx).max(0.0).sqrt();
+        let lado = 0.16f32.min(semi * 0.8);
+        let suelo_escalera = arranque + 0.3;
+        let techo_escalera = (z_marco - 0.30).max(suelo_escalera + 0.1);
+        for y in [-lado, lado] {
             esc.extend(barra(
-                [x, lado, arranque + 0.3],
-                [x, lado, techo_escalera],
+                [x, y, suelo_escalera],
+                [x, y, techo_escalera],
                 0.022,
                 5,
                 HIERRO,
             ));
+            for z in [suelo_escalera + 0.05, techo_escalera - 0.05] {
+                esc.extend(barra([x_pared, y, z], [x, y, z], 0.015, 4, HIERRO));
+            }
         }
         let mut z = arranque + 0.45;
         while z < techo_escalera - 0.05 {
-            esc.extend(barra([x, -0.16, z], [x, 0.16, z], 0.018, 5, HIERRO));
+            esc.extend(barra([x, -lado, z], [x, lado, z], 0.018, 5, HIERRO));
             z += 0.3;
         }
         partes.push(Parte {
@@ -1211,6 +1281,89 @@ mod tests {
         let (lo, hi) = p.bbox();
         assert!((lo[2] - 0.0).abs() < 0.2, "arranca en la solera: {lo:?}");
         assert!((hi[2] - 2.0).abs() < 0.1, "la tapa llega al rim: {hi:?}");
+    }
+
+    fn parte<'a>(partes: &'a [Parte], nombre: &str) -> &'a Mesh {
+        &partes
+            .iter()
+            .find(|p| p.nombre == nombre)
+            .unwrap_or_else(|| panic!("falta la parte {nombre}"))
+            .mesh
+    }
+
+    /// F12-11: la escalera cae dentro de la boca (se puede bajar) y el cono mide 0,6–0,9 m.
+    #[test]
+    fn la_escalera_cae_dentro_de_la_boca() {
+        for (diametro, alto) in [(1.2f32, 3.0f32), (1.0, 2.0), (1.5, 5.0), (1.2, 1.6)] {
+            let partes = pozo_partes(PozoParams {
+                diametro,
+                rim: alto,
+                invert: 0.0,
+                tipo: 0,
+                lod: 2,
+            });
+            // Centro de la boca = centro de la tapa.
+            let (lo, hi) = parte(&partes, "tapa").bbox();
+            let centro = [(lo[0] + hi[0]) * 0.5, (lo[1] + hi[1]) * 0.5];
+            let (_, alto_fuste) = parte(&partes, "fuste").bbox();
+            for t in &parte(&partes, "escalera").tris {
+                for v in &t.p {
+                    let d = ((v[0] - centro[0]).powi(2) + (v[1] - centro[1]).powi(2)).sqrt();
+                    // Los anclajes van a la pared; los largueros y peldaños, bajo la boca.
+                    let en_pared = v[0] < -(diametro * 0.5 - PARED_POZO) + 0.05;
+                    assert!(
+                        en_pared || d < RADIO_BOCA_LIBRE,
+                        "DI {diametro}: un punto de la escalera queda a {d:.2} m del eje de la \
+                         boca (radio libre {RADIO_BOCA_LIBRE})"
+                    );
+                }
+            }
+            // La escalera sube por el cono hasta cerca de la tapa, no se queda en el fuste.
+            let (_, hi_esc) = parte(&partes, "escalera").bbox();
+            assert!(
+                hi_esc[2] > alto_fuste[2] + 0.2,
+                "DI {diametro}: la escalera acaba en {:.2}, fuste hasta {:.2}",
+                hi_esc[2],
+                alto_fuste[2]
+            );
+            assert!(hi_esc[2] < alto - 0.2, "la escalera no asoma por la tapa");
+
+            let (lo_c, hi_c) = parte(&partes, "cono").bbox();
+            let alto_cono = hi_c[2] - lo_c[2];
+            if alto >= 2.0 {
+                assert!(
+                    (ALTO_CONO_MIN - 1e-3..=ALTO_CONO_MAX + 1e-3).contains(&alto_cono),
+                    "cono de {alto_cono:.2} m"
+                );
+            }
+            // Excéntrico: la boca toca la pared del lado de la escalera.
+            assert!(
+                (lo_c[0] + diametro * 0.5).abs() < 0.02,
+                "la generatriz −X debe seguir la pared: {lo_c:?}"
+            );
+            assert!(centro[0] < -0.05, "la tapa se desplaza hacia la escalera");
+        }
+    }
+
+    /// El cono excéntrico se dibuja en todos los niveles de detalle (también en símbolo y simple).
+    #[test]
+    fn el_cono_excentrico_respeta_el_lod() {
+        for lod in 0..=2u8 {
+            let partes = pozo_partes(PozoParams {
+                diametro: 1.2,
+                rim: 3.0,
+                invert: 0.0,
+                tipo: 0,
+                lod,
+            });
+            let (lo, hi) = parte(&partes, "cono").bbox();
+            assert!(hi[2] - lo[2] >= ALTO_CONO_MIN - 1e-3, "LOD {lod}");
+            assert_eq!(
+                partes.iter().any(|p| p.nombre == "escalera"),
+                lod >= 2,
+                "la escalera es solo del detalle completo"
+            );
+        }
     }
 
     #[test]
