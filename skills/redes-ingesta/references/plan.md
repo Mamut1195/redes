@@ -53,8 +53,11 @@ Derivado de `crates/redes-core/src/ingest.rs` (`Plan`, `PlanProyecto`, `PlanObje
 | `subtipo` | texto | subtipo | si falta, el primero del registro: **no lo dejes vacío**, pregunta |
 | `e`, `n` | número | planta | **obligatorios**, en metros del CRS. Sin planta no hay nodo: se lista |
 | `cota` | número | `z_invert` | **solera**: fondo interior del pozo o cota de fondo de la estructura (m) |
-| `cota_terreno` | número | `z_terrain` y `z_rim` | rasante/terreno en el punto (m). También es la tapa (ver §4) |
-| `diametro` | número | `attrs.diametro_interior` | diámetro interior del **pozo en metros** (1.2), no en mm |
+| `cota_terreno` | número | `z_terrain` | rasante/terreno en el punto (m). Sin él y con `terreno` en el plan, se toma del TIN (con aviso) |
+| `cota_tapa` | número | `z_rim` | tapa del pozo (m). Si falta queda ausente: **no** se copia el terreno |
+| `cota_eje` | número | `datos.cota_eje` | **redes a presión**: cota del eje del tubo en el nudo (`Elev` de EPANET). No es solera: solo ubica el nodo en altura cuando no hay otra cota; el nodo queda sin solera, tapa ni terreno (se dibuja plano) |
+| `diametro` | número | `attrs.diametro_interior` | diámetro interior del **pozo en metros** (1.2), no en mm. > 20 m → aviso de unidad |
+| `desde`, `hasta` | texto | enlace | **solo dispositivos de enlace** (bomba, válvula, vertedero): `codigo` de los nodos que une en el origen. Ver §2.1 |
 | `attrs` | objeto | atributos | claves del registro de la familia; valores número, texto o booleano |
 | `datos` | objeto | `Dato` | `{ "valor": número, "unidad": "m", "fuente": "App (archivo)" }` |
 
@@ -64,12 +67,69 @@ Derivado de `crates/redes-core/src/ingest.rs` (`Plan`, `PlanProyecto`, `PlanObje
 |---|---|---|---|
 | `codigo`, `familia`, `subtipo` | texto | — | igual que en nodos |
 | `desde`, `hasta` | texto | extremos | **obligatorios**; `codigo` de nodos del mismo plan (o ya en el proyecto). Inexistente → descarte; iguales → `E_TOPO_SELF_LOOP` |
-| `diametro_mm` | entero | `d_mm` | **diámetro nominal (DN)** en mm, entero |
+| `diametro_mm` | entero | `d_mm` | **diámetro nominal (DN)** en mm, entero. < 10 → aviso de unidad. Sin DN el tramo queda sin diámetro (nunca se pone uno) |
+| `diametro_interior_mm` | número | `attrs.diametro_interior` | **diámetro interior (DI)** en mm, el que dan SWMM (`Geom1`) o EPANET (`Diam`). < 10 → aviso |
+| `seccion` | texto | `attrs.seccion` | forma: un valor de la lista `seccion` de la familia (`redes esquema --familia X`, campo `valores`). Fuera de lista o familia sin `seccion` → descarte con la lista |
+| `alto_m`, `ancho_m` | número | `datos.altura_seccion`, `datos.ancho_seccion` | alto y ancho interiores (m) de una sección no circular. No se convierten en DN |
 | `cota_solera_inicio` | número | tramo | solera del tubo en `desde` (m). Manda sobre la del pozo (caídas, saltos) |
 | `cota_solera_fin` | número | tramo | solera del tubo en `hasta` (m) |
-| `vertices` | `[[E,N,Z], …]` | trazado | ≥ 2 puntos, del inicio al fin, Z = **solera** en cada vértice. Con < 2 el trazado va recto de `cota_solera_*` (o la solera del pozo) |
-| `attrs` | objeto | atributos | `diametro_interior` (mm, lo usa el dibujo), `espesor_pared` (m), `cota_clave`, `cota_clave_fin`, `material`… |
+| `vertices` | `[[E,N,Z], …]` o `[[E,N], …]` | trazado | ≥ 2 puntos, del inicio al fin. Con Z: Z = **solera** en cada vértice. **Sin Z**: ver §2.2. Mezclar los dos → descarte. Con < 2 el trazado va recto de `cota_solera_*` (o la solera del pozo) |
+| `attrs` | objeto | atributos | `espesor_pared` (m), `cota_clave`, `cota_clave_fin`, `material`… (el DI va mejor en `diametro_interior_mm`) |
 | `datos` | objeto | `Dato` | igual que en nodos |
+
+### 2.1 Dispositivos de enlace (bombas, válvulas, vertederos)
+
+En SWMM y EPANET una bomba, una válvula o un vertedero es un **enlace** entre dos nodos; en Redes
+es un **nodo**. Para que la red no quede cortada, el nodo declara `desde` y `hasta` con los
+códigos del origen (`Node1`/`Node2`, `From`/`To`). Redes no crea tramos: la topología los ve
+unidos. Si el propio dispositivo es un extremo (la cámara húmeda que representa a la bomba de
+SWMM), declara solo el otro lado. Un código inexistente o el propio nodo → aviso, sin unir ese
+lado. Hoy esa unión vive en el `.redes`; el DXF de ida y vuelta todavía no la lleva.
+
+```json
+{ "tipo": "nodo", "codigo": "PRV1", "familia": "agua.valvula", "subtipo": "reduccion_presion",
+  "e": 760420.0, "n": 9795300.0, "cota_eje": 2505.2, "desde": "N4", "hasta": "N5" }
+```
+
+No partas un tramo en dos para meter el dispositivo ni inventes tramos cortos que lo unan.
+
+### 2.2 Vértices sin Z
+
+Si el origen da la planta de los vértices pero no su cota (EPANET, un SIG 2D), escríbelos como
+`[E,N]`. Redes interpola la Z **por longitud en planta** entre la solera del inicio y la del fin
+(`cota_solera_inicio/fin`; si faltan, la del pozo del extremo). Los extremos siguen siendo dato;
+la Z de los vértices intermedios se marca como derivada (`sin_dato: cota_vertices`, aviso). Si
+falta la solera de algún extremo, el tramo queda sin cotas de dato (línea gris). No calcules tú
+la Z de los vértices.
+
+```json
+{ "tipo": "arco", "codigo": "T1", "familia": "agua.tuberia", "subtipo": "impulsion",
+  "desde": "NB", "hasta": "TQ1", "diametro_mm": 160,
+  "vertices": [[759505.0, 9795005.0], [759800.0, 9795200.0], [760100.0, 9795450.0]] }
+```
+
+### 2.3 Secciones no circulares y diámetro interior
+
+```json
+{ "tipo": "arco", "codigo": "C1", "familia": "saneamiento.tuberia", "subtipo": "colector_pluvial",
+  "desde": "J1", "hasta": "J2", "diametro_mm": 600, "diametro_interior_mm": 600.0 },
+{ "tipo": "arco", "codigo": "G-5", "familia": "saneamiento.tuberia", "subtipo": "colector_sanitario",
+  "desde": "MH4", "hasta": "OUT1", "seccion": "ovoide", "alto_m": 0.6096 }
+```
+
+`G-5` no lleva `diametro_mm`: un ovoide no tiene DN y Redes no le pone uno.
+
+### 2.4 Unidades (siempre las mismas)
+
+| Magnitud | Unidad | Campos |
+|---|---|---|
+| Coordenadas, cotas, longitudes | m | `e`, `n`, `cota*`, `vertices`, `alto_m`, `ancho_m` |
+| Diámetro de un **nodo** (pozo, estructura) | **m** | `diametro` |
+| Diámetro de un **tubo** (DN y DI) | **mm** | `diametro_mm`, `diametro_interior_mm`, `attrs.diametro_interior` del arco |
+| Caudal / presión | L/s / m.c.a. | atributos y `datos` |
+
+La CLI **avisa** (no corrige) lo que parece otra unidad: `diametro` de nodo > 20 m, DN o DI de tubo
+< 10 mm, `alto_m`/`ancho_m` > 20 m. Si sale el aviso, revisa la conversión; no lo ignores.
 
 ### `datos` frente a `attrs`
 
@@ -81,23 +141,23 @@ Derivado de `crates/redes-core/src/ingest.rs` (`Plan`, `PlanProyecto`, `PlanObje
 
 ## 3. Trampas del contrato (lee esto antes de escribir)
 
-1. **Los campos desconocidos se ignoran en silencio.** `trazado` en vez de `vertices`,
-   `cota_solera_inicial`, `nota`, `estado` o `unidades` no dan error: se pierden. Usa solo los
-   nombres de §2.
-2. **El importador aún rellena huecos** (F12-03 pendiente): sin `cota_terreno` toma `cota`; sin
-   `cota` pone terreno − 1,5; sin `diametro_mm` pone DN 200; sin `subtipo` el primero. Por eso
-   **todo lo ausente se lista en el informe** al usuario: lo que el visor muestre ahí no es dato.
-3. **No hay campo de tapa separado de la rasante**: `cota_terreno` alimenta ambos. Si el origen
-   trae tapa y rasante distintas, `cota_terreno` = rasante y `attrs.cota_tapa` = tapa (pozo).
-4. **Unidades mezcladas**: `diametro` del nodo en **m**; `diametro_mm` del arco y
-   `attrs.diametro_interior` del arco en **mm**; cotas y longitudes en m; caudales en L/s; presión
-   en m.c.a. (unidades de los atributos: columna `unidad` de `redes esquema`).
+1. **Un campo desconocido rechaza el plan entero** con `E_FMT_CAMPO` (código 7): el mensaje dice
+   el objeto (`objetos[3] (arco C1)`), el campo y el nombre válido más parecido (`«trazado»
+   (¿quiso decir «vertices»?)`). Vale también para `proyecto` y para las claves de cada dato
+   (`valor`, `unidad`, `fuente`). Corrige y repite; no se importa nada hasta que esté limpio.
+2. **Nada se rellena** (F12-03): sin `cota_terreno` no hay terreno (salvo el TIN del plan, con
+   aviso); sin `cota` no hay solera; sin `cota_tapa` no hay tapa; sin `diametro_mm` no hay DN; sin
+   `subtipo`, el primero del registro (**no lo dejes vacío**, pregunta). Un nodo sin ninguna cota
+   (ni `cota_eje`) se descarta. Todo lo ausente sale en `detalle_avisos`.
+3. **Tapa y rasante**: `cota_tapa` es la tapa; `cota_terreno`, la rasante. Si el origen solo da
+   una y es la tapa, ponla en `cota_tapa` (y en `cota_terreno` solo si el origen dice que coinciden).
+4. **Unidades**: §2.4. Diámetro de nodo en m; de tubo en mm.
 5. **Códigos repetidos** (también contra el proyecto abierto) → descarte. Importa en un proyecto
    nuevo; reimportar sobre el mismo duplica códigos.
 6. Las **claves retiradas** se traducen solas (`agua.captacion:toma_rio` →
    `agua.bocatoma:barraje_fijo`) y salen en `renombrados`. No las uses a propósito.
-7. **Atributos `enum`**: `redes esquema` dice `"tipo": "enum"` pero no lista las opciones. Búscalas en
-   `crates/redes-core/src/families*.rs` (`AttrType::Enum(&[...])` junto a la clave) o pregunta.
+7. **Atributos de lista** (`"tipo": "enum"`): `redes esquema --familia X` da sus valores
+   admitidos en `valores`. Usa uno de ellos tal cual; si ninguno encaja, pregunta.
 
 ## 4. Cotas: solera, clave, rasante, tapa y recubrimiento
 
@@ -105,9 +165,10 @@ Derivado de `crates/redes-core/src/ingest.rs` (`Plan`, `PlanProyecto`, `PlanObje
 |---|---|---|
 | **Solera** (invert, fondo, *cota de fondo*) | punto más bajo del **interior** del tubo o del pozo | nodo `cota`; tramo `cota_solera_inicio/fin` y Z de `vertices` |
 | **Clave** (crown, *corona interior*) | punto más alto del interior del tubo: **clave = solera + DI** | tramo `attrs.cota_clave` (inicio) y `attrs.cota_clave_fin` |
-| **Eje** | centro del tubo: solera + DI/2 | no va en el plan (lo dibuja Redes) |
+| **Eje** de un tramo | centro del tubo: solera + DI/2 | no va en el plan (lo dibuja Redes) |
+| **Eje** de una red a presión | cota del nudo en EPANET (`Elev`) | nodo `cota_eje` (no `cota`) |
 | **Rasante / terreno** | superficie del terreno o de la vía | nodo `cota_terreno`; tramo `attrs.cota_terreno` si el origen lo da |
-| **Tapa** (rim) | cota de la tapa del pozo | `cota_terreno` si coincide con la rasante; si no, `attrs.cota_tapa` |
+| **Tapa** (rim) | cota de la tapa del pozo | nodo `cota_tapa` |
 | **Profundidad del pozo** | tapa − solera | `attrs.profundidad` solo si el origen la declara |
 | **Recubrimiento** | rasante − (clave + espesor de pared) = tierra sobre el tubo | `attrs.recubrimiento` (agua) o dato, **solo si el origen lo declara** |
 
@@ -131,7 +192,8 @@ redes capacidades                               # alias de `redes esquema` (sin 
 ```
 
 Por familia, `esquema` da: `clave`, `rol` (`node`, `link`, `device`, `support`), `geometria`,
-`prefijo`, `atributos[]` (`clave`, `unidad`, `tipo`, `requerido`) y `subtipos[]` (`clave`,
+`prefijo`, `atributos[]` (`clave`, `unidad`, `tipo`, `requerido` y, si es una lista, `valores`)
+y `subtipos[]` (`clave`,
 `requeridos`). Reglas:
 
 - Familias con `rol: link` van como `arco`; las demás (`node`, `device`, `support`) como `nodo`.
@@ -142,20 +204,24 @@ Por familia, `esquema` da: `clave`, `rol` (`node`, `link`, `device`, `support`),
 
 ```powershell
 redes proyecto nuevo --nombre prueba --crs EPSG:32717 --salida out\prueba.redes
-redes -p out\prueba.redes --dry-run importar plan --archivo plan.json   # ver nota
+redes -p out\prueba.redes --pretty --dry-run importar plan --archivo plan.json   # valida, no escribe
 redes -p out\prueba.redes --pretty importar plan --archivo plan.json
 redes -p out\prueba.redes objeto lista
 redes -p out\prueba.redes vista --salida out\vista.svg
 ```
 
-- **Nota:** hoy `--dry-run` solo confirma que el archivo existe (devuelve `bytes`); no valida
-  objetos. Mientras sea así, valida importando en un **proyecto de prueba** nuevo y lee
-  `detalle_descartes` y `renombrados`. Cuando `--dry-run` informe descartes, úsalo primero.
-- Importar con descartes sigue siendo `ok:true`: **lee siempre** `detalle_descartes`.
-- Errores de archivo: `E_FMT_PARSE` (JSON roto o campo obligatorio ausente, p. ej. `e` o
-  `familia`), `E_FMT_UNSUPPORTED` (esquema), `E_IO_NOT_FOUND`.
+- `--dry-run` hace **toda** la validación y la importación en una copia en memoria y devuelve el
+  mismo informe que la importación real (`nodos`, `arcos`, `detalle_descartes`,
+  `detalle_avisos`, `renombrados`, errores), con `dry_run: true` y `guardado: false`. El proyecto
+  no se escribe. Úsalo siempre primero.
+- Importar con descartes sigue siendo `ok:true`: **lee siempre** `detalle_descartes` y
+  `detalle_avisos`.
+- Errores de archivo (nada se importa): `E_FMT_PARSE` (JSON roto o campo obligatorio ausente,
+  p. ej. `e` o `familia`), `E_FMT_CAMPO` (campo que no es del contrato), `E_FMT_UNSUPPORTED`
+  (esquema), `E_CRS`, `E_IO_NOT_FOUND`.
 - Motivos de descarte típicos: `familia desconocida`, `subtipo … no existe en …`, `código
-  duplicado`, `extremo inexistente (A → B)`, `E_TOPO_SELF_LOOP`.
+  duplicado`, `extremo inexistente (A → B)`, `E_TOPO_SELF_LOOP`, `sin ninguna cota`,
+  `seccion «x» no está en la lista`, vértices mezclados.
 
 ## 7. Ejemplos trabajados
 

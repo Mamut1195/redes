@@ -154,6 +154,10 @@ pub const COTA_TAPA: &str = "cota_tapa";
 /// Clave de [`Node::sin_dato`] y [`Link::sin_dato`]: falta la cota de solera (en un tramo, la de
 /// su trazado).
 pub const COTA_SOLERA: &str = "cota_solera";
+/// Clave de [`Link::sin_dato`]: los vértices intermedios no traían cota y su Z se interpoló por
+/// longitud entre las soleras declaradas del tramo (F12-15). Es geometría de dibujo, no dato; las
+/// soleras de los extremos sí lo son.
+pub const COTA_VERTICES: &str = "cota_vertices";
 /// Clave de [`Link::sin_dato`]: falta el diámetro nominal.
 pub const DIAMETRO_NOMINAL: &str = "diametro_nominal";
 
@@ -327,6 +331,18 @@ pub struct JournalEntry {
     pub cuando: Option<String>,
 }
 
+/// Un dispositivo puntual que une nodos sin tramo (F12-15): una bomba o una válvula de EPANET, un
+/// vertedero de SWMM. `desde`/`hasta` son los nodos del origen; uno puede faltar cuando el propio
+/// dispositivo es un extremo (la cámara húmeda que representa a la bomba).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Enlace {
+    pub dispositivo: ElementId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub desde: Option<ElementId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hasta: Option<ElementId>,
+}
+
 /// El documento: la única fuente de verdad de lo que se ve.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Project {
@@ -354,6 +370,11 @@ pub struct Project {
     pub biblioteca: Option<String>,
     pub nodes: Vec<Node>,
     pub links: Vec<Link>,
+    /// Dispositivos de enlace (bomba, válvula, vertedero) que en el origen unían nodos sin un tramo
+    /// propio (F12-15). En Redes son nodos; esto le dice a la topología a qué nodos están unidos,
+    /// sin inventar tramos. Vacío en los `.redes` anteriores.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub enlaces: Vec<Enlace>,
     pub(crate) next_slot: u32,
     #[serde(default)]
     pub journal: Vec<JournalEntry>,
@@ -386,6 +407,7 @@ impl Project {
             entorno: None,
             nodes: Vec::new(),
             links: Vec::new(),
+            enlaces: Vec::new(),
             next_slot: 1,
             journal: Vec::new(),
             biblioteca: None,

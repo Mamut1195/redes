@@ -20,10 +20,10 @@
 | pozo inicial / final | `DESDE`/`HASTA`, `P. INICIAL`/`P. FINAL`, `PZ AGUAS ARRIBA`/`ABAJO`, `NODO I`/`NODO J` | `desde`/`hasta` |
 | E, N | `ESTE`/`NORTE`, `X`/`Y`, `COORD. E` | nodo `e`, `n` |
 | longitud | `L`, `LONG.`, `LONGITUD (m)` | `datos.longitud_origen` |
-| diámetro | `Ø`, `D`, `DN`, `DIÁM. (mm)`, `D (pulg)` | `diametro_mm` = DN; si la hoja da DI, `attrs.diametro_interior` (mm). Pulgadas × 25,4 |
+| diámetro | `Ø`, `D`, `DN`, `DIÁM. (mm)`, `D (pulg)` | `diametro_mm` = DN; si la hoja da DI, `diametro_interior_mm` (mm). Pulgadas × 25,4 |
 | pendiente | `S`, `PEND. (%)`, `S (‰)`, `J` | `attrs.pendiente` en **m/m** (% ÷ 100, ‰ ÷ 1000) |
 | cota de terreno / rasante | `CT`, `COTA TERRENO`, `RASANTE`, `CR` inicio y fin | nodo `cota_terreno`; tramo `attrs.cota_terreno` si es por tramo |
-| cota de tapa | `CT`, `COTA TAPA` | `cota_terreno` o `attrs.cota_tapa` (pozo) |
+| cota de tapa | `CT`, `COTA TAPA` | `cota_tapa` (y `cota_terreno` solo si la hoja dice que coinciden) |
 | solera | `CS`, `CF`, `COTA FONDO`, `COTA SOLERA`, `INVERT`, `COTA BATEA` (Colombia) | tramo `cota_solera_inicio/fin`; pozo `cota` |
 | clave | `CC`, `COTA CLAVE`, `COTA CORONA` | tramo `attrs.cota_clave` / `attrs.cota_clave_fin` |
 | profundidad / altura de pozo | `H`, `PROF.`, `H POZO` | `attrs.profundidad` (pozo) |

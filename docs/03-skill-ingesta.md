@@ -62,10 +62,22 @@ validación de la CLI.
 | No acepta modelos rotos | Extremo inexistente → descarte; mismo nodo en ambos extremos → `E_TOPO_SELF_LOOP` |
 | Deja rastro | `fuentes[]` con app, archivo, formato y fecha |
 
-Pendiente (F12-03): hoy `import_plan` todavía rellena huecos (terreno = solera, solera =
-terreno − 1,5, DN 200, subtipo por defecto). Por eso la skill obliga a listar los ausentes en el
-informe. Pendiente también: que `--dry-run` valide el plan sin escribir (hoy solo comprueba el
-archivo); la skill valida importando en un proyecto de prueba.
+Contrato sólido (F12-15):
+
+- Un campo que no es del contrato rechaza el plan con `E_FMT_CAMPO`, el objeto, el campo y el
+  nombre válido más parecido (`«trazado» (¿quiso decir «vertices»?)`). Antes se perdía en silencio.
+- `--dry-run` de `importar plan` (y de `dxf` y `terreno`) importa en una copia en memoria y da el
+  mismo informe sin escribir.
+- Unidades fijas: diámetro de nodo en m; DN (`diametro_mm`) y DI (`diametro_interior_mm`) del tubo
+  en mm. Lo que parece otra unidad (nodo > 20 m, tubo < 10 mm) se avisa, no se corrige.
+- `seccion` (lista de la familia), `alto_m`/`ancho_m` → `datos.altura_seccion/ancho_seccion`; sin
+  DN no hay diámetro.
+- `vertices` `[E,N]` sin Z: Z interpolada entre soleras y marcada `sin_dato: cota_vertices`.
+- Bombas, válvulas y vertederos declaran `desde`/`hasta` (`Project.enlaces`): la topología los ve
+  unidos sin tramos inventados.
+- Nudos a presión: `cota_eje` → `datos.cota_eje`; no es solera.
+- `redes esquema` publica los `valores` de cada atributo de lista.
+- La vuelta del DXF de Redes no convierte en dato las Z de dibujo de un tramo sin soleras.
 
 ### Cotas: solera y clave no son lo mismo (F12-01, F12-02)
 
@@ -73,7 +85,9 @@ archivo); la skill valida importando en un proyecto de prueba.
 |---|---|---|
 | Solera (invert) | Fondo interior del tubo o del pozo | nodo: `cota` → `z_invert`; tramo: `cota_solera_inicio`/`cota_solera_fin` y Z de `vertices` |
 | Clave | Punto más alto del interior del tubo: clave = solera + DI | tramo: `attrs.cota_clave` (inicio) y `attrs.cota_clave_fin` |
-| Rasante / tapa | Superficie / boca del pozo | `cota_terreno` (→ `z_terrain` y `z_rim`); tapa distinta: `attrs.cota_tapa` |
+| Rasante | Superficie del terreno | `cota_terreno` → `z_terrain` |
+| Tapa | Boca del pozo | `cota_tapa` → `z_rim` (no se copia de la rasante) |
+| Eje (red a presión) | Cota del nudo de EPANET | `cota_eje` → `datos.cota_eje` |
 | Recubrimiento | rasante − (clave + espesor) | solo si el origen lo declara |
 
 Una clave nunca se copia como solera; solera = clave − DI solo con el DI declarado.

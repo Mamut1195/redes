@@ -36,9 +36,10 @@ puntos de terreno `E,N,Z` con `redes importar terreno --archivo t.csv --epsg 327
 5. **Escribe el plan** (`plan.json`) y, a la vez, la lista de ausentes y descartes.
 6. **Valida** en un proyecto de prueba nuevo (`redes proyecto nuevo --nombre prueba --salida
    out\prueba.redes`): primero `redes -p out\prueba.redes --dry-run importar plan --archivo
-   plan.json` y luego sin `--dry-run`. Hoy el `--dry-run` solo comprueba que el archivo existe;
-   la importación de prueba es la que da los descartes (`plan.md` §6).
-7. **Corrige según los diagnósticos** (`detalle_descartes`, `renombrados`, `E_FMT_PARSE`) y repite
+   plan.json` y luego sin `--dry-run`. El `--dry-run` valida e importa en una copia en memoria
+   y da el mismo informe que la importación real, sin escribir (`plan.md` §6).
+7. **Corrige según los diagnósticos** (`detalle_descartes`, `detalle_avisos`, `renombrados`,
+   `E_FMT_CAMPO` con el campo válido sugerido, `E_FMT_PARSE`) y repite
    hasta que lo único descartado sea lo que tú decidiste descartar.
 8. **Importa** en el proyecto real del usuario (proyecto nuevo o sin esos códigos: los repetidos se
    descartan).
@@ -78,8 +79,9 @@ sus `.plan.json`.
 5. **Pregunta en vez de adivinar** (ver abajo). Si el usuario no sabe, elige la opción más
    conservadora y dilo en el informe como supuesto suyo, no tuyo.
 6. **No calcules hidráulica** ni nada derivado: volúmenes, pendientes, caudales, presiones,
-   recubrimientos. Las conversiones de unidad, de referencia (clave → solera con DI) y el reparto
-   de Z en vértices que el contrato exige no son cálculo; dilas igualmente.
+   recubrimientos. Las conversiones de unidad y de referencia (clave → solera con DI) no son
+   cálculo; dilas igualmente. La Z de los vértices no la repartas tú: escríbelos `[E,N]` y Redes
+   la interpola y la marca como derivada (`plan.md` §2.2).
 7. **No pierdas objetos en silencio.** Cada objeto del origen acaba en el plan o en la lista de
    descartes con su motivo. Cuenta: objetos del origen = plan + descartados.
 8. **Solo campos del contrato.** El importador ignora campos desconocidos sin avisar.
@@ -106,5 +108,5 @@ Al terminar, en un mensaje corto:
 - **ausentes**: qué dato falta en qué objetos (p. ej. «terreno ausente en J3, MH3, PJ1»). Hasta
   que el importador deje de rellenar huecos, advierte que el visor puede mostrar un valor
   provisional donde dice ausente (`plan.md` §3);
-- conversiones hechas (US → SI, clave → solera, Z repartida en vértices);
+- conversiones hechas (US → SI, clave → solera); vértices sin Z (`[E,N]`);
 - la vista SVG generada.

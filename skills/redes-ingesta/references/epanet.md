@@ -43,30 +43,37 @@ plan, lee `plan.md`.
 
 | Origen | Familia:subtipo | Campos |
 |---|---|---|
-| `JUNCTION` | **no es una cámara** ni un pozo. Proponer `comun.accesorio` según los enlaces que llegan (1 `tapon`, 2 `union` o `reduccion` si cambian los diámetros, 3 `tee`, 4 `cruz`) y **confirmar** con el usuario; 0 o > 4 enlaces → listar | `cota = Elev` (con la salvedad de §3), **sin** `cota_terreno`; `attrs.tipo_accesorio` = subtipo; `datos.demanda_base` (L/s), o `demanda_base_1`, `_2`… por categoría |
+| `JUNCTION` | **no es una cámara** ni un pozo. Proponer `comun.accesorio` según los enlaces que llegan (1 `tapon`, 2 `union` o `reduccion` si cambian los diámetros, 3 `tee`, 4 `cruz`) y **confirmar** con el usuario; 0 o > 4 enlaces → listar | `cota_eje = Elev` si el modelador lo puso en el eje del tubo (lo habitual), o `cota_terreno = Elev` si es el terreno (pregunta, §3). **Nunca** `cota`: no es solera. `attrs.tipo_accesorio` = subtipo; `datos.demanda_base` (L/s), o `demanda_base_1`, `_2`… por categoría |
 | `RESERVOIR` | sin familia propia: **pregunta** qué es (`agua.captacion:<subtipo>`, `agua.bocatoma`, `agua.tanque`…). Sin respuesta, no entra | `datos.carga_hidraulica = Head`. **Sin `cota`** |
 | `TANK` | `agua.tanque:<pregunta>` (EPANET no distingue apoyado, elevado ni enterrado) | `cota = attrs.cota_piso = Elev`; `cota_nivel_min = Elev + MinLvl`; `cota_nivel_max = Elev + MaxLvl`; `attrs.diametro` en **mm** si no hay `VolCurve`; `datos.nivel_inicial`. **Sin `volumen_util`** |
-| `PIPE` | `agua.tuberia:<pregunta>` (`conduccion`, `aduccion`, `impulsion`, `distribucion_primaria`…); EPANET no lo dice. Proponer por posición (aguas abajo de una bomba hasta el tanque: `impulsion`) y confirmar | `diametro_mm = Diam` (pulgadas × 25,4); `datos.longitud_origen`; `H-W` → `attrs.coef_hazen`; `D-W` → `attrs.rugosidad_abs` (mm); `C-M` → `datos.rugosidad_n`; `CV` → `attrs.tipo_valvula = "retencion"` |
-| `PUMP` | `agua.bombeo:booster_en_linea` (o la estación que diga el usuario), en la planta de `Node1` | `cota` de `Node1` si la tiene; `attrs.potencia_unitaria` (kW) si hay `POWER`. Sin arco |
-| `VALVE` `PRV` | `agua.valvula:reduccion_presion`, en `Node1` | `attrs.tipo_valvula = "reduccion_presion"`, `diametro_nominal` (mm), `consigna_presion` (m) |
+| `PIPE` | `agua.tuberia:<pregunta>` (`conduccion`, `aduccion`, `impulsion`, `distribucion_primaria`…); EPANET no lo dice. Proponer por posición (aguas abajo de una bomba hasta el tanque: `impulsion`) y confirmar | `diametro_mm` / `diametro_interior_mm` según §5 (pulgadas × 25,4); `datos.longitud_origen`; `H-W` → `attrs.coef_hazen`; `D-W` → `attrs.rugosidad_abs` (mm); `C-M` → `datos.rugosidad_n`; `CV` → `attrs.tipo_valvula = "retencion"` |
+| `PUMP` | `agua.bombeo:booster_en_linea` (o la estación que diga el usuario), en la planta de `Node1` | la cota de `Node1` en el mismo campo (`cota_eje`) si la tiene; `attrs.potencia_unitaria` (kW) si hay `POWER`; `desde = Node1`, `hasta = Node2`. Sin arco |
+| `VALVE` `PRV` | `agua.valvula:reduccion_presion`, en `Node1` | `cota_eje` de `Node1`, `desde = Node1`, `hasta = Node2`, `attrs.tipo_valvula = "reduccion_presion"`, `diametro_nominal` (mm), `consigna_presion` (m) |
 | `VALVE` `PSV` | `agua.valvula:sostenedora` | `consigna_presion` |
 | `VALVE` `FCV` | `agua.valvula:reguladora_caudal` | `tipo_valvula = "reguladora"`, `consigna_caudal` (L/s) |
 | `VALVE` `TCV`, `PBV`, `GPV`, `PCV` | sin equivalente directo: pregunta (una `TCV` suele ser una compuerta o mariposa estrangulada) | — |
 
 **Dispositivos de enlace.** Bombas y válvulas son enlaces en EPANET y nodos en Redes: se ubican
-en `Node1` y no se unen con arcos. La red queda cortada en ese punto (p. ej. `CAPT` y `NB` en el
-ejemplo SI): dilo en el informe.
+en `Node1`, no se unen con arcos y declaran `desde = Node1` y `hasta = Node2` (`plan.md` §2.1):
+la topología los ve conectados. Si uno de esos nodos no entra en el plan (p. ej. un `RESERVOIR`
+sin respuesta), ese lado queda sin unir y el informe lo dice.
 
-**Vértices.** El contrato pide Z en cada vértice. EPANET no la da: se reparte por longitud en
-planta entre las cotas de los extremos y se dice en el informe. Si un extremo no tiene cota, no
-pongas `vertices`.
+**Nudos.** Una familia de nudo genérico no hace falta: `comun.accesorio` con `tapon`, `union`,
+`reduccion`, `tee` o `cruz` según los enlaces cubre los nudos de EPANET (no se añade un subtipo
+«nudo», que se dibujaría como tapón). Su cota va en `cota_eje`: el nodo queda sin solera y se
+dibuja plano a esa cota; los tubos sin soleras salen como línea sin dato, que es lo que EPANET
+da.
+
+**Vértices.** EPANET no da Z: escribe `[VERTICES]` como `[E,N]` (`plan.md` §2.2). Sin soleras en
+los extremos el tramo queda sin cotas de dato; no las repartas tú.
 
 ## 5. Diámetro nominal frente a interior
 
 `Diam` de EPANET es el diámetro **hidráulico** (interior) que escribió el modelador, pero muchos
 escriben el DN comercial (160 para un PVC de 160 mm). Pregunta cuál es. Si es interior y el
-usuario da el DN, `diametro_mm` = DN y `attrs.diametro_interior` = `Diam`; si no, `diametro_mm` =
-`Diam` y dilo.
+usuario da el DN, `diametro_mm` = DN y `diametro_interior_mm` = `Diam`; si no, `diametro_mm` =
+`Diam` y dilo. Los ejemplos de §6 escriben `Diam` como DN porque son valores comerciales (160,
+110, 90).
 
 ## 6. Ejemplos trabajados (`crates/redes-core/tests/fixtures/`)
 
@@ -75,28 +82,28 @@ usuario da el DN, `diametro_mm` = DN y `attrs.diametro_interior` = `Diam`; si no
 | Línea del `.inp` | Objeto del plan |
 |---|---|
 | 106 `Units LPS`, 107 `Headloss H-W` | m, mm, L/s; rugosidad → `coef_hazen` |
-| 8 `N2 2512.50 1.20 P1` + T3, T4, T5 | `N2` `comun.accesorio:tee`, `cota 2512.5`, `demanda_base 1.2` L/s |
+| 8 `N2 2512.50 1.20 P1` + T3, T4, T5 | `N2` `comun.accesorio:tee`, `cota_eje 2512.5`, `demanda_base 1.2` L/s |
 | 7 `N1` + T2 (160) y T3 (110) | `N1` `reduccion` |
 | 16 `CAPT 2478.00` | `CAPT` `agua.captacion:pozo_profundo` (respuesta del usuario; la curva `CB1` dice «bomba sumergible del pozo»), `datos.carga_hidraulica 2478`, **sin `cota`** |
 | 20 `TQ1 2530.00 2.50 0.30 3.20 12.00` | `TQ1` `agua.tanque:apoyado_cilindrico`, `cota_nivel_min 2530.3`, `cota_nivel_max 2533.2`, `diametro 12000`, `nivel_inicial 2.5`; sin volumen |
-| 24 `T1 NB TQ1 850 160 140` + 137-138 vértices | `T1` `agua.tuberia:impulsion` (aguas abajo de `B1`, confirmado), DN 160, 4 vértices con Z repartida |
+| 24 `T1 NB TQ1 850 160 140` + 137-138 vértices | `T1` `agua.tuberia:impulsion` (aguas abajo de `B1`, confirmado), DN 160, 4 vértices `[E,N]` (sin soleras: línea sin dato) |
 | 29 `T6 … CV` | `T6` con `attrs.tipo_valvula "retencion"` |
-| 33 `B1 CAPT NB HEAD CB1` | `B1` `agua.bombeo:booster_en_linea` en la planta de `CAPT`, sin cota (el reservorio no tiene) |
-| 37 `PRV1 N4 N5 90 PRV 25` | `PRV1` `agua.valvula:reduccion_presion` en `N4`, `consigna_presion 25.0` |
+| 33 `B1 CAPT NB HEAD CB1` | `B1` `agua.bombeo:booster_en_linea` en la planta de `CAPT`, `desde CAPT`, `hasta NB`, sin cota (el reservorio no tiene): se descarta y se lista |
+| 37 `PRV1 N4 N5 90 PRV 25` | `PRV1` `agua.valvula:reduccion_presion` en `N4`, `cota_eje 2505.2`, `desde N4`, `hasta N5`, `consigna_presion 25.0` |
 
 ### `epanet_us_gpm.inp` → `epanet_us_gpm.plan.json` (GPM, D-W)
 
 | Línea del `.inp` | Objeto del plan |
 |---|---|
 | 100 `Units GPM`, 101 `Headloss D-W` | pies, pulgadas, psi, hp; ε en milipies |
-| 7 `J20 690.00 150` | `J20` `cota 210.312`, `demanda_base 9.4635` L/s |
+| 7 `J20 690.00 150` | `J20` `cota_eje 210.312`, `demanda_base 9.4635` L/s |
 | 9 `J40 640.00 80` + 41-42 `[DEMANDS]` 50 y 30 | `J40` `demanda_base_1 3.1545`, `demanda_base_2 1.8927` (la de 80 se sustituye) |
 | 14 `LAKE 620.00` | **no está en el plan**: el usuario no dijo qué era; listado |
 | 18 `TWR 780 15 5 30 40` | `TWR` `cota 237.744`, `cota_nivel_max 246.888` (780+30 ft), `diametro 12192` (40 ft) |
 | 23 `102 J10 J20 2000 8 0.85` + 126 vértice | `102` DN 203 (8 in), `rugosidad_abs 0.2591` mm, `longitud_origen 609.6` |
 | 30 `PU1 LAKE J10 POWER 25` | `PU1` `agua.bombeo:booster_en_linea` en la planta de `LAKE`, `potencia_unitaria 18.6425` kW |
-| 34 `V1 J30 J50 6 PRV 40` | `V1` en `J30`, `diametro_nominal 152`, `consigna_presion 28.1375` m |
-| 35 `V2 J20 J50 4 FCV 100` | `V2` `reguladora_caudal`, `consigna_caudal 6.309` L/s |
+| 34 `V1 J30 J50 6 PRV 40` | `V1` en `J30`, `desde J30`, `hasta J50`, `diametro_nominal 152`, `consigna_presion 28.1375` m |
+| 35 `V2 J20 J50 4 FCV 100` | `V2` `reguladora_caudal`, `desde J20`, `hasta J50`, `consigna_caudal 6.309` L/s |
 
 ## 7. Trampas conocidas
 

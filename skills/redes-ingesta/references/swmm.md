@@ -49,7 +49,7 @@ Las **coordenadas no dependen de `FLOW_UNITS`**: son unidades de mapa. `[MAP] Un
 | `[WEIRS]` | `Name From To Type CrestHt Qcoeff [Gated] [EndCon] [EndCoeff] [Surcharge] [RoadWidth] [RoadSurf] [CoeffCurve]` | `Type`: `TRANSVERSE`, `SIDEFLOW`, `V-NOTCH`, `TRAPEZOIDAL`, `ROADWAY`. `CrestHt` sigue a `LINK_OFFSETS` (altura sobre la solera de `From` o cota). Longitud de cresta = `Geom2` de su `[XSECTIONS]` |
 | `[OUTLETS]` | `Name From To Offset Type …` | salida regulada por curva |
 | `[COORDINATES]` | `Node X Y` | planta de los nodos. Sin fila → el nodo **no tiene planta**: no lo pongas en (0,0); pide coordenadas o descártalo con sus tramos |
-| `[VERTICES]` | `Link X Y` (en orden) | vértices intermedios. El tramo de SWMM es recto en perfil: la Z de cada vértice se reparte por longitud en planta entre las soleras de los extremos (lo exige el contrato, que pide Z; dilo en el informe) |
+| `[VERTICES]` | `Link X Y` (en orden) | vértices intermedios. Escríbelos `[E,N]` (sin Z): Redes interpola la Z por longitud entre las soleras del tramo y la marca como derivada (`plan.md` §2.2) |
 | `[TAGS]` | `Node\|Link Name Tag` | etiquetas del usuario: a veces dicen qué es (`Manhole`, `Inlet`, `Camara`). Úsalas como pista, confírmalas |
 
 Otras secciones (`[SUBCATCHMENTS]`, `[SUBAREAS]`, `[INFILTRATION]`, `[RAINGAGES]`, `[DWF]`,
@@ -70,11 +70,11 @@ Comprueba subtipos y atributos con `redes esquema --familia <clave>`.
 | `OUTFALL` | `saneamiento.descarga:<pregunta>` (`emisario_muro`, `emisario_talud`, `emisario_subacuatico`…) | `cota = Elev`, `attrs.cota_entrega = Elev`, `attrs.tipo_descarga = "emisario"`. SWMM no describe la estructura |
 | `STORAGE` del que aspira una bomba | `saneamiento.bombeo:camara_humeda` | `cota = Elev`, `attrs.profundidad = MaxDepth`, `datos.profundidad_max` |
 | `STORAGE` sin bomba | `saneamiento.camara:compensacion` (tanque de tormenta: pregunta) | `attrs.altura_util = MaxDepth`. **Sin** `volumen_util` |
-| `CONDUIT` `CIRCULAR` / `FILLED_CIRCULAR` | `saneamiento.tuberia:colector_<sistema>` | `diametro_mm = Geom1` (pies × 304,8 o m × 1000), `cota_solera_inicio/fin`, `attrs.rugosidad_n`, `datos.longitud_origen`; desfase ≠ 0 → `datos.desfase_entrada/salida`; `FILLED_CIRCULAR`: `datos.altura_sedimento = Geom2` |
+| `CONDUIT` `CIRCULAR` / `FILLED_CIRCULAR` | `saneamiento.tuberia:colector_<sistema>` | `diametro_mm = Geom1` (pies × 304,8 o m × 1000; es el DN que asume el plan, dilo) y `diametro_interior_mm = Geom1` (SWMM da el interior), `cota_solera_inicio/fin`, `attrs.rugosidad_n`, `datos.longitud_origen`; desfase ≠ 0 → `datos.desfase_entrada/salida`; `FILLED_CIRCULAR`: `datos.altura_sedimento = Geom2` |
 | `CONDUIT` `FORCE_MAIN` | `saneamiento.tuberia:impulsion` | `diametro_mm = Geom1`; `Geom2` → `attrs.coef_hazen` (H-W) o `attrs.rugosidad_abs` en mm (D-W; pies × 304,8) |
 | `CONDUIT` `RECT_CLOSED` | `saneamiento.canal:box_culvert` | `attrs.altura_celda = Geom1`, `ancho_celda = Geom2`, `numero_celdas = Barrels`, `seccion = "rectangular"` |
 | `CONDUIT` `RECT_OPEN` / `TRAPEZOIDAL` / `TRIANGULAR` | `saneamiento.canal:rectangular` / `trapezoidal` / `triangular` | `altura_muro = Geom1`; `ancho_plantilla` (y `base`) = `Geom2`; `talud = Geom3` si `Geom3 = Geom4` (si no, ambos a `datos`); triangular: `profundidad = Geom1`, `ancho = Geom2` (ancho superior) |
-| `CONDUIT` ovoide, herradura, arco, elipses, `CUSTOM`… | `saneamiento.tuberia:colector_<sistema>` **sin** `diametro_mm` | `datos.altura_seccion = Geom1`, `datos.ancho_seccion = Geom2`. Redes dibuja tubo circular: dilo |
+| `CONDUIT` ovoide, herradura, arco, elipses, `CUSTOM`… | `saneamiento.tuberia:colector_<sistema>` **sin** `diametro_mm` | `seccion` (`ovoide`, `herradura`, `arco`, `elipse`, `otra`), `alto_m = Geom1`, `ancho_m = Geom2` si es > 0. Redes dibuja tubo circular: dilo |
 | `CONDUIT` `IRREGULAR`, `PARABOLIC`, `POWER`, `STREET` | `saneamiento.canal` si el usuario lo confirma; si no, fuera | sin geometría: lista en el informe |
 | `PUMP` | sin arco: la representa su `STORAGE` (`saneamiento.bombeo`). Bomba en línea (no aspira de un almacenamiento): sin familia, se lista | `datos` del `STORAGE` si el usuario quiere el estado/arranque |
 | `WEIR` `SIDEFLOW` | `saneamiento.descarga:alivio_lateral`, ubicado en el nodo `From` | `cota` = solera de `From`, `attrs.tipo_descarga = "alivio"`, `cota_cresta`, `longitud_vertedero = Geom2` |
@@ -86,8 +86,9 @@ Comprueba subtipos y atributos con `redes esquema --familia <clave>`.
 El `[TITLE]` es una pista. Si no hay certeza, **pregunta**; no elijas.
 
 **Dispositivos de enlace** (bombas, vertederos, orificios): en Redes son nodos puntuales y no se
-unen con arcos. Se ubican en el nodo `From` con su planta y cota; el informe dice qué conectaban.
-No inventes tramos para unirlos.
+unen con arcos. Se ubican en el nodo `From` con su planta y cota y declaran `desde = From`,
+`hasta = To` (`plan.md` §2.1): la topología los ve conectados. La cámara húmeda que representa a
+una bomba declara solo `hasta = To`. No inventes tramos para unirlos.
 
 ## 6. Ejemplos trabajados (`crates/redes-core/tests/fixtures/`)
 
@@ -100,7 +101,7 @@ No inventes tramos para unirlos.
 | 74 `J3 2508.90 0` | `J3` pozo **sin** `cota_terreno` (MaxDepth 0) |
 | 80 `OF1 2505.00 FREE` | `OF1` `saneamiento.descarga:emisario_muro` (subtipo confirmado con el usuario), `cota_entrega 2505.0` |
 | 85 `ST1 2506.00 4.00 … FUNCTIONAL 0 0 120` + 98 `P1 ST1 OF1` | `ST1` `saneamiento.bombeo:camara_humeda`, `profundidad 4.0`; sin volumen; `P1` no es objeto |
-| 90 `C1 J1 J2 85.0 0.013 0 0.25` + 113 `CIRCULAR 0.60` + 159 vértice | `C1` DN 600, `cota_solera_inicio 2510.5`, `cota_solera_fin 2510.05` (2509.80 + 0.25), `desfase_salida 0.25`, 3 vértices |
+| 90 `C1 J1 J2 85.0 0.013 0 0.25` + 113 `CIRCULAR 0.60` + 159 vértice | `C1` DN 600, `cota_solera_inicio 2510.5`, `cota_solera_fin 2510.05` (2509.80 + 0.25), `desfase_salida 0.25`, `diametro_interior_mm 600`, 3 vértices `[E,N]` |
 | 92 `C3 … 0.30 0` + 115 `RECT_CLOSED 1.00 1.50` | `C3` `saneamiento.canal:box_culvert`, `altura_celda 1.0`, `ancho_celda 1.5`, solera inicio 2509.2 |
 | 93 `C4` + 116 `TRAPEZOIDAL 1.20 2.00 1.5 1.5` | `C4` `saneamiento.canal:trapezoidal`, `altura_muro 1.2`, `ancho_plantilla 2.0`, `talud 1.5` |
 | 103 `OR1` orificio | no está en el plan: sin familia, listado |
@@ -117,7 +118,7 @@ No inventes tramos para unirlos.
 | 63 `P-1 … 820.00 816.25` + 82 `CIRCULAR 1.0` | `P-1` DN 305 (1 ft), soleras 249.936 → 248.793; `desfase_salida 0.2286` |
 | 64 `P-2 … * *` + 137-138 vértices | `P-2` soleras = las de `MH2` y `MH3`; 4 vértices |
 | 66 `FM-1` + 85 `FORCE_MAIN 0.5 130` | `FM-1` `impulsion`, DN 152, `coef_hazen 130` |
-| 67 `G-5` + 86 `EGG 2.0` | `G-5` sin `diametro_mm`, `datos.altura_seccion 0.6096` |
+| 67 `G-5` + 86 `EGG 2.0` | `G-5` sin `diametro_mm`, `seccion "ovoide"`, `alto_m 0.6096` |
 | 77 `WR1 MH2 OUT1 TRANSVERSE 819.00` + 87 `RECT_OPEN 1.0 4.0` | `WR1` `vertedero_cresta`, `cota_cresta 249.6312`, `altura_cresta 1.0668`, `longitud_vertedero 1.2192` |
 
 ## 7. Trampas conocidas
