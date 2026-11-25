@@ -12,7 +12,8 @@ Documento de traspaso: qué está hecho, qué falta y por dónde seguir. Las cif
 | Modelos | importación, validación, medidas, caché, dibujo en el pase 3D, política de pesados, foco sobre el modelo, **selector en el inspector** y **anclas de conexión** (se leen del `.glb` y la tubería nace en el puerto, no en el centro) |
 | Cantidades | `redes cantidades`: unidades, longitudes por DN/material, volúmenes, pesos, discrepancias y CSV |
 | CAD | ida y vuelta DXF sin pérdida (46 familias y 7 arcos vuelven idénticos), **bloques con atributos** por familia y GeoJSON con atributos |
-| Calidad | **244 pruebas** (núcleo 135 + 13 validar + 5 acta + 8 reimportar + 31 ingesta + 3 cotas + 2 rendimiento, app 18, CLI 17 + 3 + 4 + 2 acta + 2 reimportar, doctest 1), arnés de 14 mutaciones, CI en GitHub **en verde** |
+| Calidad | **249 pruebas** (núcleo 138 + 13 validar + 5 acta + 8 reimportar + 31 ingesta + 3 cotas + 2 rendimiento, app 18, CLI 19 + 3 + 4 + 2 acta + 2 reimportar, doctest 1), arnés de 15 mutaciones, CI en GitHub **en verde** |
+| Formato (F15-01, D10) | solo se abre la versión vigente: `redes.project/3` (otra versión → `E_PROJ_SCHEMA`, con pista para regenerar desde la entrega) y `redes.plan/1` (otra → `E_FMT_VERSION`); sin migraciones antes de v1; demos de `demo/` regeneradas a `/3` |
 | Revisor (F13) | `redes validar` geométrico con panel Validación (F13-01, D6), `redes perfil` con botón Perfil en el inspector (F13-02), observaciones con historial (`objeto observar/observaciones/cerrar-observacion`, panel en el inspector, `redes.project/3`, F13-03, D7; sin conversión de `.redes` anteriores), `redes proyecto diff` (F13-05, compara estado y cada observación por id), `redes acta` en CSV (Excel, BOM y «;») o HTML imprimible (F13-04, sin autor si no se registró, D2), `redes importar reimportar` (F13-06, D9: empareja por código, conserva estados y observaciones, reinicia a pendiente el aprobado cuyo diseño cambió y exige `--aceptar-bajas` para dar de baja objetos con revisión) |
 | Producto | plantilla, licencias de modelos, journal con fecha, paquete portable y **release 0.1.0 publicada** |
 | Documentación | 23 documentos; los informes antiguos llevan aviso de cifras corregidas |
@@ -26,8 +27,8 @@ y en Linear (MAM-1085…MAM-1139). Se trabaja **por fases en orden**; no se abre
 |---|---|
 | F12 — Corrección de dominio | **cerrada** (F12-01…F12-15). Ingesta por skill guiada (D5) |
 | F13 — Herramientas del revisor | **cerrada** (F13-01…F13-06): `redes validar`, perfil longitudinal, observaciones con historial, `redes acta`, `proyecto diff` y `importar reimportar` |
-| F14 — Rendimiento con redes reales | **siguiente** (índices, cámara 3D sin regenerar, LOD/instanciado) |
-| F15 — Arquitectura | pendiente (migración de formato P0, agregado, catálogo como datos, errores tipados) |
+| F14 — Rendimiento con redes reales | **en curso**: F14-01, F14-02 y F14-03 en ramas aparte (índices, cámara 3D sin regenerar, LOD/instanciado) |
+| F15 — Arquitectura | pendiente; **F15-01 hecha por adelantado** (solo la versión vigente del `.redes`, D10, MAM-1115). Falta agregado, catálogo como datos y errores tipados |
 | F16 — Release v1 | pendiente (F16-01 ya cerrada por F12-09) |
 
 Decisiones abiertas del usuario: A1 (vertedero), A2 (pozo profundo), sumideros de la topología
@@ -44,8 +45,8 @@ Pendientes menores conocidos de F13 (no bloquean F14):
 ## Cómo retomar
 
 ```powershell
-cargo test --workspace                       # 244 pruebas
-powershell -File scripts/mutar.ps1           # 14 mutaciones
+cargo test --workspace                       # 249 pruebas
+powershell -File scripts/mutar.ps1           # 15 mutaciones
 powershell -File scripts/empaquetar.ps1      # zip portable
 gh run list --limit 3                        # CI
 ```
@@ -56,6 +57,7 @@ el pase del pintor donde hoy se cae a la pieza paramétrica.
 ## Deuda conocida
 
 - `redes-cli/src/main.rs` concentra todos los comandos; si crece, toca partirlo por dominio.
+- `Project::migrar_cotas` (`redes-core/src/model.rs`) ya no tiene llamadas fuera de su prueba tras F15-01 (D10: sin migraciones): borrarla, con su prueba, después de integrar F14-01 para no chocar con esa rama.
 - El `journal` no guarda identidad (decisión D2); si algún día se pide, es un campo opcional más.
 - El `.glb` del catálogo y de la ciudad incluyen el terreno: las cifras de triángulos de `docs/21`
   lo tienen en cuenta.

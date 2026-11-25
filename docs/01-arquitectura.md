@@ -240,7 +240,7 @@ No hay animación de fondo; una ventana quieta no dibuja.
 | # | Decisión | Estado |
 |---|---|---|
 | A1 | **No calcular.** Todo número es un `Dato` con fuente. | nueva (revierte hidráulica y tierras) |
-| A2 | Documento **JSON** versionado (`redes.project/2`) en vez de SQLite | nueva; SQLite cuando el tamaño lo pida |
+| A2 | Documento **JSON** versionado (`redes.project/2`) en vez de SQLite (hoy `/3`, ver D10) | nueva; SQLite cuando el tamaño lo pida |
 | A3 | Modelo por **filas tipadas + esquema de familia** en vez de columnar | simplificación de v0.1; el esquema sigue siendo la fuente |
 | A4 | Dispositivos **no parten** el arco | revierte la propuesta del consejo |
 | A5 | Aprobación **por objeto** con estado global bloqueado | nueva |
