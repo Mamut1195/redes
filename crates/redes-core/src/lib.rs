@@ -34,6 +34,7 @@ pub mod parts;
 pub mod parts_cadena;
 pub mod perfil;
 pub mod project_io;
+pub mod reimportar;
 pub mod revision;
 pub mod terrain;
 pub mod topology;
