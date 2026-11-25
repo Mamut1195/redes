@@ -195,7 +195,7 @@ que esté mal interpretado.
 | F12-12 · [MAM-1096](https://linear.app/mamutsystems/issue/MAM-1096) | P1 | **Recubrimiento bien definido** | `demo_city.rs:568` llama recubrimiento a tapa − solera (es profundidad); recubrimiento = rasante − (clave + espesor) | nombre y fórmula corregidos donde aparezca | 0,5 |
 | F12-13 · [MAM-1097](https://linear.app/mamutsystems/issue/MAM-1097) | P1 | **Sistema de coordenadas controlado** | EPSG:32717 fijo (`ingest.rs:67`): admitir 17S/18S; comparar `Terrain.epsg` con `Project.crs`; detectar GeoJSON en lon/lat | GeoJSON en grados → error `E_CRS` legible; terreno en otra zona → aviso | 1,5 |
 | F12-14 · [MAM-1098](https://linear.app/mamutsystems/issue/MAM-1098) | P2 | **Longitud 3D en cantidades** | `cantidades.rs:92` mide en planta; añadir longitud inclinada | conducción con 20 % de pendiente reporta ambas longitudes | 0,5 |
-| F12-15 | P0 | **Contrato del plan sólido** (surge de D5) | `--dry-run` que valida; campos desconocidos = error con sugerencia; unidades coherentes; DI y secciones no circulares; vértices sin Z; dispositivos conectados; `cota_eje`; `esquema` con valores de listas; ida y vuelta DXF de soleras y enlaces | cada punto con prueba; fixtures SWMM/EPANET importan | 2 |
+| F12-15 · [MAM-1140](https://linear.app/mamutsystems/issue/MAM-1140) | P0 | **Contrato del plan sólido** (surge de D5) | `--dry-run` que valida; campos desconocidos = error con sugerencia; unidades coherentes; DI y secciones no circulares; vértices sin Z; dispositivos conectados; `cota_eje`; `esquema` con valores de listas; ida y vuelta DXF de soleras y enlaces | cada punto con prueba; fixtures SWMM/EPANET importan | 2 |
 
 **Total F12: 25 días.**
 
@@ -264,7 +264,7 @@ Objetivo: fluidez con 5k–50k tramos y 2k–20k pozos (hoy solo con cientos).
 
 | ID | P | Ticket | Alcance | Aceptación | Días |
 |---|---|---|---|---|---|
-| F16-01 · [MAM-1127](https://linear.app/mamutsystems/issue/MAM-1127) | P0 | **DXF ilegible es error** | `importar dxf` con basura devuelve `ok:true`, 0 objetos y sube la revisión | `ok:false`, código `E_FMT_PARSE`, revisión sin cambios | 0,5 |
+| F16-01 · [MAM-1127](https://linear.app/mamutsystems/issue/MAM-1127) | P0 | **DXF ilegible es error** (hecho por F12-09) | `importar dxf` con basura devuelve `ok:true`, 0 objetos y sube la revisión | `ok:false`, código `E_FMT_PARSE`, revisión sin cambios | 0,5 |
 | F16-02 · [MAM-1128](https://linear.app/mamutsystems/issue/MAM-1128) | P0 | **README con la sintaxis real** | `importar` exige `--archivo`; el README pone la ruta suelta | todos los comandos del README se ejecutan (prueba que los extrae) | 0,5 |
 | F16-03 · [MAM-1129](https://linear.app/mamutsystems/issue/MAM-1129) | P1 | **Fixtures reales y verificación externa** | EPANET, SWMM y DXF de Civil 3D reales; pruebas de ida y vuelta con nombre explícito; validar DXF y glTF con un lector externo | `cargo test` cubre los cinco formatos con archivos reales | 2 |
 | F16-04 · [MAM-1130](https://linear.app/mamutsystems/issue/MAM-1130) | P1 | **Cobertura de módulos críticos** | `ingest.rs` (3 pruebas en 1.246 líneas), `export.rs` (3), `families_extra.rs` y `parts_cadena.rs` (0), CLI (solo contrato) | cobertura medida (`cargo llvm-cov`) ≥ 60 % en `ingest` y `export` | 2 |
