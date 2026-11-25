@@ -140,7 +140,7 @@ Regla dura: **`ok:false` ⇔ código de salida ≠ 0**.
 redes proyecto nuevo --nombre "Alcantarillado Norte" --crs EPSG:32717 --salida norte.redes
 redes proyecto demo --salida la-esperanza.redes
 redes proyecto info --pretty
-redes proyecto aprobar          # falla si quedan objetos pendientes
+redes proyecto aprobar          # falla si quedan objetos pendientes (E_STATE_PENDING) u observados (E_STATE_OBSERVED)
 ```
 
 Resolución del proyecto: `--project` / `-p` → `$REDES_PROJECT` → el primer `*.redes` de la

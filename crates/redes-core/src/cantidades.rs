@@ -18,6 +18,8 @@ pub struct Fila {
     pub cantidad: f64,
     /// De dónde sale la cifra (`modelo`, `atributo`, `conteo`, `medido`…).
     pub fuente: String,
+    /// Longitud inclinada (3D) cuando la fila es una longitud; `cantidad` sigue siendo la de planta.
+    pub cantidad_3d: Option<f64>,
 }
 
 /// Densidades por defecto (t/m³) para pasar volumen a peso cuando el material es conocido.
@@ -75,13 +77,14 @@ pub fn por_familia(p: &Project) -> Vec<Fila> {
             unidad: "ud",
             cantidad: n as f64,
             fuente: "conteo".into(),
+            cantidad_3d: None,
         })
         .collect()
 }
 
 /// Longitud de tubería agrupada por familia, diámetro y material.
 pub fn longitudes(p: &Project) -> Vec<Fila> {
-    let mut acumula: BTreeMap<(String, u32, String), f64> = BTreeMap::new();
+    let mut acumula: BTreeMap<(String, u32, String), (f64, f64)> = BTreeMap::new();
     for l in p.links.iter().filter(|l| !l.deleted) {
         let material = l
             .get("material")
@@ -89,16 +92,19 @@ pub fn longitudes(p: &Project) -> Vec<Fila> {
             .unwrap_or("sin_material")
             .to_string();
         let clave = (l.family.clone(), l.d_mm, material);
-        *acumula.entry(clave).or_default() += l.length_2d();
+        let e = acumula.entry(clave).or_default();
+        e.0 += l.length_2d();
+        e.1 += l.length_3d();
     }
     acumula
         .into_iter()
-        .map(|((familia, dn, material), m)| Fila {
+        .map(|((familia, dn, material), (m, m3d))| Fila {
             grupo: "longitud".into(),
             clave: format!("{familia} · DN {dn} · {material}"),
             unidad: "m",
             cantidad: m,
             fuente: "geometria".into(),
+            cantidad_3d: Some(m3d),
         })
         .collect()
 }
@@ -123,6 +129,7 @@ pub fn de_modelos(p: &Project) -> Vec<Fila> {
             unidad: "m3",
             cantidad: v,
             fuente: "modelo".into(),
+            cantidad_3d: None,
         });
     }
     for (familia, a) in area {
@@ -132,6 +139,7 @@ pub fn de_modelos(p: &Project) -> Vec<Fila> {
             unidad: "m2",
             cantidad: a,
             fuente: "modelo".into(),
+            cantidad_3d: None,
         });
     }
     filas
@@ -171,6 +179,7 @@ pub fn pesos(p: &Project) -> Vec<Fila> {
                 unidad: "t",
                 cantidad: v * dens,
                 fuente: "densidad_declarada".into(),
+                cantidad_3d: None,
             })
         })
         .collect()
@@ -239,15 +248,16 @@ pub fn totales(filas: &[Fila]) -> Vec<(String, &'static str, f64)> {
 
 /// CSV con cabecera y BOM (Excel en español abre bien los acentos y las comas).
 pub fn a_csv(filas: &[Fila]) -> String {
-    let mut s = String::from("\u{feff}grupo;clave;unidad;cantidad;fuente\n");
+    let mut s = String::from("\u{feff}grupo;clave;unidad;cantidad;fuente;cantidad_3d\n");
     for f in filas {
         s.push_str(&format!(
-            "{};{};{};{:.3};{}\n",
+            "{};{};{};{:.3};{};{}\n",
             f.grupo,
             f.clave.replace(';', ","),
             f.unidad,
             f.cantidad,
-            f.fuente
+            f.fuente,
+            f.cantidad_3d.map(|v| format!("{v:.3}")).unwrap_or_default()
         ));
     }
     s
@@ -284,9 +294,30 @@ mod tests {
         let csv = a_csv(&por_familia(&p));
         assert!(csv.starts_with('\u{feff}'));
         assert!(csv.lines().count() > 5);
-        assert!(csv.lines().next().unwrap().contains("cantidad"));
+        assert!(csv.lines().next().unwrap().ends_with("fuente;cantidad_3d"));
     }
 
+    #[test]
+    fn la_longitud_3d_va_junto_a_la_de_planta() {
+        let mut p = crate::demo_cadena::cadena();
+        // Un tramo inclinado: la 3D supera a la de planta y la de planta no cambia.
+        let l = p.links.iter_mut().find(|l| !l.deleted).unwrap();
+        l.path.last_mut().unwrap().z += 25.0;
+        let plana: f64 = longitudes(&p).iter().map(|f| f.cantidad).sum();
+        let inclinada: f64 = longitudes(&p).iter().filter_map(|f| f.cantidad_3d).sum();
+        let directo: f64 = p
+            .links
+            .iter()
+            .filter(|l| !l.deleted)
+            .map(|l| l.length_2d())
+            .sum();
+        assert!((plana - directo).abs() < 1e-6);
+        assert!(inclinada > plana + 1e-6, "{inclinada} vs {plana}");
+        let csv = a_csv(&longitudes(&p));
+        let fila = csv.lines().nth(1).unwrap();
+        assert_eq!(fila.split(';').count(), 6);
+        assert!(!fila.ends_with(';'));
+    }
     fn biblioteca_con_volumen(volumen: f64) -> crate::biblioteca::Biblioteca {
         crate::biblioteca::Biblioteca {
             schema: "redes.biblioteca/1".into(),

@@ -486,6 +486,7 @@ fn run(cli: Cli, t0: Instant) -> i32 {
                         "unidad": f.unidad,
                         "cantidad": round(f.cantidad, 3),
                         "fuente": f.fuente,
+                        "cantidad_3d": f.cantidad_3d.map(|v| round(v, 3)),
                     })).collect::<Vec<_>>(),
                     "totales": totales,
                     "discrepancias": discrepancias.iter().map(|d| json!({
