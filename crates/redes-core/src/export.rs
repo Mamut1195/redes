@@ -33,22 +33,20 @@ pub const CAPA_OBSERVACIONES: &str = "OBSERVACIONES";
 /// Capa de datos de la ida y vuelta (la lee `importar dxf`).
 pub const CAPA_INFO: &str = "REDES_INFO";
 
-// --- Lectura de los datos que pueden faltar: un solo sitio por dato, para que el día que pasen a
-// ser opcionales en el modelo solo cambien estas funciones. ---
+// --- Lectura de los datos que pueden faltar: se leen siempre con los lectores del modelo, que
+// devuelven `None` cuando el origen no trajo el dato (F12-03), aunque el campo guarde un valor de
+// dibujo. ---
 
-/// Cota de terreno del nodo, si existe.
 fn cota_terreno(node: &Node) -> Option<f64> {
-    Some(node.z_terrain).filter(|z| z.is_finite())
+    node.cota_terreno().filter(|z| z.is_finite())
 }
 
-/// Cota de tapa del nodo, si existe.
 fn cota_tapa(node: &Node) -> Option<f64> {
-    Some(node.z_rim).filter(|z| z.is_finite())
+    node.cota_tapa().filter(|z| z.is_finite())
 }
 
-/// Cota de solera del nodo (su cota de referencia, F12-01), si existe.
 fn cota_solera(node: &Node) -> Option<f64> {
-    Some(node.z_invert).filter(|z| z.is_finite())
+    node.cota_solera().filter(|z| z.is_finite())
 }
 
 /// Diámetro interior declarado del pozo (m). Sin valor por defecto: si falta, no se acota.
@@ -57,9 +55,9 @@ fn diametro_pozo(node: &Node) -> Option<f64> {
         .filter(|d| d.is_finite() && *d > 0.0)
 }
 
-/// DN declarado del tramo (mm); `0` es «sin dato».
+/// DN declarado del tramo (mm); `None` si el origen no lo trajo.
 fn dn_mm(link: &Link) -> Option<u32> {
-    Some(link.d_mm).filter(|d| *d > 0)
+    link.dn()
 }
 
 /// Exporta el modelo a DXF ASCII (R12 cómodo para cualquier CAD).
@@ -235,7 +233,8 @@ impl Dibujo {
     }
 
     /// Observación de la revisión junto al objeto: texto (código, estado, nota) y, si está
-    /// observado, una nube (círculo) que lo rodea. Nada si está pendiente y sin nota.
+    /// observado, una nube (círculo) que lo rodea. Entra solo si está observado o tiene nota
+    /// (cualquier estado): un aprobado o pendiente sin nota no lleva rótulo.
     fn observacion(
         &mut self,
         code: &str,
@@ -602,7 +601,16 @@ fn giro_legible(a: P3, b: P3) -> f64 {
 }
 
 fn info_nodo(d: &mut Dibujo, node: &Node) {
-    let q = [node.pos.x, node.pos.y, node.z_rim];
+    let q = [
+        node.pos.x,
+        node.pos.y,
+        cota_tapa(node)
+            .or(cota_solera(node))
+            .or(cota_terreno(node))
+            .unwrap_or(0.0),
+    ];
+    // Una cota ausente va vacía: el importador la lee como «sin dato» (F12-03).
+    let cota = |z: Option<f64>| z.map(|z| z.to_string()).unwrap_or_default();
     let carga = format!(
         "REDES|1|N|{}|{}|{}|{}|{}|{}|{}|{}|{}",
         node.family,
@@ -611,11 +619,9 @@ fn info_nodo(d: &mut Dibujo, node: &Node) {
         node.estado.key(),
         node.pos.x,
         node.pos.y,
-        node.z_rim,
-        node.z_invert,
-        cota_terreno(node)
-            .map(|z| z.to_string())
-            .unwrap_or_default()
+        cota(cota_tapa(node)),
+        cota(cota_solera(node)),
+        cota(cota_terreno(node))
     );
     d.info(q, &carga);
     info_attrs_datos(d, q, &node.code, &node.attrs, &node.datos);
@@ -635,7 +641,7 @@ fn info_tramo(d: &mut Dibujo, link: &Link) {
         link.ty,
         link.code,
         link.estado.key(),
-        dn_mm(link).unwrap_or(0),
+        dn_mm(link).map(|d| d.to_string()).unwrap_or_default(),
         trazado.join(";")
     );
     d.info(q, &carga);
@@ -736,7 +742,7 @@ pub fn export_geojson(p: &Project, path: &Path) -> Result<usize, String> {
             "codigo": n.code,
             "familia": n.family,
             "subtipo": n.ty,
-            "cota_terreno": n.z_terrain,
+            "cota_terreno": cota_terreno(n),
             "estado": n.estado.key(),
             "nota": n.nota,
         });
@@ -749,10 +755,13 @@ pub fn export_geojson(p: &Project, path: &Path) -> Result<usize, String> {
         }
         // La cota del nodo es su solera (fondo interior), no la clave (F12-01). Va después de
         // los atributos para que el valor tipado no se pise con su copia en texto.
-        props["cota_solera"] = serde_json::json!(n.z_invert);
+        props["cota_solera"] = serde_json::json!(cota_solera(n));
         features.push(serde_json::json!({
             "type": "Feature",
-            "geometry": { "type": "Point", "coordinates": [n.pos.x, n.pos.y, n.z_invert] },
+            "geometry": { "type": "Point", "coordinates": match cota_solera(n) {
+                Some(z) => vec![n.pos.x, n.pos.y, z],
+                None => vec![n.pos.x, n.pos.y],
+            } },
             "properties": props,
         }));
     }
@@ -764,7 +773,7 @@ pub fn export_geojson(p: &Project, path: &Path) -> Result<usize, String> {
             "codigo": l.code,
             "familia": l.family,
             "subtipo": l.ty,
-            "diametro_mm": l.d_mm,
+            "diametro_mm": dn_mm(l),
             "longitud_m": l.length_2d(),
             "estado": l.estado.key(),
             "nota": l.nota,
@@ -785,7 +794,7 @@ pub fn export_geojson(p: &Project, path: &Path) -> Result<usize, String> {
         }
         features.push(serde_json::json!({
             "type": "Feature",
-            "geometry": { "type": "LineString", "coordinates": l.path.iter().map(|q| [q.x, q.y, q.z]).collect::<Vec<_>>() },
+            "geometry": { "type": "LineString", "coordinates": l.path.iter().map(|q| if l.cotas_trazado().is_some() { vec![q.x, q.y, q.z] } else { vec![q.x, q.y] }).collect::<Vec<_>>() },
             "properties": props,
         }));
     }
@@ -1288,6 +1297,40 @@ mod tests {
                 .iter()
                 .any(|t| t.starts_with(&format!("{} ", pendiente.code)))
         );
+    }
+
+    /// F12-03: un pozo sin terreno y un tramo sin DN no se rotulan y siguen sin ese dato tras
+    /// exportar e importar.
+    #[test]
+    fn lo_que_falta_no_se_rotula_y_vuelve_como_falta() {
+        let mut p = crate::demo::project();
+        p.nodes[0].z_terrain = -777.0;
+        p.nodes[0].sin_dato = vec![crate::model::COTA_TERRENO.to_string()];
+        p.links[0].d_mm = 200;
+        p.links[0].sin_dato = vec![crate::model::DIAMETRO_NOMINAL.to_string()];
+        let (cn, cl) = (p.nodes[0].code.clone(), p.links[0].code.clone());
+        let t = exporta(&p, "faltas");
+        assert!(!t.contains("-777"), "el valor de dibujo no se escribe");
+        let l = lee_dxf(&t);
+        for (_, e) in &l.entidades {
+            if let Some(x) = g(e, 1)
+                && x.starts_with(&cl)
+                && g(e, 8).is_some_and(|c| c.starts_with("ROT_"))
+            {
+                assert!(!x.contains("DN"), "{x}");
+            }
+        }
+        let ruta = std::env::temp_dir().join(format!("redes-faltas-{}.dxf", std::process::id()));
+        export_dxf(&p, &ruta).unwrap();
+        let mut d = crate::model::Project::new("vuelta", "EPSG:32717");
+        crate::ingest::import_dxf(&mut d, &ruta, 0.5).unwrap();
+        let _ = std::fs::remove_file(&ruta);
+        let n = d.nodes.iter().find(|x| x.code == cn).unwrap();
+        assert_eq!(n.cota_terreno(), None);
+        let k = d.links.iter().find(|x| x.code == cl).unwrap();
+        assert_eq!(k.dn(), None);
+        let n1 = d.nodes.iter().find(|x| x.code == p.nodes[1].code).unwrap();
+        assert!(n1.cota_terreno().is_some());
     }
 
     /// Los datos de los tramos también vuelven (antes no se escribían y los de los nodos salían en
