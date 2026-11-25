@@ -106,6 +106,7 @@
       "subtipo": "camara_humeda",
       "e": 761210.0,
       "n": 9797120.0,
+      "hasta": "PJ1",
       "cota": 243.84,
       "attrs": {
         "profundidad": 4.572
@@ -125,6 +126,8 @@
       "subtipo": "vertedero_cresta",
       "e": 761090.0,
       "n": 9797180.0,
+      "desde": "MH2",
+      "hasta": "OUT1",
       "cota": 248.5644,
       "attrs": {
         "tipo_descarga": "alivio",
@@ -141,18 +144,17 @@
       "desde": "MH1",
       "hasta": "MH2",
       "diametro_mm": 305,
+      "diametro_interior_mm": 304.8,
       "cota_solera_inicio": 249.936,
       "cota_solera_fin": 248.793,
       "vertices": [
         [
           761000.0,
-          9797200.0,
-          249.936
+          9797200.0
         ],
         [
           761090.0,
-          9797180.0,
-          248.793
+          9797180.0
         ]
       ],
       "attrs": {
@@ -179,28 +181,25 @@
       "desde": "MH2",
       "hasta": "MH3",
       "diametro_mm": 381,
+      "diametro_interior_mm": 381.0,
       "cota_solera_inicio": 248.5644,
       "cota_solera_fin": 247.4976,
       "vertices": [
         [
           761090.0,
-          9797180.0,
-          248.5644
+          9797180.0
         ],
         [
           761115.0,
-          9797175.0,
-          248.2112
+          9797175.0
         ],
         [
           761140.0,
-          9797160.0,
-          247.8074
+          9797160.0
         ],
         [
           761160.0,
-          9797150.0,
-          247.4976
+          9797150.0
         ]
       ],
       "attrs": {
@@ -222,18 +221,17 @@
       "desde": "MH3",
       "hasta": "WW1",
       "diametro_mm": 457,
+      "diametro_interior_mm": 457.2,
       "cota_solera_inicio": 247.4976,
       "cota_solera_fin": 244.602,
       "vertices": [
         [
           761160.0,
-          9797150.0,
-          247.4976
+          9797150.0
         ],
         [
           761210.0,
-          9797120.0,
-          244.602
+          9797120.0
         ]
       ],
       "attrs": {
@@ -260,23 +258,21 @@
       "desde": "PJ1",
       "hasta": "MH4",
       "diametro_mm": 152,
+      "diametro_interior_mm": 152.4,
       "cota_solera_inicio": 244.1448,
       "cota_solera_fin": 252.984,
       "vertices": [
         [
           761215.0,
-          9797120.0,
-          244.1448
+          9797120.0
         ],
         [
           761300.0,
-          9797160.0,
-          248.46
+          9797160.0
         ],
         [
           761390.0,
-          9797200.0,
-          252.984
+          9797200.0
         ]
       ],
       "attrs": {
@@ -298,18 +294,18 @@
       "subtipo": "colector_sanitario",
       "desde": "MH4",
       "hasta": "OUT1",
+      "seccion": "ovoide",
+      "alto_m": 0.6096,
       "cota_solera_inicio": 252.984,
       "cota_solera_fin": 242.6208,
       "vertices": [
         [
           761390.0,
-          9797200.0,
-          252.984
+          9797200.0
         ],
         [
           761500.0,
-          9797100.0,
-          242.6208
+          9797100.0
         ]
       ],
       "attrs": {
@@ -323,11 +319,6 @@
         },
         "desfase_salida": {
           "valor": 0.3048,
-          "unidad": "m",
-          "fuente": "SWMM (swmm_us_cfs.inp)"
-        },
-        "altura_seccion": {
-          "valor": 0.6096,
           "unidad": "m",
           "fuente": "SWMM (swmm_us_cfs.inp)"
         }

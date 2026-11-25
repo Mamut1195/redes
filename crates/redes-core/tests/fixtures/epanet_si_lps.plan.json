@@ -15,7 +15,7 @@
       "subtipo": "union",
       "e": 759505.0,
       "n": 9795005.0,
-      "cota": 2480.0,
+      "cota_eje": 2480.0,
       "attrs": {
         "tipo_accesorio": "union"
       },
@@ -34,7 +34,7 @@
       "subtipo": "reduccion",
       "e": 760150.0,
       "n": 9795480.0,
-      "cota": 2520.0,
+      "cota_eje": 2520.0,
       "attrs": {
         "tipo_accesorio": "reduccion"
       },
@@ -53,7 +53,7 @@
       "subtipo": "tee",
       "e": 760300.0,
       "n": 9795400.0,
-      "cota": 2512.5,
+      "cota_eje": 2512.5,
       "attrs": {
         "tipo_accesorio": "tee"
       },
@@ -72,7 +72,7 @@
       "subtipo": "tapon",
       "e": 760420.0,
       "n": 9795480.0,
-      "cota": 2508.0,
+      "cota_eje": 2508.0,
       "attrs": {
         "tipo_accesorio": "tapon"
       },
@@ -91,7 +91,7 @@
       "subtipo": "union",
       "e": 760420.0,
       "n": 9795300.0,
-      "cota": 2505.2,
+      "cota_eje": 2505.2,
       "attrs": {
         "tipo_accesorio": "union"
       },
@@ -110,7 +110,7 @@
       "subtipo": "reduccion",
       "e": 760425.0,
       "n": 9795298.0,
-      "cota": 2504.0,
+      "cota_eje": 2504.0,
       "attrs": {
         "tipo_accesorio": "reduccion"
       },
@@ -129,7 +129,7 @@
       "subtipo": "tapon",
       "e": 760560.0,
       "n": 9795240.0,
-      "cota": 2490.0,
+      "cota_eje": 2490.0,
       "attrs": {
         "tipo_accesorio": "tapon"
       },
@@ -184,7 +184,9 @@
       "familia": "agua.bombeo",
       "subtipo": "booster_en_linea",
       "e": 759500.0,
-      "n": 9795000.0
+      "n": 9795000.0,
+      "desde": "CAPT",
+      "hasta": "NB"
     },
     {
       "tipo": "nodo",
@@ -193,7 +195,9 @@
       "subtipo": "reduccion_presion",
       "e": 760420.0,
       "n": 9795300.0,
-      "cota": 2505.2,
+      "desde": "N4",
+      "hasta": "N5",
+      "cota_eje": 2505.2,
       "attrs": {
         "tipo_valvula": "reduccion_presion",
         "diametro_nominal": 90,
@@ -211,23 +215,19 @@
       "vertices": [
         [
           759505.0,
-          9795005.0,
-          2480.0
+          9795005.0
         ],
         [
           759700.0,
-          9795300.0,
-          2502.5554
+          9795300.0
         ],
         [
           759850.0,
-          9795500.0,
-          2518.5013
+          9795500.0
         ],
         [
           760000.0,
-          9795600.0,
-          2530.0
+          9795600.0
         ]
       ],
       "attrs": {

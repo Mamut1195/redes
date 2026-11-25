@@ -1069,6 +1069,11 @@ fn esquema(filtro: Option<&str>) -> Envelope {
                     "tipo": a.ty.key(),
                     "requerido": a.required,
                     "grupo": a.group.key(),
+                    // Lista cerrada: los valores admitidos, para no adivinarlos (F12-15).
+                    "valores": match a.ty {
+                        families::AttrType::Enum(v) => json!(v),
+                        _ => serde_json::Value::Null,
+                    },
                 })
             })
             .collect();
@@ -1154,6 +1159,11 @@ const CODIGOS: &[(&str, &str, i32)] = &[
     ("E_FMT_PARSE", "archivo ilegible", 7),
     ("E_FMT_UNSUPPORTED", "formato no soportado", 7),
     (
+        "E_FMT_CAMPO",
+        "el plan usa un campo que no es del contrato redes.plan/1 (se perdería); el mensaje sugiere el válido",
+        7,
+    ),
+    (
         "E_FMT_NOT_REDES",
         "DXF que no exportó Redes (sin capa REDES_INFO): adáptelo con la skill de ingesta",
         7,
@@ -1193,23 +1203,19 @@ fn project_info(p: &Project, path: &Path) -> Envelope {
 }
 
 fn importar(p: &mut Project, cmd: ImportarCmd, dry: bool) -> Envelope {
+    // Con `--dry-run` se importa de verdad, pero en una copia en memoria (F12-15): el informe
+    // (altas, descartes con motivo, avisos, errores) es el mismo y el proyecto no se escribe.
+    let mut copia;
+    let p: &mut Project = if dry {
+        copia = p.clone();
+        &mut copia
+    } else {
+        p
+    };
     let (command, result) = match cmd {
-        ImportarCmd::Plan { archivo } => {
-            if dry {
-                return dry_import(p, "importar.plan", &archivo);
-            }
-            ("importar.plan", ingest::import_plan(p, &archivo))
-        }
-        ImportarCmd::Dxf { archivo } => {
-            if dry {
-                return dry_import(p, "importar.dxf", &archivo);
-            }
-            ("importar.dxf", ingest::import_dxf(p, &archivo, 0.0))
-        }
+        ImportarCmd::Plan { archivo } => ("importar.plan", ingest::import_plan(p, &archivo)),
+        ImportarCmd::Dxf { archivo } => ("importar.dxf", ingest::import_dxf(p, &archivo, 0.0)),
         ImportarCmd::Terreno { archivo, epsg } => {
-            if dry {
-                return dry_import(p, "importar.terreno", &archivo);
-            }
             // Sin `--epsg`, el del proyecto (F12-13): antes se suponía 32717 aunque el proyecto
             // estuviera en 18S.
             let epsg = epsg.or_else(|| ingest::epsg_de(&p.crs));
@@ -1235,13 +1241,22 @@ fn importar(p: &mut Project, cmd: ImportarCmd, dry: bool) -> Envelope {
             "avisos": rep.avisos.len(),
             "detalle_avisos": rep.avisos,
             "objetos_totales": p.count(),
-            "siguiente": "redes vista --salida vista.svg"
+            "dry_run": dry,
+            "guardado": !dry,
+            "siguiente": if dry {
+                "sin --dry-run para importar"
+            } else {
+                "redes vista --salida vista.svg"
+            }
         })),
         Err(e) => {
             let code = e.split(':').next().unwrap_or("E_FMT_PARSE").to_string();
             let pista = match code.as_str() {
                 "E_FMT_NOT_REDES" | "E_FMT_PARSE" if command == "importar.dxf" => {
                     "`importar dxf` solo lee DXF exportados por Redes (capa REDES_INFO). Un DXF de otra aplicación se adapta con la skill `skills/redes-ingesta`, que escribe un `redes.plan/1`; luego `redes importar plan --archivo plan.json`."
+                }
+                "E_FMT_CAMPO" => {
+                    "Use solo los campos del contrato (skills/redes-ingesta/references/plan.md §2); el mensaje sugiere el nombre válido más parecido."
                 }
                 "E_CRS" => {
                     "Declare el CRS real (en el plan, `proyecto.crs`; en el terreno, `--epsg`): UTM sur en metros, p. ej. EPSG:32717 (17S) o EPSG:32718 (18S), el mismo del proyecto. Redes no reproyecta: hágalo en origen o cree un proyecto con `--crs`."
@@ -1256,16 +1271,6 @@ fn importar(p: &mut Project, cmd: ImportarCmd, dry: bool) -> Envelope {
             )
         }
     }
-}
-
-fn dry_import(p: &Project, command: &str, archivo: &Path) -> Envelope {
-    let bytes = std::fs::metadata(archivo).map(|m| m.len()).unwrap_or(0);
-    Envelope::ok(command).with_data(json!({
-        "dry_run": true,
-        "archivo": archivo.display().to_string(),
-        "bytes": bytes,
-        "objetos_actuales": p.count()
-    }))
 }
 
 fn objeto(p: &mut Project, cmd: ObjetoCmd, dry: bool) -> Envelope {

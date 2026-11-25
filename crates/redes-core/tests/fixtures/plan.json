@@ -1,6 +1,6 @@
 {
   "schema": "redes.plan/1",
-  "proyecto": { "nombre": "Fixture", "crs": "EPSG:32717", "unidades": "si" },
+  "proyecto": { "nombre": "Fixture", "crs": "EPSG:32717" },
   "objetos": [
     { "tipo": "nodo", "codigo": "PZ-901", "familia": "saneamiento.pozo", "subtipo": "inspeccion",
       "e": 758010.0, "n": 9797010.0, "cota": 2498.4, "cota_terreno": 2500.1, "diametro": 1.2 },
@@ -8,6 +8,6 @@
       "e": 758040.0, "n": 9797012.0, "cota": 2497.9, "cota_terreno": 2499.8, "diametro": 1.2 },
     { "tipo": "arco", "codigo": "CL-901", "familia": "saneamiento.tuberia",
       "subtipo": "colector_sanitario", "desde": "PZ-901", "hasta": "PZ-902",
-      "diametro_mm": 200, "trazado": [[758010.0, 9797010.0, 2498.4], [758040.0, 9797012.0, 2497.9]] }
+      "diametro_mm": 200, "vertices": [[758010.0, 9797010.0, 2498.4], [758040.0, 9797012.0, 2497.9]] }
   ]
 }

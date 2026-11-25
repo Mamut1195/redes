@@ -35,7 +35,7 @@ Redes trabaja en metros proyectados (UTM). **No conviertas lon/lat a mano.**
 |---|---|---|
 | código | `CODIGO`, `COD_POZO`, `ID`, `FACILITYID`, `ASSETID`, `NOMBRE` | `codigo` (el `OBJECTID`/`FID` es interno del SIG: solo si no hay otro) |
 | tipo | `TIPO`, `CLASE`, `SUBTYPE`, `SUBTIPO` | familia:subtipo (tabla de valores al usuario) |
-| cota de tapa | `COTA_TAPA`, `CT`, `RIMELEV`, `Z_TAPA` | `cota_terreno` / `attrs.cota_tapa` |
+| cota de tapa | `COTA_TAPA`, `CT`, `RIMELEV`, `Z_TAPA` | `cota_tapa` |
 | cota de fondo | `COTA_FONDO`, `CF`, `CS`, `INVERTELEV`, `SOLERA` | nodo `cota` |
 | solera de tramo | `CS_INI`/`CS_FIN`, `UPELEV`/`DOWNELEV`, `INV_ENTRADA`/`INV_SALIDA` | `cota_solera_inicio/fin` (comprueba cuál es aguas arriba) |
 | clave | `COTA_CLAVE`, `CC`, `CROWN` | `attrs.cota_clave` (**nunca** solera) |

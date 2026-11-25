@@ -151,6 +151,8 @@ fn rechazar_lonlat<'a>(
     ))
 }
 
+/// Un objeto del plan. Los nombres de campo son el contrato: uno desconocido se rechaza con
+/// `E_FMT_CAMPO` antes de leer nada (F12-15), porque antes se perdía en silencio.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "tipo", rename_all = "snake_case")]
 pub enum PlanObjeto {
@@ -162,7 +164,7 @@ pub enum PlanObjeto {
         subtipo: String,
         e: f64,
         n: f64,
-        /// Cota de solera.
+        /// Cota de solera (m).
         #[serde(default)]
         cota: Option<f64>,
         #[serde(default)]
@@ -170,8 +172,20 @@ pub enum PlanObjeto {
         /// Cota de tapa. Si falta, queda ausente: no se copia el terreno (F12-03).
         #[serde(default)]
         cota_tapa: Option<f64>,
+        /// Cota del eje de la tubería en el nudo (m), la de una red a presión (`Elev` de un
+        /// nudo de EPANET). No es solera: va a `datos.cota_eje` y solo sirve para ubicar el
+        /// nodo en altura (F12-15).
+        #[serde(default)]
+        cota_eje: Option<f64>,
+        /// Diámetro interior del pozo o de la estructura, en **metros**.
         #[serde(default)]
         diametro: Option<f64>,
+        /// Dispositivo de enlace (bomba, válvula, vertedero): nodos del origen que une sin tramo
+        /// propio (F12-15). Ver [`crate::model::Enlace`].
+        #[serde(default)]
+        desde: Option<String>,
+        #[serde(default)]
+        hasta: Option<String>,
         #[serde(default)]
         attrs: BTreeMap<String, Value>,
         #[serde(default)]
@@ -185,15 +199,29 @@ pub enum PlanObjeto {
         subtipo: String,
         desde: String,
         hasta: String,
+        /// Diámetro **nominal** (DN), mm.
         #[serde(default)]
         diametro_mm: Option<u32>,
+        /// Diámetro **interior** (mm), el que dan SWMM o EPANET. Va a `attrs.diametro_interior`.
+        #[serde(default)]
+        diametro_interior_mm: Option<f64>,
+        /// Forma de la sección (lista `seccion` de la familia). Va a `attrs.seccion`.
+        #[serde(default)]
+        seccion: Option<String>,
+        /// Alto y ancho interiores de una sección no circular (m). Van a `datos.altura_seccion`
+        /// y `datos.ancho_seccion`; nunca se convierten en un DN.
+        #[serde(default)]
+        alto_m: Option<f64>,
+        #[serde(default)]
+        ancho_m: Option<f64>,
         /// Solera (fondo interior) del tramo en su inicio y su fin, si el origen la declara.
         #[serde(default)]
         cota_solera_inicio: Option<f64>,
         #[serde(default)]
         cota_solera_fin: Option<f64>,
+        /// Vértices `[E,N,Z]` (Z = solera) o `[E,N]` (sin Z: se interpola, ver F12-15).
         #[serde(default)]
-        vertices: Vec<[f64; 3]>,
+        vertices: Vec<Vec<f64>>,
         #[serde(default)]
         attrs: BTreeMap<String, Value>,
         #[serde(default)]
@@ -210,9 +238,259 @@ pub struct PlanDato {
     pub fuente: String,
 }
 
+// ---------------------------------------------------------------------------------------------
+// Campos del contrato (F12-15). Un campo que no está aquí se rechaza: antes se perdía en silencio.
+
+const CAMPOS_RAIZ: &[&str] = &["schema", "proyecto", "terreno", "objetos"];
+const CAMPOS_PROYECTO: &[&str] = &["nombre", "crs", "fuente_app", "fuente_archivo"];
+const CAMPOS_NODO: &[&str] = &[
+    "tipo",
+    "codigo",
+    "familia",
+    "subtipo",
+    "e",
+    "n",
+    "cota",
+    "cota_terreno",
+    "cota_tapa",
+    "cota_eje",
+    "diametro",
+    "desde",
+    "hasta",
+    "attrs",
+    "datos",
+];
+const CAMPOS_ARCO: &[&str] = &[
+    "tipo",
+    "codigo",
+    "familia",
+    "subtipo",
+    "desde",
+    "hasta",
+    "diametro_mm",
+    "diametro_interior_mm",
+    "seccion",
+    "alto_m",
+    "ancho_m",
+    "cota_solera_inicio",
+    "cota_solera_fin",
+    "vertices",
+    "attrs",
+    "datos",
+];
+const CAMPOS_DATO: &[&str] = &["valor", "unidad", "fuente"];
+
+/// Nombres que un agente escribe a menudo en lugar del del contrato. La distancia de edición no
+/// los encuentra (`trazado` no se parece a `vertices`).
+const SINONIMOS: &[(&str, &str)] = &[
+    ("trazado", "vertices"),
+    ("geometria", "vertices"),
+    ("coordenadas", "vertices"),
+    ("puntos", "vertices"),
+    ("polilinea", "vertices"),
+    ("dn", "diametro_mm"),
+    ("diametro_nominal", "diametro_mm"),
+    ("di", "diametro_interior_mm"),
+    ("diametro_interior", "diametro_interior_mm"),
+    ("solera", "cota"),
+    ("cota_solera", "cota"),
+    ("cota_fondo", "cota"),
+    ("rasante", "cota_terreno"),
+    ("cota_rasante", "cota_terreno"),
+    ("terreno", "cota_terreno"),
+    ("tapa", "cota_tapa"),
+    ("eje", "cota_eje"),
+    ("x", "e"),
+    ("y", "n"),
+    ("este", "e"),
+    ("norte", "n"),
+    ("inicio", "desde"),
+    ("fin", "hasta"),
+    ("nodo_inicio", "desde"),
+    ("nodo_fin", "hasta"),
+    ("from", "desde"),
+    ("to", "hasta"),
+    ("id", "codigo"),
+    ("nombre", "codigo"),
+    ("forma", "seccion"),
+    ("alto", "alto_m"),
+    ("altura", "alto_m"),
+    ("ancho", "ancho_m"),
+    ("atributos", "attrs"),
+    ("unidades", "unidad"),
+];
+
+/// Distancia de edición (Levenshtein) entre dos textos cortos.
+fn distancia(a: &str, b: &str) -> usize {
+    let b: Vec<char> = b.chars().collect();
+    let mut fila: Vec<usize> = (0..=b.len()).collect();
+    for (i, ca) in a.chars().enumerate() {
+        let mut diag = fila[0];
+        fila[0] = i + 1;
+        for (j, cb) in b.iter().enumerate() {
+            let arriba = fila[j + 1];
+            fila[j + 1] = (diag + usize::from(ca != *cb))
+                .min(arriba + 1)
+                .min(fila[j] + 1);
+            diag = arriba;
+        }
+    }
+    fila[b.len()]
+}
+
+/// El campo válido más parecido a `campo`, si lo hay.
+fn sugerencia(campo: &str, validos: &[&'static str]) -> Option<&'static str> {
+    let c = campo.to_lowercase();
+    if let Some((_, s)) = SINONIMOS.iter().find(|(k, _)| *k == c) {
+        // Solo si el sinónimo es válido aquí (`nombre` es válido en `proyecto`, no en un objeto).
+        return validos.iter().find(|v| *v == s).copied();
+    }
+    let tope = (c.chars().count() / 3).max(2);
+    validos
+        .iter()
+        .map(|v| (distancia(&c, v), *v))
+        .filter(|(d, _)| *d <= tope)
+        .min_by_key(|(d, _)| *d)
+        .map(|(_, v)| v)
+}
+
+/// Comprueba que el plan solo usa campos del contrato. Devuelve `E_FMT_CAMPO` con **todos** los
+/// campos desconocidos, el objeto donde están y el nombre válido más parecido.
+fn revisar_campos(v: &serde_json::Value) -> Result<(), String> {
+    use serde_json::Value as J;
+    let mut malos: Vec<String> = Vec::new();
+    let mut revisa = |donde: &str, obj: &serde_json::Map<String, J>, validos: &[&'static str]| {
+        for k in obj.keys().filter(|k| !validos.contains(&k.as_str())) {
+            let pista = match sugerencia(k, validos) {
+                Some(s) => format!(" (¿quiso decir «{s}»?)"),
+                None => format!(" (válidos: {})", validos.join(", ")),
+            };
+            malos.push(format!("{donde}: «{k}»{pista}"));
+        }
+    };
+    let Some(raiz) = v.as_object() else {
+        return Ok(()); // serde dirá qué falla
+    };
+    revisa("raíz", raiz, CAMPOS_RAIZ);
+    if let Some(pr) = raiz.get("proyecto").and_then(J::as_object) {
+        revisa("proyecto", pr, CAMPOS_PROYECTO);
+    }
+    for (i, o) in raiz
+        .get("objetos")
+        .and_then(J::as_array)
+        .into_iter()
+        .flatten()
+        .enumerate()
+    {
+        let Some(o) = o.as_object() else { continue };
+        let tipo = o.get("tipo").and_then(J::as_str).unwrap_or("");
+        let codigo = o.get("codigo").and_then(J::as_str).unwrap_or("");
+        let donde = format!("objetos[{i}] ({tipo} {codigo})");
+        let validos = match tipo {
+            "nodo" => CAMPOS_NODO,
+            "arco" => CAMPOS_ARCO,
+            _ => continue, // tipo desconocido: lo rechaza serde con su nombre
+        };
+        revisa(&donde, o, validos);
+        for (k, d) in o.get("datos").and_then(J::as_object).into_iter().flatten() {
+            if let Some(d) = d.as_object() {
+                revisa(&format!("{donde}.datos.{k}"), d, CAMPOS_DATO);
+            }
+        }
+    }
+    if malos.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "E_FMT_CAMPO: el plan usa campos que no son del contrato redes.plan/1 y se perderían: {}",
+            malos.join("; ")
+        ))
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Unidades (F12-15): se avisa de lo que parece un error de unidad; nunca se corrige.
+
+/// Diámetro de un pozo o estructura (m) mayor que esto: casi seguro está en mm.
+const DIAMETRO_NODO_MAX_M: f64 = 20.0;
+/// DN o DI de un tubo (mm) menor que esto: casi seguro está en m o en pulgadas.
+const DIAMETRO_TUBO_MIN_MM: f64 = 10.0;
+/// Alto o ancho de una sección (m) mayor que esto: casi seguro está en mm.
+const SECCION_MAX_M: f64 = 20.0;
+
+fn aviso_diametro_nodo(rep: &mut ImportReport, codigo: &str, campo: &str, d: f64) {
+    if d > DIAMETRO_NODO_MAX_M {
+        rep.avisos.push(format!(
+            "nodo {codigo}: {campo} = {d} m es mayor que {DIAMETRO_NODO_MAX_M} m; ¿está en mm? El diámetro del nodo va en metros (se importa tal cual)"
+        ));
+    }
+}
+
+fn aviso_diametro_tubo(rep: &mut ImportReport, codigo: &str, campo: &str, d: f64) {
+    if d > 0.0 && d < DIAMETRO_TUBO_MIN_MM {
+        rep.avisos.push(format!(
+            "arco {codigo}: {campo} = {d} mm es menor que {DIAMETRO_TUBO_MIN_MM} mm; ¿está en m o en pulgadas? El diámetro del tubo va en mm (se importa tal cual)"
+        ));
+    }
+}
+
+/// Opciones de un atributo de lista de una familia, si lo es.
+fn opciones(familia: &str, attr: &str) -> Option<&'static [&'static str]> {
+    match crate::families::family(familia)?.attr(attr)?.ty {
+        crate::families::AttrType::Enum(v) => Some(v),
+        _ => None,
+    }
+}
+
+/// Vértices del plan: todos `[E,N,Z]`, todos `[E,N]` o error.
+enum Vertices {
+    Con(Vec<P3>),
+    SinZ(Vec<P2>),
+}
+
+fn leer_vertices(v: &[Vec<f64>]) -> Result<Vertices, String> {
+    if v.iter().flatten().any(|c| !c.is_finite()) {
+        return Err("vértice con una coordenada no finita".into());
+    }
+    if v.iter().all(|c| c.len() == 3) {
+        Ok(Vertices::Con(
+            v.iter().map(|c| P3::new(c[0], c[1], c[2])).collect(),
+        ))
+    } else if v.iter().all(|c| c.len() == 2) {
+        Ok(Vertices::SinZ(
+            v.iter().map(|c| P2::new(c[0], c[1])).collect(),
+        ))
+    } else {
+        Err("los vértices deben ser todos [E,N,Z] o todos [E,N] (sin Z)".into())
+    }
+}
+
+/// Z por longitud en planta entre `z0` y `z1` (geometría de dibujo, no dato).
+fn interpolar_z(planta: &[P2], z0: f64, z1: f64) -> Vec<P3> {
+    let mut acum = vec![0.0];
+    for w in planta.windows(2) {
+        acum.push(acum.last().unwrap() + w[0].dist(w[1]));
+    }
+    let total = *acum.last().unwrap();
+    planta
+        .iter()
+        .zip(&acum)
+        .map(|(q, s)| {
+            let t = if total > 0.0 { s / total } else { 0.0 };
+            P3::new(q.x, q.y, z0 + (z1 - z0) * t)
+        })
+        .collect()
+}
+
 /// Importa un plan JSON y lo aplica al proyecto.
+///
+/// Para validar sin escribir (`--dry-run`), se llama sobre una copia del proyecto: el informe es
+/// el mismo que el de la importación real.
 pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("E_IO_NOT_FOUND: {e}"))?;
+    let crudo: serde_json::Value =
+        serde_json::from_str(&text).map_err(|e| format!("E_FMT_PARSE: {e}"))?;
+    revisar_campos(&crudo)?;
     let plan: Plan = serde_json::from_str(&text).map_err(|e| format!("E_FMT_PARSE: {e}"))?;
     if !plan.schema.starts_with("redes.plan/") {
         return Err(format!("E_FMT_UNSUPPORTED: esquema {}", plan.schema));
@@ -229,6 +507,7 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
             codigo, vertices, ..
         } => vertices
             .iter()
+            .filter(|v| v.len() >= 2)
             .map(|v| (codigo.as_str(), v[0], v[1]))
             .collect(),
     });
@@ -243,6 +522,24 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
             p.crs
         ));
     }
+    // Fuente de los `datos` que salen de un campo del plan (cota_eje, alto_m…).
+    let fuente_plan = {
+        let app = if plan.proyecto.fuente_app.is_empty() {
+            "plan"
+        } else {
+            plan.proyecto.fuente_app.as_str()
+        };
+        if plan.proyecto.fuente_archivo.is_empty() {
+            app.to_string()
+        } else {
+            format!("{app} ({})", plan.proyecto.fuente_archivo)
+        }
+    };
+    let dato_m = |valor: f64| Dato {
+        valor,
+        unidad: "m".into(),
+        fuente: fuente_plan.clone(),
+    };
 
     if !plan.terreno.is_empty() {
         let pts = plan
@@ -256,6 +553,8 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
 
     // Índice de códigos para resolver `desde`/`hasta`.
     let mut codes: BTreeMap<String, ElementId> = BTreeMap::new();
+    // Dispositivos de enlace por resolver cuando estén todos los nodos.
+    let mut por_enlazar: Vec<(ElementId, String, Option<String>, Option<String>)> = Vec::new();
     for o in &plan.objetos {
         if let PlanObjeto::Nodo {
             codigo,
@@ -266,7 +565,10 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
             cota,
             cota_terreno,
             cota_tapa,
+            cota_eje,
             diametro,
+            desde,
+            hasta,
             attrs,
             datos,
         } = o
@@ -279,9 +581,11 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
                 .flatten();
             let zt = cota_terreno.or(del_tin);
             let (zs, zr) = (*cota, *cota_tapa);
-            let Some(dibujo) = zr.or(zt).or(zs) else {
+            // La cota del eje (red a presión) solo ubica el nodo cuando no hay otra: no es
+            // solera, ni terreno, ni tapa (F12-15).
+            let Some(dibujo) = zr.or(zt).or(zs).or(*cota_eje) else {
                 rep.descartados.push(format!(
-                    "nodo {codigo}: sin ninguna cota (solera, tapa ni terreno, y sin TIN en su planta): no se puede ubicar en altura"
+                    "nodo {codigo}: sin ninguna cota (solera, tapa, terreno ni eje, y sin TIN en su planta): no se puede ubicar en altura"
                 ));
                 continue;
             };
@@ -305,16 +609,23 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
                 rep.avisos.push(format!(
                     "nodo {codigo}: sin {} (se muestra «—»{})",
                     sin_dato.join(", "),
-                    if plano {
-                        "; se dibuja plano, sin altura"
-                    } else {
-                        ""
+                    match (plano, zr.or(zt).or(zs).is_none()) {
+                        (true, true) => "; se dibuja plano, a la cota del eje",
+                        (true, false) => "; se dibuja plano, sin altura",
+                        _ => "",
                     }
                 ));
             }
             let mut a = attrs.clone();
             if let Some(d) = diametro {
+                aviso_diametro_nodo(&mut rep, codigo, "diametro", *d);
                 a.insert("diametro_interior".to_string(), Value::Num(*d));
+            } else if let Some(d) = a.get("diametro_interior").and_then(Value::as_f64) {
+                aviso_diametro_nodo(&mut rep, codigo, "attrs.diametro_interior", d);
+            }
+            let mut ds = to_datos(datos);
+            if let Some(z) = cota_eje {
+                ds.insert("cota_eje".to_string(), dato_m(*z));
             }
             let code = if codigo.is_empty() {
                 p.next_code(familia)
@@ -337,7 +648,7 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
                 z_rim: zr.unwrap_or(dibujo),
                 z_invert: zs.unwrap_or(dibujo),
                 attrs: a,
-                datos: to_datos(datos),
+                datos: ds,
                 estado: EstadoObjeto::Pendiente,
                 nota: None,
                 modelo: None,
@@ -353,11 +664,48 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
             }
             match p.add_node(node) {
                 Ok(id) => {
-                    codes.insert(code, id);
+                    codes.insert(code.clone(), id);
                     rep.nodos += 1;
+                    if desde.is_some() || hasta.is_some() {
+                        por_enlazar.push((id, code, desde.clone(), hasta.clone()));
+                    }
                 }
                 Err(e) => rep.descartados.push(format!("nodo {codigo}: {e}")),
             }
+        }
+    }
+
+    // Dispositivos de enlace (F12-15): la bomba o la válvula une sus nodos sin tramo inventado.
+    for (id, code, desde, hasta) in por_enlazar {
+        let mut resuelve = |lado: &str, c: Option<String>| -> Option<ElementId> {
+            let c = c?;
+            let otro = codes
+                .get(&c)
+                .copied()
+                .or_else(|| p.node_by_code(&c).map(|n| n.id));
+            match otro {
+                Some(o) if o == id => {
+                    rep.avisos.push(format!(
+                        "nodo {code}: {lado} «{c}» es el propio nodo; se ignora"
+                    ));
+                    None
+                }
+                Some(o) => Some(o),
+                None => {
+                    rep.avisos.push(format!(
+                        "nodo {code}: {lado} «{c}» no existe; el dispositivo queda sin unir por ese lado"
+                    ));
+                    None
+                }
+            }
+        };
+        let (d, h) = (resuelve("desde", desde), resuelve("hasta", hasta));
+        if d.is_some() || h.is_some() {
+            p.enlaces.push(crate::model::Enlace {
+                dispositivo: id,
+                desde: d,
+                hasta: h,
+            });
         }
     }
 
@@ -369,6 +717,10 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
             desde,
             hasta,
             diametro_mm,
+            diametro_interior_mm,
+            seccion,
+            alto_m,
+            ancho_m,
             cota_solera_inicio,
             cota_solera_fin,
             vertices,
@@ -382,32 +734,110 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
                 ));
                 continue;
             };
+            let verts = match leer_vertices(vertices) {
+                Ok(v) => v,
+                Err(e) => {
+                    rep.descartados.push(format!("arco {codigo}: {e}"));
+                    continue;
+                }
+            };
+            let mut a_attrs = attrs.clone();
+            if let Some(s) = seccion {
+                match opciones(familia, "seccion") {
+                    Some(lista) if lista.contains(&s.as_str()) => {
+                        a_attrs.insert("seccion".into(), Value::Text(s.clone()));
+                    }
+                    Some(lista) => {
+                        rep.descartados.push(format!(
+                            "arco {codigo}: seccion «{s}» no está en la lista de {familia}: {}",
+                            lista.join(", ")
+                        ));
+                        continue;
+                    }
+                    None => {
+                        rep.descartados.push(format!(
+                            "arco {codigo}: la familia {familia} no tiene atributo «seccion»"
+                        ));
+                        continue;
+                    }
+                }
+            }
             let (a, b) = (p.node(from).unwrap(), p.node(to).unwrap());
             let mut sin_dato = Vec::new();
-            let path = if vertices.len() >= 2 {
-                vertices.iter().map(|v| P3::new(v[0], v[1], v[2])).collect()
-            } else {
-                // La solera declarada del tramo manda sobre la del pozo (F12-02). Si no hay
-                // ninguna de las dos, el trazado va a la cota de dibujo del pozo y se marca.
-                let z0 = cota_solera_inicio.or(a.cota_solera());
-                let z1 = cota_solera_fin.or(b.cota_solera());
-                if z0.is_none() || z1.is_none() {
-                    sin_dato.push(crate::model::COTA_SOLERA.to_string());
+            // La solera declarada del tramo manda sobre la del pozo (F12-02). Si no hay ninguna
+            // de las dos, el trazado va a la cota de dibujo del pozo y se marca.
+            let z0 = cota_solera_inicio.or(a.cota_solera());
+            let z1 = cota_solera_fin.or(b.cota_solera());
+            let (za, zb) = (z0.unwrap_or(a.z_invert), z1.unwrap_or(b.z_invert));
+            let path = match verts {
+                Vertices::Con(v) if v.len() >= 2 => v,
+                Vertices::SinZ(planta) if planta.len() >= 2 => {
+                    // F12-15: la Z de los vértices se interpola por longitud entre las soleras de
+                    // los extremos. Es geometría de dibujo, no dato.
+                    if z0.is_none() || z1.is_none() {
+                        sin_dato.push(crate::model::COTA_SOLERA.to_string());
+                    } else if planta.len() > 2 {
+                        sin_dato.push(crate::model::COTA_VERTICES.to_string());
+                        rep.avisos.push(format!(
+                            "arco {codigo}: Z de {} vértices intermedios interpolada por longitud entre las soleras (dibujo, no dato)",
+                            planta.len() - 2
+                        ));
+                    }
+                    interpolar_z(&planta, za, zb)
                 }
-                vec![
-                    P3::new(a.pos.x, a.pos.y, z0.unwrap_or(a.z_invert)),
-                    P3::new(b.pos.x, b.pos.y, z1.unwrap_or(b.z_invert)),
-                ]
+                _ => {
+                    if z0.is_none() || z1.is_none() {
+                        sin_dato.push(crate::model::COTA_SOLERA.to_string());
+                    }
+                    vec![P3::new(a.pos.x, a.pos.y, za), P3::new(b.pos.x, b.pos.y, zb)]
+                }
             };
             let dn = diametro_mm.filter(|d| *d > 0);
             if dn.is_none() {
                 sin_dato.push(crate::model::DIAMETRO_NOMINAL.to_string());
             }
+            if let Some(d) = dn {
+                aviso_diametro_tubo(&mut rep, codigo, "diametro_mm", d as f64);
+            }
+            if let Some(di) = diametro_interior_mm {
+                aviso_diametro_tubo(&mut rep, codigo, "diametro_interior_mm", *di);
+                if let Some(otro) = attrs.get("diametro_interior").and_then(Value::as_f64)
+                    && (otro - di).abs() > 1e-9
+                {
+                    rep.avisos.push(format!(
+                        "arco {codigo}: diametro_interior_mm ({di}) y attrs.diametro_interior ({otro}) no coinciden; se usa diametro_interior_mm"
+                    ));
+                }
+                a_attrs.insert("diametro_interior".into(), Value::Num(*di));
+            } else if let Some(di) = attrs.get("diametro_interior").and_then(Value::as_f64) {
+                aviso_diametro_tubo(&mut rep, codigo, "attrs.diametro_interior", di);
+            }
+            let mut ds = to_datos(datos);
+            for (campo, clave, v) in [
+                ("alto_m", "altura_seccion", alto_m),
+                ("ancho_m", "ancho_seccion", ancho_m),
+            ] {
+                if let Some(v) = v {
+                    if *v > SECCION_MAX_M {
+                        rep.avisos.push(format!(
+                            "arco {codigo}: {campo} = {v} m es mayor que {SECCION_MAX_M} m; ¿está en mm? (se importa tal cual)"
+                        ));
+                    }
+                    ds.insert(clave.to_string(), dato_m(*v));
+                }
+            }
             if !sin_dato.is_empty() {
-                rep.avisos.push(format!(
-                    "arco {codigo}: sin {} (se muestra «—» y se dibuja como línea sin dato)",
-                    sin_dato.join(", ")
-                ));
+                let de_dato: Vec<&str> = sin_dato
+                    .iter()
+                    .map(String::as_str)
+                    .filter(|k| *k != crate::model::COTA_VERTICES)
+                    .collect();
+                if !de_dato.is_empty() {
+                    rep.avisos.push(format!(
+                        "arco {codigo}: sin {} (se muestra «—» y se dibuja como línea sin dato)",
+                        de_dato.join(", ")
+                    ));
+                }
             }
             let code = if codigo.is_empty() {
                 p.next_code(familia)
@@ -428,8 +858,8 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
                 path,
                 // Sin DN declarado queda 0 («sin dato»), no 200 (F12-03).
                 d_mm: dn.unwrap_or(0),
-                attrs: attrs.clone(),
-                datos: to_datos(datos),
+                attrs: a_attrs,
+                datos: ds,
                 estado: EstadoObjeto::Pendiente,
                 nota: None,
                 cota_solera_inicio: *cota_solera_inicio,
@@ -717,6 +1147,29 @@ fn importar_de_capa_info(
         ) else {
             continue;
         };
+        // Soleras del tramo: campos 7 y 8 si la línea los trae (vacío = ausente); si no, la regla
+        // del plan: la del pozo del extremo. Sin ninguna de las dos, las Z del trazado son de
+        // dibujo y el tramo vuelve sin cotas de dato, como salió (F12-15).
+        let solera = |i: usize| {
+            campos
+                .get(i)
+                .and_then(|s| s.trim().parse::<f64>().ok())
+                .filter(|v| v.is_finite())
+        };
+        let (si, sf) = (solera(7), solera(8));
+        let de_pozo = |id: ElementId| p.node(id).and_then(|n| n.cota_solera());
+        let sin_solera = si.or(de_pozo(desde)).is_none() || sf.or(de_pozo(hasta)).is_none();
+        let mut sin_dato = Vec::new();
+        if sin_solera {
+            sin_dato.push(crate::model::COTA_SOLERA.to_string());
+        }
+        if dn.is_none() {
+            sin_dato.push(crate::model::DIAMETRO_NOMINAL.to_string());
+        }
+        if !sin_dato.is_empty() {
+            rep.avisos
+                .push(format!("arco {code}: sin {}", sin_dato.join(", ")));
+        }
         let link = Link {
             id: ElementId::new(0, 0),
             family: familia.to_string(),
@@ -730,18 +1183,10 @@ fn importar_de_capa_info(
             datos: datos.get(&code).cloned().unwrap_or_default(),
             estado: EstadoObjeto::Pendiente,
             nota: None,
-            cota_solera_inicio: None,
-            cota_solera_fin: None,
+            cota_solera_inicio: si,
+            cota_solera_fin: sf,
             deleted: false,
-            sin_dato: if dn.is_none() {
-                rep.avisos.push(format!(
-                    "arco {code}: sin {}",
-                    crate::model::DIAMETRO_NOMINAL
-                ));
-                vec![crate::model::DIAMETRO_NOMINAL.to_string()]
-            } else {
-                Vec::new()
-            },
+            sin_dato,
         };
         match p.add_link(link) {
             Ok(_) => arcos_creados += 1,

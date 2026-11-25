@@ -53,7 +53,25 @@ impl Topology {
             incident.entry(l.from).or_default().push(l.id);
             incident.entry(l.to).or_default().push(l.id);
         }
-        let degree = incident.iter().map(|(k, v)| (*k, v.len())).collect();
+        // Dispositivos de enlace (F12-15): una bomba o una válvula que en el origen unía dos nodos
+        // sin tramo propio. No son arcos (no hay tubo que dibujar), pero la red no está cortada.
+        let vivo = |id: ElementId| p.node(id).is_some_and(|n| !n.deleted);
+        let mut unidos: BTreeMap<ElementId, Vec<ElementId>> = BTreeMap::new();
+        for e in &p.enlaces {
+            if !vivo(e.dispositivo) {
+                continue;
+            }
+            for otro in [e.desde, e.hasta].into_iter().flatten() {
+                if otro != e.dispositivo && vivo(otro) {
+                    unidos.entry(e.dispositivo).or_default().push(otro);
+                    unidos.entry(otro).or_default().push(e.dispositivo);
+                }
+            }
+        }
+        let degree = incident
+            .iter()
+            .map(|(k, v)| (*k, v.len() + unidos.get(k).map_or(0, |u| u.len())))
+            .collect();
 
         // Componentes conexas por BFS sobre nodos vivos.
         let mut seen: BTreeSet<ElementId> = BTreeSet::new();
@@ -73,6 +91,11 @@ impl Topology {
                         if seen.insert(other) {
                             q.push_back(other);
                         }
+                    }
+                }
+                for &other in unidos.get(&cur).into_iter().flatten() {
+                    if seen.insert(other) {
+                        q.push_back(other);
                     }
                 }
             }
@@ -256,6 +279,38 @@ mod tests {
         assert_eq!(iso, vec![extra]);
         assert_eq!(t.components.len(), 2);
         assert_eq!(t.degree_of(ids[0]), 1);
+    }
+
+    /// Una válvula de EPANET une dos nudos sin tramo propio: la red no queda cortada (F12-15).
+    #[test]
+    fn un_dispositivo_de_enlace_une_dos_redes_sin_tramo() {
+        let (mut p, a) = p_with_chain(2);
+        let mut otra = p.nodes[0].clone();
+        otra.id = ElementId::new(0, 0);
+        otra.code = String::new();
+        let b = p.add_node(otra).unwrap();
+        let mut valvula = p.nodes[0].clone();
+        valvula.id = ElementId::new(0, 0);
+        valvula.code = String::new();
+        let v = p.add_node(valvula).unwrap();
+        assert_eq!(
+            Topology::build(&p).components.len(),
+            3,
+            "sin enlace: cortada"
+        );
+        p.enlaces.push(Enlace {
+            dispositivo: v,
+            desde: Some(a[1]),
+            hasta: Some(b),
+        });
+        let t = Topology::build(&p);
+        assert_eq!(t.components.len(), 1, "{:?}", t.components);
+        assert_eq!(t.degree_of(v), 2);
+        assert_eq!(t.degree_of(a[1]), 2);
+        assert_eq!(t.isolated(&p).count(), 0);
+        // Un extremo borrado no conecta.
+        p.remove(b).unwrap();
+        assert_eq!(Topology::build(&p).degree_of(v), 1);
     }
 
     #[test]

@@ -117,7 +117,7 @@ según la entidad, y lo que no se reconoce **se pregunta o se lista**, no se adi
 - Sentido: el del dibujo no siempre es el del flujo. Si las etiquetas de solera dicen lo
   contrario, invierte `desde`/`hasta` y los vértices, y dilo.
 - Diámetro y material del texto del tramo («Ø250 PVC»): `diametro_mm` = DN; si la etiqueta dice
-  DI, va a `attrs.diametro_interior`.
+  DI, va a `diametro_interior_mm`.
 
 ## 5. Coordenadas
 

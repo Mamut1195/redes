@@ -328,6 +328,122 @@ fn una_familia_inexistente_no_rompe_el_esquema() {
     );
 }
 
+/// Un atributo de lista publica sus valores admitidos: el agente no los adivina (F12-15).
+#[test]
+fn el_esquema_lista_los_valores_de_los_atributos_de_lista() {
+    let d = tempdir("valores");
+    let j = sobre(&corre(&["esquema", "--familia", "saneamiento.tuberia"], &d));
+    let fam = j["data"]["familias"]
+        .as_array()
+        .and_then(|f| f.iter().find(|x| x["clave"] == "saneamiento.tuberia"))
+        .expect("familia");
+    let attr = |k: &str| {
+        fam["atributos"]
+            .as_array()
+            .and_then(|a| a.iter().find(|x| x["clave"] == k))
+            .cloned()
+            .expect(k)
+    };
+    let seccion = attr("seccion");
+    assert_eq!(seccion["tipo"], "enum");
+    let valores: Vec<&str> = seccion["valores"]
+        .as_array()
+        .expect("valores")
+        .iter()
+        .filter_map(|v| v.as_str())
+        .collect();
+    assert!(valores.contains(&"ovoide") && valores.contains(&"circular"));
+    assert!(
+        attr("rugosidad_n")["valores"].is_null(),
+        "un número no tiene lista"
+    );
+}
+
+/// `--dry-run` de `importar plan` valida de verdad: el mismo informe que la importación (altas,
+/// descartes con motivo, avisos y errores) y el proyecto intacto (F12-15).
+#[test]
+fn importar_plan_en_seco_da_el_informe_completo_sin_escribir() {
+    let d = tempdir("plan-seco");
+    let ruta = d.join("p.redes");
+    let r = ruta.to_str().unwrap();
+    corre(
+        &[
+            "proyecto", "nuevo", "--nombre", "x", "--salida", r, "--quiet",
+        ],
+        &d,
+    );
+    let antes = std::fs::read_to_string(&ruta).unwrap();
+    let plan = d.join("plan.json");
+    std::fs::write(
+        &plan,
+        serde_json::json!({
+            "schema": "redes.plan/1",
+            "proyecto": { "nombre": "x", "crs": "EPSG:32717" },
+            "objetos": [
+                { "tipo": "nodo", "codigo": "P1", "familia": "saneamiento.pozo", "e": 760000.0, "n": 9796000.0, "cota": 2500.0 },
+                { "tipo": "nodo", "codigo": "P2", "familia": "saneamiento.pozo", "e": 760050.0, "n": 9796000.0 },
+                { "tipo": "arco", "codigo": "C1", "familia": "saneamiento.tuberia", "desde": "P1", "hasta": "P9", "diametro_mm": 200 }
+            ]
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let p = plan.to_str().unwrap();
+    let seco = sobre(&corre(
+        &["-p", r, "--dry-run", "importar", "plan", "--archivo", p],
+        &d,
+    ));
+    assert_eq!(seco["ok"], true, "{seco}");
+    let datos = &seco["data"];
+    assert_eq!(datos["dry_run"], true);
+    assert_eq!(datos["guardado"], false);
+    assert_eq!(datos["nodos"], 1);
+    assert_eq!(datos["arcos"], 0);
+    let descartes = datos["detalle_descartes"].to_string();
+    assert!(
+        descartes.contains("P2") && descartes.contains("sin ninguna cota"),
+        "{descartes}"
+    );
+    assert!(
+        descartes.contains("C1") && descartes.contains("P9"),
+        "{descartes}"
+    );
+    assert!(datos["avisos"].as_u64().unwrap() > 0, "{datos}");
+    assert_eq!(
+        std::fs::read_to_string(&ruta).unwrap(),
+        antes,
+        "el proyecto no se toca"
+    );
+    // La importación real da el mismo informe.
+    let real = sobre(&corre(&["-p", r, "importar", "plan", "--archivo", p], &d));
+    for k in ["nodos", "arcos", "detalle_descartes", "detalle_avisos"] {
+        assert_eq!(real["data"][k], datos[k], "{k}");
+    }
+    assert_ne!(std::fs::read_to_string(&ruta).unwrap(), antes);
+
+    // Un plan roto falla igual en seco: E_FMT_CAMPO con la sugerencia, código 7.
+    std::fs::write(
+        &plan,
+        r#"{"schema":"redes.plan/1","proyecto":{"nombre":"x","crs":"EPSG:32717"},
+            "objetos":[{"tipo":"nodo","codigo":"P1","familia":"saneamiento.pozo","e":760000.0,"n":9796000.0,"solera":2500.0}]}"#,
+    )
+    .unwrap();
+    let s = corre(
+        &["-p", r, "--dry-run", "importar", "plan", "--archivo", p],
+        &d,
+    );
+    let j = sobre(&s);
+    assert_eq!(j["ok"], false, "{j}");
+    assert_eq!(j["diagnostics"][0]["code"], "E_FMT_CAMPO");
+    assert!(
+        j["diagnostics"][0]["message"]
+            .as_str()
+            .is_some_and(|m| m.contains("«solera» (¿quiso decir «cota»?)")),
+        "{j}"
+    );
+    assert_eq!(s.codigo, 7);
+}
+
 #[test]
 fn aprobar_el_proyecto_con_observados_devuelve_e_state_observed() {
     let d = tempdir("aprobar-obs");

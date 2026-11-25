@@ -15,7 +15,7 @@
       "subtipo": "tee",
       "e": 762100.0,
       "n": 9798050.0,
-      "cota": 213.36,
+      "cota_eje": 213.36,
       "attrs": {
         "tipo_accesorio": "tee"
       },
@@ -34,7 +34,7 @@
       "subtipo": "tee",
       "e": 762700.0,
       "n": 9798000.0,
-      "cota": 210.312,
+      "cota_eje": 210.312,
       "attrs": {
         "tipo_accesorio": "tee"
       },
@@ -53,7 +53,7 @@
       "subtipo": "tee",
       "e": 763150.0,
       "n": 9797900.0,
-      "cota": 208.788,
+      "cota_eje": 208.788,
       "attrs": {
         "tipo_accesorio": "tee"
       },
@@ -72,7 +72,7 @@
       "subtipo": "union",
       "e": 763400.0,
       "n": 9797800.0,
-      "cota": 195.072,
+      "cota_eje": 195.072,
       "attrs": {
         "tipo_accesorio": "union"
       },
@@ -96,7 +96,7 @@
       "subtipo": "tee",
       "e": 763250.0,
       "n": 9797850.0,
-      "cota": 193.548,
+      "cota_eje": 193.548,
       "attrs": {
         "tipo_accesorio": "tee"
       },
@@ -137,6 +137,8 @@
       "subtipo": "booster_en_linea",
       "e": 762000.0,
       "n": 9798000.0,
+      "desde": "LAKE",
+      "hasta": "J10",
       "attrs": {
         "potencia_unitaria": 18.6425
       }
@@ -148,7 +150,9 @@
       "subtipo": "reduccion_presion",
       "e": 763150.0,
       "n": 9797900.0,
-      "cota": 208.788,
+      "desde": "J30",
+      "hasta": "J50",
+      "cota_eje": 208.788,
       "attrs": {
         "tipo_valvula": "reduccion_presion",
         "diametro_nominal": 152,
@@ -162,7 +166,9 @@
       "subtipo": "reguladora_caudal",
       "e": 762700.0,
       "n": 9798000.0,
-      "cota": 210.312,
+      "desde": "J20",
+      "hasta": "J50",
+      "cota_eje": 210.312,
       "attrs": {
         "tipo_valvula": "reguladora",
         "diametro_nominal": 102,
@@ -199,18 +205,15 @@
       "vertices": [
         [
           762100.0,
-          9798050.0,
-          213.36
+          9798050.0
         ],
         [
           762400.0,
-          9798060.0,
-          211.8505
+          9798060.0
         ],
         [
           762700.0,
-          9798000.0,
-          210.312
+          9798000.0
         ]
       ],
       "attrs": {
