@@ -142,6 +142,9 @@ struct State {
     bib: Option<(std::path::PathBuf, Arc<redes_core::biblioteca::Biblioteca>)>,
     /// Aviso de política de dibujo (modelos pesados sin `--gpu3d`).
     aviso_modelos: Option<String>,
+    /// Aviso del pase 3D cuando la escena no cabe en el búfer que admite la GPU (lo fija el
+    /// compositor con el límite del dispositivo).
+    aviso_gpu: Option<String>,
     /// Perfil longitudinal abierto desde el inspector de un tramo (F13-02).
     perfil: Option<redes_core::perfil::Perfil>,
     /// Última validación geométrica (F13-01).
@@ -224,6 +227,7 @@ impl State {
             piezas: Default::default(),
             bib: None,
             aviso_modelos: None,
+            aviso_gpu: None,
             perfil: None,
             validacion: Default::default(),
             obs_texto: rune::TextEdit::new(""),
@@ -1340,8 +1344,9 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
         )
         .child(
             text(
-                s.aviso_modelos
+                s.aviso_gpu
                     .clone()
+                    .or_else(|| s.aviso_modelos.clone())
                     .or_else(|| s.aviso.clone())
                     .unwrap_or_default(),
             )

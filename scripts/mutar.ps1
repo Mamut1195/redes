@@ -185,6 +185,15 @@ $mutaciones = @(
         Que = "volver a subir la malla en cada frame con la escena quieta (F14-03)"
     },
     @{
+        Nombre = "gpu3d-tope-fijo"
+        Archivo = "crates/redes-app/src/gpu3d.rs"
+        Patron = 'let tope = limite\.min\(TOPE_PRUDENTE\);'
+        Reemplazo = 'let tope = TOPE_PRUDENTE;'
+        Paquete = "redes-app"
+        Prueba = "el_tope_del_bufer_respeta_el_limite_del_dispositivo"
+        Que = "ignorar max_buffer_size del dispositivo: panico con 5k pozos en una GPU de 256 MB (F14-05)"
+    },
+    @{
         Nombre = "cache-piezas-sin-acierto"
         Archivo = "crates/redes-core/src/mallas.rs"
         Patron = 'if let Some\(e\) = self\.mapa\.get_mut\(&clave\) \{'

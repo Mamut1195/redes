@@ -87,7 +87,15 @@ construcción** (adiós a los artefactos del pintor).
   camino 2D; en `--gpu3d` el modelo se dibuja con su color de material.
 - El modo corte en 3D **no** recorta (el z‑búfer no necesita recorte para ocluir): el corte
   sigue siendo del camino 2D. Son dos herramientas distintas, no dos versiones del mismo pase.
-- El buffer de vértices se dimensiona a 200 000 vértices (≈ 7,2 MB); por encima se recorta.
+- El buffer de vértices empieza en ~24 MB y crece en pasos de 4 MB hasta el **tope del
+  dispositivo**: `max_buffer_size` de `device.limits()` (es un búfer de vértices, no de
+  almacenamiento), sin pasar de 512 MB y redondeado a triángulos enteros (`tope_bufer`). Si la
+  escena no cabe se dibuja lo que cabe y la barra de estado avisa «Pase 3D recortado…» (también
+  en la consola). Antes el tope era 512 MB fijo y una GPU que admite 256 MB entraba en pánico
+  con ~5k pozos (301 989 888 > 268 435 456); prueba
+  `el_tope_del_bufer_respeta_el_limite_del_dispositivo`. El aviso lo fija el compositor, así que
+  aparece en el frame siguiente (no en una captura `--snap` de un solo frame). El arreglo de fondo
+  (LOD e instancias) es F14-05.
 - La app pide `wgpu ~30.0.1`, la misma versión que usa Rune fijado en `vendor/rune`.
 
 Pruebas: las de la fase 1‑3 más `el_proyecto_guardado_conserva_el_entorno`; el pase 3D se verificó

@@ -329,7 +329,10 @@ impl Compositor3d {
             view_formats: &[],
         });
         let depth_view = depth.create_view(&Default::default());
-        let capacidad = 36 * 3 * 200_000;
+        let capacidad = capacidad_para(
+            TRIANGULO * 200_000,
+            tope_bufer(device.limits().max_buffer_size),
+        );
         let vertices = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("redes-3d-vertices"),
             size: capacidad,
@@ -351,33 +354,70 @@ impl Compositor3d {
         self.ultima_generacion = 0;
     }
 
-    /// Crecen el búfer si la geometría no cabe (hasta un tope prudente).
-    fn crecer(&mut self, device: &wgpu::Device, bytes: usize) {
-        const TOPE: u64 = 512 * 1024 * 1024;
-        let Some(r) = self.recursos.as_mut() else {
-            return;
-        };
-        if bytes as u64 <= r.capacidad {
-            return;
+    /// Crecen el búfer si la geometría no cabe, hasta el tope que admite el dispositivo.
+    /// Devuelve el aviso de recorte si la escena no cabe entera.
+    fn crecer(&mut self, device: &wgpu::Device, bytes: usize) -> Option<String> {
+        let r = self.recursos.as_mut()?;
+        let bytes = bytes as u64;
+        let tope = tope_bufer(device.limits().max_buffer_size);
+        if bytes > r.capacidad && r.capacidad < tope {
+            let nueva = capacidad_para(bytes, tope);
+            r.vertices = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("redes-3d-vertices"),
+                size: nueva,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            r.capacidad = nueva;
+            self.ultima_generacion = 0;
+            if bytes > nueva {
+                eprintln!(
+                    "redes: la escena tiene {} MB de vértices y el tope es {} MB; se recorta",
+                    bytes / MB,
+                    nueva / MB
+                );
+            }
         }
-        let paso = 4 * 1024 * 1024;
-        let nueva = ((bytes as u64).div_ceil(paso) * paso).min(TOPE);
-        r.vertices = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("redes-3d-vertices"),
-            size: nueva,
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        r.capacidad = nueva;
-        self.ultima_generacion = 0;
-        if bytes as u64 > TOPE {
-            eprintln!(
-                "redes: la escena tiene {} MB de vértices y el tope es {} MB; se recorta",
-                bytes / (1024 * 1024),
-                TOPE / (1024 * 1024)
-            );
-        }
+        aviso_recorte(bytes, r.capacidad)
     }
+}
+
+const MB: u64 = 1024 * 1024;
+
+/// Tope prudente del búfer de vértices aunque el dispositivo admita más.
+const TOPE_PRUDENTE: u64 = 512 * MB;
+
+/// Bytes de un triángulo empaquetado (3 vértices de 36 bytes).
+const TRIANGULO: u64 = 3 * 36;
+
+/// Tope del búfer de vértices para un dispositivo cuyo `max_buffer_size` es `limite`.
+///
+/// El búfer es de vértices (no de almacenamiento), así que solo aplica `max_buffer_size`. Se
+/// redondea hacia abajo a triángulos enteros: así es múltiplo de 4 (lo que exige `write_buffer`)
+/// y el recorte nunca deja un triángulo a medias. Antes el tope era 512 MB fijo y una GPU con
+/// 256 MB entraba en pánico al crear el búfer con ~5k pozos.
+pub fn tope_bufer(limite: u64) -> u64 {
+    let tope = limite.min(TOPE_PRUDENTE);
+    (tope / TRIANGULO * TRIANGULO).max(TRIANGULO)
+}
+
+/// Capacidad nueva para `bytes`: en pasos de 4 MB, sin pasar de `tope`.
+pub fn capacidad_para(bytes: u64, tope: u64) -> u64 {
+    let paso = 4 * MB;
+    (bytes.div_ceil(paso) * paso).min(tope)
+}
+
+/// Aviso para la barra de estado si la escena (`bytes`) no cabe en el búfer (`capacidad`).
+pub fn aviso_recorte(bytes: u64, capacidad: u64) -> Option<String> {
+    (bytes > capacidad).then(|| {
+        let total = bytes / 36;
+        let dibujados = capacidad / 36;
+        format!(
+            "Pase 3D recortado: la GPU admite {} MB de vértices y la escena tiene {} MB; se dibujan {dibujados} de {total} vértices",
+            capacidad / MB,
+            bytes.div_ceil(MB)
+        )
+    })
 }
 
 impl Compositor<crate::State> for Compositor3d {
@@ -394,7 +434,11 @@ impl Compositor<crate::State> for Compositor3d {
             return;
         }
         self.asegurar(device, size, formato);
-        self.crecer(device, vertices as usize * 36);
+        let aviso = self.crecer(device, vertices as usize * 36);
+        // El recorte se muestra en la barra de estado, no solo en la consola.
+        if f.rt.state.aviso_gpu != aviso {
+            f.rt.state.aviso_gpu = aviso;
+        }
         let Ok(toma) = geom.lock().map(|g| g.tomar(self.ultima_generacion)) else {
             f.draw_ui();
             return;
@@ -516,8 +560,34 @@ pub fn activo() -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::Geometria;
+    use super::{Geometria, MB, aviso_recorte, capacidad_para, tope_bufer};
     use redes_core::view::Layers;
+
+    /// El tope del búfer sale del dispositivo (P0): con `max_buffer_size` = 256 MB y una escena
+    /// de 288 MB (≈5k pozos) el búfer no pasa de 256 MB y hay aviso de recorte. Antes el tope era
+    /// 512 MB fijo y `create_buffer` entraba en pánico.
+    #[test]
+    fn el_tope_del_bufer_respeta_el_limite_del_dispositivo() {
+        let limite = 256 * MB;
+        let escena = 301_989_888;
+        let tope = tope_bufer(limite);
+        assert!(tope <= limite, "tope {tope} > límite {limite}");
+        assert_eq!(tope % 4, 0, "write_buffer exige múltiplos de 4");
+        assert_eq!(tope % 108, 0, "el recorte deja triángulos enteros");
+        let capacidad = capacidad_para(escena, tope);
+        assert!(capacidad <= limite);
+        let aviso = aviso_recorte(escena, capacidad).expect("la escena no cabe: hay aviso");
+        assert!(aviso.contains("recortado"), "{aviso}");
+
+        // Un límite pequeño también manda, y un dispositivo generoso no pasa del tope prudente.
+        assert!(tope_bufer(MB) <= MB);
+        assert_eq!(tope_bufer(u64::MAX), tope_bufer(512 * MB));
+        assert!(tope_bufer(u64::MAX) <= 512 * MB);
+        // Si cabe, no hay aviso y la capacidad va en pasos de 4 MB.
+        assert_eq!(capacidad_para(5 * MB, tope), 8 * MB);
+        assert!(aviso_recorte(5 * MB, 8 * MB).is_none());
+        assert!(aviso_recorte(8 * MB, 8 * MB).is_none());
+    }
 
     /// Lo que el pase declara dibujar es exactamente lo que hay en el búfer, y apagar una capa
     /// reduce el conteo (antes se declaraba la malla entera y se leía basura del frame anterior).
