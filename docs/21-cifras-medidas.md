@@ -92,33 +92,69 @@ La malla solo se regenera si cambia `ClaveMalla` (proyecto y revisión, capas, b
 exageración vertical va en la matriz. Pruebas `mover_la_camara_en_3d_no_regenera_la_malla` y
 `la_escena_quieta_no_se_vuelve_a_subir`.
 
+### 4.3 Banco de 20k tramos, perfil y escena (F14-10, F14-09, F14-04, F14-07)
+
+Red en peine de `tests/comun` (sin azar), release, Windows 11 de 16 hilos, 2026-11-27, con
+`cargo test --release -p redes-core --test banco -- --include-ignored --nocapture` (escena: mediana
+de 9 `build_opts`, vista encuadrada 900×600). Cada columna se midió al integrar ese paso en `main`.
+
+| Medida (20k tramos) | F14-10 | + perfil F14-09 | + escena F14-04/07 | Umbral CI |
+|---|---:|---:|---:|---:|
+| Ingesta | 392 ms | 184 ms | 182 ms | 1 000 ms |
+| Escena | 30,1 ms | 18,8 ms | **7,0 ms** | 100 ms |
+| Abrir | 217 ms | 121 ms | 115 ms | 600 ms |
+| Reimportar | 697 ms | 335 ms | 349 ms | 2 000 ms |
+| Búsquedas | 14,9 ms | 8,7 ms | 8,1 ms | — |
+| Escena 50k | 77,5 ms | 49,9 ms | **13,4 ms** | — |
+
+F14-04 pedía la escena ≥ 3× más rápida: con el mismo perfil, ×2,7 a 20k y ×3,7 a 50k (×4,3 a 20k
+frente a antes de F14-09). Depuración con dependencias en `opt-level 2`: escena 20k 93 ms.
+
+`tests/escena.rs` (`banco_escena`, ignorado, mínimo de 15, release), antes → después de F14-04/07:
+
+| Cámara | Antes | Después | Primitivas |
+|---|---:|---:|---:|
+| Red 20k encuadrada | 17,3 ms | **6,5 ms** | 40 299 |
+| Red 20k de cerca | 444 ms | **5,4 ms** | 3 054 → 493 |
+| Ciudad encuadrada | 3,8 ms | **2,1 ms** | 12 009 |
+| Ciudad de cerca | 3,9 ms | **1,3 ms** | 12 494 → 541 |
+
+De cerca, el recorte por pantalla deja fuera lo que no se ve antes de teselarlo y ordenarlo. La
+selección por rejilla: con 20k encuadrados un clic mira < 10 % de los 40 299 objetos (las filas
+lejanas se apiñan); de cerca, < 50.
+
 ## 5. Pruebas
 
 | Suite | Pruebas |
 |---|---:|
-| Núcleo (`redes-core`, unitarias) | **141** |
+| Núcleo (`redes-core`, unitarias) | **150** |
 | Validación geométrica (`redes-core/tests/validar.rs`) | **13** |
 | Acta de revisión (`redes-core/tests/acta.rs`) | **5** |
 | Reimportar (`redes-core/tests/reimportar.rs`) | **8** |
 | Ingesta con fixtures (`tests/ingesta.rs`) | **32** |
 | Cotas de tramo (`tests/cotas_tramo.rs`) | **3** |
 | Presupuesto de frame (`tests/rendimiento.rs`) | **2** |
-| Índices del proyecto (`tests/indices.rs`, + 1 banco ignorado) | **4** |
-| Interfaz (`redes-app`) | **22** |
+| Índices del proyecto (`tests/indices.rs`) | **3** |
+| Banco 20k (`tests/banco.rs`, + 1 de 50k ignorado) | **1** |
+| Escena y selección (`tests/escena.rs`, + 1 banco ignorado) | **2** |
+| Interfaz (`redes-app`) | **24** |
 | Contrato del CLI (`tests/contrato.rs`) | **19** |
 | Perfil del CLI (`tests/perfil.rs`) | **3** |
 | Validar del CLI (`tests/validar.rs`) | **4** |
 | Acta del CLI (`tests/acta.rs`) | **2** |
 | Reimportar del CLI (`tests/reimportar.rs`) | **2** |
 | Doctest | **1** |
-| **Total** | **261** |
+| **Total** | **274** |
 
-Más el arnés de mutación: `powershell -File scripts/mutar.ps1` rompe dieciocho comportamientos (cinco
+Más el arnés de mutación: `powershell -File scripts/mutar.ps1` rompe veintiocho comportamientos (cinco
 de vista, tres de `redes validar`, el estado derivado de las observaciones y dos del acta: escapar el
 HTML y no sacar columnas de autor sin registrarlo, D2; y tres de reimportar: reiniciar el aprobado
 cuyo diseño cambió, conservar las observaciones y no dar de baja en silencio; y abrir un `.redes` de otra versión sin
 migrar, F15-01, D10; y olvidar el nodo final en el índice de tramos por nodo, F14-01; y dos del pase 3D: regenerar la malla
-al mover la cámara, F14-02, y volver a subirla en cada frame, F14-03) y exige que la suite falle.
+al mover la cámara, F14-02, y volver a subirla en cada frame, F14-03; una escena cuadrática en el banco, F14-10;
+dos de la caché de piezas y proxies, F14-06; y siete de la escena y la selección, F14-04/07: recortar de más,
+no recortar, esfera de pozo corta, orden de negativos, bloques de hilos desordenados, rejilla de una celda y
+rejilla que pierde tramos) y exige que la suite falle.
 
 ## 6. Qué cifras de los informes anteriores son falsas
 
