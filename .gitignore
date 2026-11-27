@@ -10,7 +10,6 @@ out/
 *.glb.tmp
 
 # Spikes: pruebas de framework, no producto (incluyen sus propios target/)
-spike/
 
 # Historial del checkout de Rune: se versiona el árbol de trabajo, no su .git (74 MB)
 vendor/rune/.git-upstream/

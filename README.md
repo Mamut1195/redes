@@ -190,7 +190,6 @@ proyecto como modificado), **Guardar**, vista en planta con encuadre, volver a i
 | `docs/00-investigacion-rune.md` | Dossier verificado de Rune (el framework de UI). |
 | `docs/consejo/` | Documentos del consejo de arquitectura original (alcance anterior, con cálculos). Se conservan como referencia de dominio. |
 | `vendor/rune` | Checkout fijado de Rune (`78efd4a`), sin modificar. |
-| `spike/` | Pruebas técnicas de Rune (no forman parte del producto). |
 
 ## Licencia
 
@@ -204,7 +203,7 @@ framework); no se modifica.
 - Una sola rama, `main`.
 - Las ramas de trabajo se nombran con el ticket: `mam-1066-campo-modelo`, `mam-1068-modelo-en-3d`…
   Linear ya genera ese nombre para cada ticket (campo `gitBranchName`).
-- `target/`, `out/` y `spike/` no se versionan; el árbol de Rune sí (para compilar sin red).
+- `target/` y `out/` no se versionan; el árbol de Rune sí (para compilar sin red).
 - Commits en imperativo y en español, con el identificador del ticket al principio:
   `MAM-1066: añade modelo al nodo y biblioteca al proyecto`.
 

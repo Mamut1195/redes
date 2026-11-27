@@ -19,7 +19,7 @@
 - `skills/redes-ingesta/`: skill guiada (D5): `SKILL.md` + `references/` por formato (plan, SWMM, EPANET, DXF Civil 3D, SIG, tablas). Sin scripts: NO añadas adaptadores por programa ni en Python ni en Rust; mejora las referencias y el contrato del plan.
 - `docs/`: documentación numerada `NN-nombre.md`. `docs/consejo/` es contexto histórico (el alcance con cálculos quedó descartado), NO el alcance vigente.
 - `scripts/`: `mutar.ps1`, `empaquetar.ps1`, `traer-rune.ps1`.
-- `vendor/rune`: copia fijada de Rune. `spike/`: pruebas técnicas aparte. `demo/`: proyectos de ejemplo. `out/`: salida generada (ignorada).
+- `vendor/rune`: copia fijada de Rune. `demo/`: proyectos de ejemplo. `out/`: salida generada (ignorada).
 
 ## Comandos (PowerShell; los mismos que usa el CI)
 - Formato: `cargo fmt -p redes-core -p redes-cli -p redes-app --check` (NUNCA `cargo fmt --all`: alcanza vendor/rune).
@@ -52,11 +52,11 @@
 - Coordenadas UTM en `f64` absoluto con `origin` local. El render resta el origen en `f64` y solo después baja a `f32`. Construir geometría en `f32` con UTM rompió los tubos (docs/15): no lo repitas.
 - No reintroducir bugs ya corregidos: NaN al guardar, guardado no atómico, pánico del TIN.
 - `vendor/rune`: NO editar ni formatear. Los cambios a Rune van como `vendor/parches/*.patch` documentados en `vendor/LEEME.md`. Mantén la tabla `[patch.crates-io]` del `Cargo.toml` raíz.
-- `spike/` y `vendor/rune` están fuera del workspace: no los metas en comandos de cargo del producto.
+- `vendor/rune` está fuera del workspace: no lo metas en comandos de cargo del producto.
 - Edition 2024. El CI solo exige clippy `correctness`, pero no añadas avisos nuevos.
 
 ## Herramientas para agentes (Codegraph y Archify)
-- **Codegraph** indexa `crates/` (sin `vendor/` ni `spike/`) en `.codegraph/` (ignorado por git). Si falta: `codegraph init .`; tras cambios grandes: `codegraph sync .`.
+- **Codegraph** indexa `crates/` (sin `vendor/`) en `.codegraph/` (ignorado por git). Si falta: `codegraph init .`; tras cambios grandes: `codegraph sync .`.
   - Úsalo ANTES de grep+Read para entender código: herramienta MCP `codegraph_explore` con `projectPath` = raíz del repo, o CLI `codegraph explore|callers|callees|impact <símbolo> .`.
   - Antes de cambiar una función pública de `redes-core`, mira su radio de impacto con `codegraph impact <símbolo> .`.
 - **Archify** (skill `archify`): diagramas de arquitectura/flujo respaldados por el código y "Code Analysis" de acoplamiento. Salidas en `out/auditoria/` (ignorado). Usa `archify-pr` para explicar ramas o PRs con cambios de arquitectura.

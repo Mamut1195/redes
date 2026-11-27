@@ -1,8 +1,8 @@
 [workspace]
 resolver = "3"
 members = ["crates/redes-core", "crates/redes-cli", "crates/redes-app"]
-# El checkout de Rune y los spikes son mundos aparte: cada uno tiene su propio workspace.
-exclude = ["vendor/rune", "spike"]
+# El checkout de Rune es un mundo aparte: tiene su propio workspace.
+exclude = ["vendor/rune"]
 
 [workspace.package]
 version = "0.1.0"
