@@ -90,7 +90,7 @@ impl Baja {
 #[derive(Clone, Debug, Serialize)]
 pub struct Informe {
     pub formato: &'static str,
-    /// Lo que dijo la ingesta de la entrega (descartes, avisos, renombrados).
+    /// Lo que dijo la ingesta de la entrega (descartes y avisos).
     pub importacion: ImportReport,
     pub altas: Vec<Presencia>,
     pub bajas: Vec<Baja>,

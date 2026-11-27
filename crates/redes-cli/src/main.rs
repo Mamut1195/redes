@@ -1329,7 +1329,6 @@ fn importar(p: &mut Project, cmd: ImportarCmd, dry: bool) -> Envelope {
             "puntos_terreno": rep.puntos_terreno,
             "descartados": rep.descartados.len(),
             "detalle_descartes": rep.descartados,
-            "renombrados": rep.renombrados,
             "avisos": rep.avisos.len(),
             "detalle_avisos": rep.avisos,
             "objetos_totales": p.count(),

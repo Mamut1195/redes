@@ -129,7 +129,6 @@ fn datos(
             "arcos": r.arcos,
             "puntos_terreno": r.puntos_terreno,
             "descartados": r.descartados,
-            "renombrados": r.renombrados,
             "avisos": r.avisos,
         },
         "dry_run": dry,

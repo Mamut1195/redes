@@ -1,8 +1,9 @@
-//! Huecos y retiros del registro (docs/20 §4 y §5), aplicados sobre el catálogo base.
+//! Huecos del registro (docs/20 §4 y §5), aplicados sobre el catálogo base.
 //!
 //! Se mantiene aquí, como dato, lo que el registro original no tenía: 17 subtipos que faltaban en
-//! familias existentes, 62 atributos nuevos y 13 claves retiradas con su alias de migración. El
-//! motor no cambia: `build()` construye el catálogo y luego llama a [`aplicar`].
+//! familias existentes y 62 atributos nuevos. Las 13 claves retiradas (docs/20 §4.2) ya no están en
+//! el catálogo base y no tienen alias. El motor no cambia: `build()` construye el catálogo y luego
+//! llama a [`aplicar`].
 
 use crate::families::{AttrType, Category, FamilyDef, Group, TopoRole, Unit, attr, subtype};
 
@@ -837,62 +838,7 @@ const ATTRS_DE_SUBTIPO: &[(&str, &[AttrSpec])] = &[
     ),
 ];
 
-/// Claves retiradas y su destino (familia, subtipo). Se usan como alias en la ingesta.
-pub const RETIRADOS: &[(&str, &str, &str, &str)] = &[
-    (
-        "agua.captacion",
-        "toma_rio",
-        "agua.bocatoma",
-        "barraje_fijo",
-    ),
-    (
-        "agua.captacion",
-        "toma_quebrada",
-        "agua.bocatoma",
-        "bocatoma_lateral",
-    ),
-    (
-        "agua.captacion",
-        "rejilla_fondo",
-        "agua.bocatoma",
-        "toma_tirolesa",
-    ),
-    ("saneamiento.camara", "carga", "agua.camara", "carga"),
-    ("saneamiento.camara", "quiebre", "agua.camara", "quiebre"),
-    ("saneamiento.camara", "valvulas", "agua.camara", "valvulas"),
-    ("saneamiento.camara", "medicion", "agua.camara", "medicion"),
-    ("saneamiento.camara", "reparto", "agua.camara", "reparto"),
-    ("saneamiento.camara", "alivio", "agua.camara", "alivio"),
-    ("agua.planta", "cloracion", "comun.caseta", "cloracion"),
-    (
-        "agua.planta",
-        "lecho_secado",
-        "comun.lecho_secado",
-        "arena_grava",
-    ),
-    (
-        "agua.planta",
-        "espesador",
-        "saneamiento.sedimentador",
-        "espesador",
-    ),
-    (
-        "agua.planta",
-        "laguna_estabilizacion",
-        "saneamiento.laguna",
-        "facultativa",
-    ),
-];
-
-/// Traduce una clave retirada a su destino. `None` si no está retirada.
-pub fn alias(familia: &str, tipo: &str) -> Option<(&'static str, &'static str)> {
-    RETIRADOS
-        .iter()
-        .find(|(f, t, _, _)| *f == familia && *t == tipo)
-        .map(|(_, _, nf, nt)| (*nf, *nt))
-}
-
-/// Aplica los huecos y los retiros sobre el catálogo recién construido.
+/// Aplica los huecos sobre el catálogo recién construido.
 pub fn aplicar(catalogo: &mut Vec<FamilyDef>) {
     for f in catalogo.iter_mut() {
         // Atributos nuevos (y los que piden los subtipos nuevos).
@@ -926,13 +872,6 @@ pub fn aplicar(catalogo: &mut Vec<FamilyDef>) {
                 f.types.push(subtype(k, label, req));
             }
         }
-        // Retiros con alias.
-        let retirados: Vec<&str> = RETIRADOS
-            .iter()
-            .filter(|(fam, _, _, _)| *fam == f.key)
-            .map(|(_, t, _, _)| *t)
-            .collect();
-        f.types.retain(|s| !retirados.contains(&s.key));
     }
     // Los retiros de `agua.planta` dejan la familia con menos subtipos; el mínimo del registro es 4.
     debug_assert!(

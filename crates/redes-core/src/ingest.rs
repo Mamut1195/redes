@@ -29,9 +29,6 @@ pub struct ImportReport {
     pub puntos_terreno: usize,
     /// Objetos descartados de verdad (no se pudieron importar).
     pub descartados: Vec<String>,
-    /// Objetos que entraron con otra clave porque la suya estaba retirada (docs/20 §4.2).
-    #[serde(default)]
-    pub renombrados: Vec<String>,
     /// Objetos que entraron con algún dato ausente (F12-03): se muestran con `—`, no se rellenan.
     #[serde(default)]
     pub avisos: Vec<String>,
@@ -654,7 +651,7 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
             } else {
                 codigo.clone()
             };
-            let mut node = Node {
+            let node = Node {
                 id: ElementId::new(0, 0),
                 family: familia.clone(),
                 ty: if subtipo.is_empty() {
@@ -677,13 +674,6 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
                 deleted: false,
                 sin_dato,
             };
-            // Clave retirada: se traduce a su destino y se anota (nunca en silencio).
-            if let Some((nf, nt)) = crate::families_extra::alias(&node.family, &node.ty) {
-                rep.renombrados
-                    .push(format!("{}:{} -> {nf}:{nt}", node.family, node.ty));
-                node.family = nf.to_string();
-                node.ty = nt.to_string();
-            }
             match p.add_node(node) {
                 Ok(id) => {
                     codes.insert(code.clone(), id);

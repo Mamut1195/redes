@@ -57,7 +57,7 @@ validación de la CLI.
 | Garantía | Cómo |
 |---|---|
 | No calcula | Los números del origen se copian a `Dato { valor, unidad, fuente }` |
-| No pierde objetos en silencio | Informe con `nodos`, `arcos`, `detalle_descartes` (motivo de cada uno) y `renombrados` |
+| No pierde objetos en silencio | Informe con `nodos`, `arcos`, `detalle_descartes` (motivo de cada uno, también las claves retiradas) |
 | No duplica | Código repetido → descarte con motivo |
 | No acepta modelos rotos | Extremo inexistente → descarte; mismo nodo en ambos extremos → `E_TOPO_SELF_LOOP` |
 | Deja rastro | `fuentes[]` con app, archivo, formato y fecha |
@@ -114,7 +114,7 @@ Una clave nunca se copia como solera; solera = clave − DI solo con el DI decla
 |---|---|
 | `cargo test -p redes-core --test ingesta` | Los planes de ejemplo de cuatro `.inp` (SWMM CFS y CMS, EPANET GPM y LPS) entran sin descartes y con las cotas, diámetros y familias esperadas |
 | `cargo test -p redes-core --test cotas_tramo` | La solera declarada del tramo manda y el tubo se dibuja sobre ella |
-| `redes importar plan` en un proyecto de prueba | Los descartes y renombrados del plan concreto |
+| `redes importar plan` en un proyecto de prueba | Los descartes del plan concreto |
 | `redes vista --salida x.svg` | Lo que entró se ve (una imagen que un agente puede mirar) |
 
 ## 6. Lo que la skill **no** hará nunca

@@ -154,8 +154,9 @@ La CLI **avisa** (no corrige) lo que parece otra unidad: `diametro` de nodo > 20
 4. **Unidades**: §2.4. Diámetro de nodo en m; de tubo en mm.
 5. **Códigos repetidos** (también contra el proyecto abierto) → descarte. Importa en un proyecto
    nuevo; reimportar sobre el mismo duplica códigos.
-6. Las **claves retiradas** se traducen solas (`agua.captacion:toma_rio` →
-   `agua.bocatoma:barraje_fijo`) y salen en `renombrados`. No las uses a propósito.
+6. Las **claves retiradas** no se admiten: un objeto con `agua.captacion:toma_rio` se descarta
+   con `subtipo 'toma_rio' no existe en agua.captacion`. Escribe la clave nueva
+   (`agua.bocatoma:barraje_fijo`; tabla completa en docs/20 §8.1).
 7. **Atributos de lista** (`"tipo": "enum"`): `redes esquema --familia X` da sus valores
    admitidos en `valores`. Usa uno de ellos tal cual; si ninguno encaja, pregunta.
 
@@ -212,7 +213,7 @@ redes -p out\prueba.redes vista --salida out\vista.svg
 
 - `--dry-run` hace **toda** la validación y la importación en una copia en memoria y devuelve el
   mismo informe que la importación real (`nodos`, `arcos`, `detalle_descartes`,
-  `detalle_avisos`, `renombrados`, errores), con `dry_run: true` y `guardado: false`. El proyecto
+  `detalle_avisos`, errores), con `dry_run: true` y `guardado: false`. El proyecto
   no se escribe. Úsalo siempre primero.
 - Importar con descartes sigue siendo `ok:true`: **lee siempre** `detalle_descartes` y
   `detalle_avisos`.

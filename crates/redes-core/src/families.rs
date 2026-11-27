@@ -2580,36 +2580,6 @@ fn build() -> Vec<FamilyDef> {
                     &["numero_aportes", "cota_solera"],
                 ),
                 subtype(
-                    "carga",
-                    "Cámara de carga",
-                    &["cota_agua", "longitud_vertedero"],
-                ),
-                subtype(
-                    "quiebre",
-                    "Cámara de quiebre de presión",
-                    &["tipo_quiebre", "altura_caida"],
-                ),
-                subtype(
-                    "valvulas",
-                    "Cámara de válvulas",
-                    &["largo", "ancho", "numero_valvulas"],
-                ),
-                subtype(
-                    "medicion",
-                    "Cámara de medición",
-                    &["diametro_tuberia", "by_pass"],
-                ),
-                subtype(
-                    "reparto",
-                    "Cámara de reparto",
-                    &["numero_salidas", "tipo_reparto"],
-                ),
-                subtype(
-                    "alivio",
-                    "Cámara de alivio",
-                    &["longitud_vertedero", "cota_cresta"],
-                ),
-                subtype(
                     "inspeccion_rectangular",
                     "Cámara de inspección",
                     &["largo", "ancho", "altura_util"],
@@ -3185,21 +3155,6 @@ fn build() -> Vec<FamilyDef> {
                     "Galería filtrante",
                     &["longitud_galeria", "diametro_galeria"],
                 ),
-                subtype(
-                    "toma_rio",
-                    "Toma de río con presa",
-                    &["ancho_presa", "altura_presa"],
-                ),
-                subtype(
-                    "toma_quebrada",
-                    "Toma de quebrada",
-                    &["ancho_bocatoma", "altura_bocatoma"],
-                ),
-                subtype(
-                    "rejilla_fondo",
-                    "Rejilla de fondo",
-                    &["longitud_rejilla", "ancho_rejilla"],
-                ),
             ],
         },
         FamilyDef {
@@ -3325,29 +3280,9 @@ fn build() -> Vec<FamilyDef> {
                     &["numero_unidades", "diametro_tanque"],
                 ),
                 subtype(
-                    "laguna_estabilizacion",
-                    "Laguna de estabilización",
-                    &["numero_lagunas", "largo_laguna"],
-                ),
-                subtype(
                     "desalinizadora",
                     "Planta desalinizadora",
                     &["numero_unidades", "largo", "ancho"],
-                ),
-                subtype(
-                    "espesador",
-                    "Espesador de lodos",
-                    &["diametro_tanque", "altura"],
-                ),
-                subtype(
-                    "lecho_secado",
-                    "Lecho de secado",
-                    &["largo", "ancho", "numero_celdas"],
-                ),
-                subtype(
-                    "cloracion",
-                    "Caseta de cloración",
-                    &["largo", "ancho", "altura"],
                 ),
             ],
         },

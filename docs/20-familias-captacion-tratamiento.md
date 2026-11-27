@@ -8,10 +8,10 @@
 | Fecha | 2026-11-21 |
 | Estado | Especificación de catálogo. No implementa: deja el registro listo para implementar |
 | Audiencia | implementadores de `redes-core`, mantenedores de la skill `redes-ingesta`, cliente |
-| Alcance | familias y subtipos que faltan entre la captación y la planta, y en la salida del alcantarillado; atributos, capacidades, pieza paramétrica y alias de migración |
+| Alcance | familias y subtipos que faltan entre la captación y la planta, y en la salida del alcantarillado; atributos, capacidades, pieza paramétrica y claves retiradas |
 | Fuera de alcance | hidráulica, hidrología, dosificación, dimensionamiento, cumplimiento normativo, automatización |
 
-**Cómo leer este documento.** La §1 dice qué hay hoy, con la clave exacta y el conteo verificado en `crates/redes-core/src/families.rs`. La §2 fija las convenciones con las que se propone lo nuevo. Las §3–§7 son el entregable en el orden pedido: **familias nuevas**, **huecos en familias existentes**, **atributos nuevos**, **qué no debe entrar** y **referencias**. La §8 son los anexos que hacen la propuesta ejecutable (alias de ingesta y checklist de pruebas).
+**Cómo leer este documento.** La §1 dice qué hay hoy, con la clave exacta y el conteo verificado en `crates/redes-core/src/families.rs`. La §2 fija las convenciones con las que se propone lo nuevo. Las §3–§7 son el entregable en el orden pedido: **familias nuevas**, **huecos en familias existentes**, **atributos nuevos**, **qué no debe entrar** y **referencias**. La §8 son los anexos que hacen la propuesta ejecutable (correspondencias de las claves retiradas y checklist de pruebas).
 
 **Regla dura.** El producto **no calcula**. Un número entra al catálogo solo si (a) cambia la forma de algo o (b) hay que verlo y compararlo en la revisión; en el segundo caso se marca **▣ dato** y el dibujo no depende de él. No se añade ni un atributo `Derived` hidráulico.
 
@@ -39,7 +39,7 @@
 | Subtipos | 216 | **315** | +99 netos |
 | Subtipos nuevos en familias nuevas | — | **95** | |
 | Subtipos nuevos en familias existentes | — | **17** | |
-| Claves retiradas o movidas (con alias) | — | **13** | |
+| Claves retiradas o movidas | — | **13** | |
 | Atributos nuevos en familias existentes | — | **62** | |
 | Unidades nuevas en `Unit` | 13 | **21** | +8 |
 | Primitivas nuevas en `parts.rs` | 11 | **13** | +2 |
@@ -128,7 +128,7 @@ Solo las familias que tocan la cadena de agua cruda y su salida. El resto del re
 | `comun.cruce` | CR | support / point | `REPORTABLE` | 10 | río, quebrada, vía, ferrocarril, otra red, eléctrica, telecom, gas, aéreo, subfluvial | hinca / perforación dirigida |
 | `comun.hito` | HT | support / point | `REPORTABLE` | 6 | BM, punto de control, sondeo, calicata, **punto de aforo**, señalización | el aforo es un punto topográfico, no la estructura (ver §3.6) |
 
-Ninguna de estas 15 familias se propone retirar. Tres pierden subtipos (con alias) y el resto solo gana.
+Ninguna de estas 15 familias se propone retirar. Tres pierden subtipos (§4.2) y el resto solo gana.
 
 ---
 
@@ -153,7 +153,7 @@ Ya usados y por tanto prohibidos: `PZ CL TB DS VL LL TQ MD AC CM SM CN SF CP PT 
 
 ### 2.3 Reglas de migración
 
-Se respetan las cinco reglas de `docs/consejo/06-catalogo-familias.md` §2.4. Las 12 claves que se retiran conservan alias en la skill de ingesta durante dos versiones (§8.1) y ningún archivo `.redes` se reescribe sin confirmación.
+Se respetan las cinco reglas de `docs/consejo/06-catalogo-familias.md` §2.4. Las claves que se retiran **no tienen alias**: nada está en producción y no se mantiene compatibilidad con planes ni `.redes` anteriores. Un plan que use una clave retirada pierde ese objeto con el descarte de siempre (`subtipo '…' no existe en …`); quien escribe el plan usa la clave nueva de §8.1.
 
 ---
 
@@ -605,7 +605,7 @@ Estanque de tierra con taludes y estructuras de entrada y salida donde el agua r
 
 Total: **17 subtipos nuevos** en familias existentes (`agua.captacion` 3, `agua.tuberia` 4, `agua.tanque` 2, `agua.valvula` 2, `agua.arqueta` 1, `agua.planta` 3, `comun.cruce` 1, `saneamiento.canal` 1).
 
-### 4.2 Subtipos que se retiran (con alias, nunca en silencio)
+### 4.2 Subtipos que se retiran (sin alias)
 
 | clave retirada | destino | motivo |
 |---|---|---|
@@ -624,6 +624,8 @@ Total: **17 subtipos nuevos** en familias existentes (`agua.captacion` 3, `agua.
 | `agua.planta:laguna_estabilizacion` | `saneamiento.laguna:facultativa` | una laguna es una unidad, no una planta; hoy está además en el dominio del agua |
 
 Las cuatro variantes `ptap_*` y las tres `ptar_*` de `agua.planta` **no** se retiran: se conservan como «planta completa» esquemática para cuando el origen solo trae la instalación entera. La unidad suelta, cuando existe, manda (§3.5–§3.7).
+
+La ingesta no traduce estas claves: un objeto del plan con una de ellas se descarta con `subtipo '…' no existe en …` en `detalle_descartes` (nunca en silencio). La tabla es la guía para quien escribe el plan.
 
 Efecto en los conteos: `saneamiento.camara` 11 → 5 (sigue cumpliendo el mínimo de 4); `agua.planta` 11 → 10; `agua.captacion` 8 → 5 + 3 = 8. Retiros totales: 13.
 
@@ -825,9 +827,9 @@ Tres prácticas de este documento **no son normativas** y se marcan como locales
 
 ## 8. Anexos
 
-### 8.1 Alias obligatorios para la skill `redes-ingesta`
+### 8.1 Correspondencias para la skill `redes-ingesta`
 
-| Alias de origen | Clave nueva |
+| Clave de origen | Clave nueva |
 |---|---|
 | `agua.captacion:toma_rio` | `agua.bocatoma:barraje_fijo` |
 | `agua.captacion:toma_quebrada` | `agua.bocatoma:bocatoma_lateral` |
@@ -847,7 +849,7 @@ Tres prácticas de este documento **no son normativas** y se marcan como locales
 | `agua.planta:ptar_uasb` | `saneamiento.reactor:uasb` (preferencia, no retiro) |
 | `saneamiento.bombeo:estacion_impulsion` | `agua.bombeo:camara_seca` (si la red es AP) |
 
-Las tres filas marcadas «preferencia» no retiran nada: `agua.planta:ptar_*` se conserva como planta completa esquemática, y el alias solo se aplica cuando el origen trae la **unidad** suelta. Los trece alias obligatorios son los trece primeros.
+Las tres filas marcadas «preferencia» no retiran nada: `agua.planta:ptar_*` se conserva como planta completa esquemática, y la correspondencia solo se aplica cuando el origen trae la **unidad** suelta. Las trece primeras filas son claves retiradas: la app ya no las admite y la skill escribe la clave nueva.
 
 Mapeos de origen que cambian con estas familias:
 
@@ -886,7 +888,7 @@ Y tres comprobaciones que **no** existen hoy y convendría añadir:
 | Registro actual | 29 | 216 |
 | Nuevas familias (§3) | +17 | +95 |
 | Subtipos nuevos en familias existentes (§4.1) | 0 | +17 |
-| Subtipos retirados con alias (§4.2) | 0 | −13 |
+| Subtipos retirados (§4.2) | 0 | −13 |
 | **Total propuesto** | **46** | **315** |
 
 Comprobación: `29 + 17 = 46` familias y `216 + 95 + 17 − 13 = 315` subtipos.

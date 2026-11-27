@@ -16,8 +16,8 @@
 | Prueba que lo fija | — | `capacidades_publica_el_registro_completo` (46 y 315 exactos) |
 
 El registro se compone de 29 familias del consejo original (216 subtipos) más 17 familias de la
-cadena de agua cruda con 95 subtipos, 17 subtipos nuevos en familias existentes y 13 retirados con
-alias: `216 + 95 + 17 − 13 = 315`.
+cadena de agua cruda con 95 subtipos, 17 subtipos nuevos en familias existentes y 13 retirados (sin
+alias): `216 + 95 + 17 − 13 = 315`.
 
 ## 2. Salidas glTF
 

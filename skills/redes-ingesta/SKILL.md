@@ -38,7 +38,7 @@ puntos de terreno `E,N,Z` con `redes importar terreno --archivo t.csv --epsg 327
    out\prueba.redes`): primero `redes -p out\prueba.redes --dry-run importar plan --archivo
    plan.json` y luego sin `--dry-run`. El `--dry-run` valida e importa en una copia en memoria
    y da el mismo informe que la importación real, sin escribir (`plan.md` §6).
-7. **Corrige según los diagnósticos** (`detalle_descartes`, `detalle_avisos`, `renombrados`,
+7. **Corrige según los diagnósticos** (`detalle_descartes`, `detalle_avisos`,
    `E_FMT_CAMPO` con el campo válido sugerido, `E_FMT_PARSE`) y repite
    hasta que lo único descartado sea lo que tú decidiste descartar.
 8. **Importa** en el proyecto real del usuario (proyecto nuevo o sin esos códigos: los repetidos se

@@ -136,11 +136,6 @@ fn importa_plan_descartando(
         );
         assert!(p.nodes.iter().all(|n| n.code != *c));
     }
-    assert!(
-        rep.renombrados.is_empty(),
-        "{nombre}: {:?}",
-        rep.renombrados
-    );
     (p, rep)
 }
 
@@ -941,4 +936,33 @@ fn un_tramo_con_el_codigo_de_un_nodo_se_descarta_y_el_proyecto_abre() {
     let abierto = redes_core::project_io::load(&guardado);
     let _ = std::fs::remove_file(&guardado);
     abierto.expect("el proyecto importado siempre abre");
+}
+
+/// Retired keys have no alias: the object is discarded with the usual unknown-subtype reason
+/// instead of being silently translated to its replacement (docs/20 §4.2).
+#[test]
+fn a_retired_key_is_discarded_not_translated() {
+    let plan = r#"{
+  "schema": "redes.plan/1",
+  "proyecto": { "nombre": "retirada", "crs": "EPSG:32717" },
+  "terreno": [],
+  "objetos": [
+    { "tipo": "nodo", "codigo": "CP-1", "familia": "agua.captacion", "subtipo": "toma_rio",
+      "e": 758000.0, "n": 9797000.0, "cota_eje": 2500.0 }
+  ]
+}"#;
+    let ruta = std::env::temp_dir().join(format!("redes-retirada-{}.json", std::process::id()));
+    std::fs::write(&ruta, plan).unwrap();
+    let mut p = Project::new("retirada", "EPSG:32717");
+    let rep = redes_core::ingest::import_plan(&mut p, &ruta).expect("the plan itself is valid");
+    let _ = std::fs::remove_file(&ruta);
+    assert_eq!(rep.nodos, 0, "{:?}", rep.descartados);
+    assert!(
+        p.nodes.is_empty(),
+        "nothing enters under the replacement key"
+    );
+    assert_eq!(
+        rep.descartados,
+        ["nodo CP-1: subtipo 'toma_rio' no existe en agua.captacion"]
+    );
 }
