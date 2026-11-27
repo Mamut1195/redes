@@ -35,7 +35,7 @@
 - Variables de entorno: `REDES_PROJECT`, `REDES_GPU`, `REDES_INFO`, `REDES_JOURNAL_USUARIO`.
 
 ## Convenciones
-- Identificadores, comandos de la CLI, mensajes y docs en español. Respeta los campos en inglés que ya existen (`family`, `ty`, `attrs`).
+- Comandos de la CLI, mensajes y docs en español. Los identificadores en español que ya existen se migran a inglés poco a poco (ver «Idioma del código»).
 - Commits en español, en una línea y descriptivos, con el código de fase entre paréntesis cuando aplique (`Proxy de malla por rejilla (F6-05)`). Los de cierre de sesión empiezan con `Traspaso:`.
 - Definición de terminado (docs/18):
   - una prueba que falle sin el cambio;
@@ -44,6 +44,8 @@
   - captura `--snap` si toca la UI.
 - Decisiones en `docs/22-decisiones.md` (D# decididas, A# abiertas): se editan en el mismo commit que el código.
 - Estado y traspaso en `docs/23-estado-y-pendientes.md`; backlog por fase en `docs/18-backlog.md`; cifras vigentes en `docs/21-cifras-medidas.md`. Actualízalos al cerrar trabajo.
+- Idioma del código: **inglés** para el código nuevo (identificadores, comentarios, nombres de pruebas), porque el repo es MIT y público. La interfaz, los mensajes, los comandos de la CLI, los códigos `E_*` y los docs siguen en español (contrato con el usuario). Migración gradual: al tocar un módulo, renombra en inglés lo que toques; no hagas renombrados masivos fuera de F15.
+- Código que se explica solo: nombres que cuenten la historia (funciones cortas con verbo, tipos con el concepto del dominio) en vez de comentarios que repiten lo que hace el código. Un comentario solo dice el *porqué* que el código no puede decir (una decisión D#, un bug ya corregido, un límite externo). Si necesitas comentar un bloque, extráelo a una función con ese nombre. Al tocar un archivo, borra los comentarios que sobran.
 - Contrato de la CLI: `ok:false` ⇔ código de salida ≠ 0. Las pruebas de contrato usan el binario real.
 
 ## Reglas técnicas
