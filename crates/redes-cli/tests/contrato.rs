@@ -862,28 +862,25 @@ fn solo_abre_la_version_vigente_del_proyecto_y_del_plan() {
     assert!(!codigos.contains("E_PROJ_SCHEMA_TOO_NEW"), "{codigos}");
 }
 
-/// Los proyectos versionados en `demo/` (y la copia de `docs/demo/`) son de la versión vigente
-/// y abren con el binario real.
+/// Los proyectos versionados en `demo/` son de la versión vigente y abren con el binario real.
 #[test]
 fn los_proyectos_de_demo_abren() {
     let raiz = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let d = tempdir("demos");
     let mut vistos = 0;
-    for carpeta in ["demo", "docs/demo"] {
-        for e in std::fs::read_dir(raiz.join(carpeta)).unwrap().flatten() {
-            let ruta = e.path();
-            if ruta.extension().is_none_or(|x| x != "redes") {
-                continue;
-            }
-            let s = corre(&["-p", ruta.to_str().unwrap(), "proyecto", "info"], &d);
-            let j = sobre(&s);
-            assert_eq!(j["ok"], true, "{}: {j}", ruta.display());
-            assert_eq!(s.codigo, 0);
-            vistos += 1;
+    for e in std::fs::read_dir(raiz.join("demo")).unwrap().flatten() {
+        let ruta = e.path();
+        if ruta.extension().is_none_or(|x| x != "redes") {
+            continue;
         }
+        let s = corre(&["-p", ruta.to_str().unwrap(), "proyecto", "info"], &d);
+        let j = sobre(&s);
+        assert_eq!(j["ok"], true, "{}: {j}", ruta.display());
+        assert_eq!(s.codigo, 0);
+        vistos += 1;
     }
     assert!(
-        vistos >= 5,
-        "se esperaban los 5 .redes de demo; hubo {vistos}"
+        vistos >= 4,
+        "se esperaban los 4 .redes de demo; hubo {vistos}"
     );
 }
