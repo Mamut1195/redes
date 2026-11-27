@@ -237,6 +237,9 @@ Objetivo: fluidez con 5k–50k tramos y 2k–20k pozos (hoy solo con cientos).
 
 **Total F14: 15,25 días.**
 
+Fuera de fase (27/11/2026): se retiró el panel «Parámetros (en vivo)» del inspector (D12, la app no
+edita el diseño). Cualquier ítem que pida editar parámetros desde la app queda descartado.
+
 ---
 
 ## F15 — Arquitectura y mantenibilidad (P1/P2)
