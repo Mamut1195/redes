@@ -79,11 +79,6 @@ impl Cache {
     pub fn cargas(&self) -> usize {
         self.cargas
     }
-
-    #[allow(dead_code)]
-    pub fn olvidar_fallos(&mut self) {
-        self.fallos.clear();
-    }
 }
 
 /// Convierte un `.glb` en vértices listos para el pase 3D, pasando de Y-arriba a Z-arriba.

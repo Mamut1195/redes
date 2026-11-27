@@ -19,10 +19,6 @@ impl P2 {
     pub fn dist(self, o: P2) -> f64 {
         ((self.x - o.x).powi(2) + (self.y - o.y).powi(2)).sqrt()
     }
-    /// Longitud del tramo entre dos puntos.
-    pub fn len_to(self, o: P2) -> f64 {
-        self.dist(o)
-    }
     pub fn lerp(self, o: P2, t: f64) -> P2 {
         P2::new(self.x + (o.x - self.x) * t, self.y + (o.y - self.y) * t)
     }
@@ -48,18 +44,6 @@ impl P3 {
     }
 }
 
-/// Distancia punto–segmento en planta (para hit-testing y trazado).
-pub fn dist_to_segment(p: P2, a: P2, b: P2) -> f64 {
-    let abx = b.x - a.x;
-    let aby = b.y - a.y;
-    let len2 = abx * abx + aby * aby;
-    if len2 <= f64::EPSILON {
-        return p.dist(a);
-    }
-    let t = (((p.x - a.x) * abx + (p.y - a.y) * aby) / len2).clamp(0.0, 1.0);
-    p.dist(P2::new(a.x + abx * t, a.y + aby * t))
-}
-
 /// Punto más cercano de un segmento, con su parámetro `t` en `0..=1`.
 pub fn closest_on_segment(p: P2, a: P2, b: P2) -> (P2, f64) {
     let abx = b.x - a.x;
@@ -83,26 +67,6 @@ pub fn polyline_len_3d(points: &[P3]) -> f64 {
             (dx * dx + dy * dy + dz * dz).sqrt()
         })
         .sum()
-}
-
-/// Longitud en planta.
-pub fn polyline_len_2d(points: &[P2]) -> f64 {
-    points.windows(2).map(|w| w[0].dist(w[1])).sum()
-}
-
-/// Área de un polígono simple por la fórmula del cordón (positiva si el anillo es antihorario).
-pub fn polygon_area(points: &[P2]) -> f64 {
-    let n = points.len();
-    if n < 3 {
-        return 0.0;
-    }
-    let mut s = 0.0;
-    for i in 0..n {
-        let a = points[i];
-        let b = points[(i + 1) % n];
-        s += a.x * b.y - b.x * a.y;
-    }
-    s * 0.5
 }
 
 /// Caja envolvente `[xmin, ymin, xmax, ymax]`.
@@ -212,25 +176,6 @@ impl SegmentGrid {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn distancia_a_segmento() {
-        let a = P2::new(0.0, 0.0);
-        let b = P2::new(10.0, 0.0);
-        assert!((dist_to_segment(P2::new(5.0, 3.0), a, b) - 3.0).abs() < 1e-9);
-        assert!((dist_to_segment(P2::new(-4.0, 0.0), a, b) - 4.0).abs() < 1e-9);
-    }
-
-    #[test]
-    fn area_de_un_cuadrado() {
-        let sq = [
-            P2::new(0.0, 0.0),
-            P2::new(2.0, 0.0),
-            P2::new(2.0, 2.0),
-            P2::new(0.0, 2.0),
-        ];
-        assert!((polygon_area(&sq).abs() - 4.0).abs() < 1e-12);
-    }
 
     #[test]
     fn longitud_3d() {

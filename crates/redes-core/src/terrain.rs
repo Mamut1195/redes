@@ -283,22 +283,6 @@ impl Terrain {
         }
         Terrain::build(&self.name, self.epsg, pts)
     }
-
-    /// Terreno sintético para demos y pruebas: ondulación suave + una divisoria.
-    pub fn synthetic(epsg: u32, bbox: Bbox, n: usize) -> Terrain {
-        let mut points = Vec::with_capacity(n * n);
-        for j in 0..n {
-            for i in 0..n {
-                let fx = i as f64 / (n - 1) as f64;
-                let fy = j as f64 / (n - 1) as f64;
-                let x = bbox.xmin + fx * bbox.width();
-                let y = bbox.ymin + fy * bbox.height();
-                let z = 2400.0 + (fx * 6.0).sin() * 6.0 + (fy * 4.0).cos() * 4.0 + fx * 9.0;
-                points.push(SurfacePoint::new(x, y, z));
-            }
-        }
-        Terrain::build("terreno-demo", epsg, points)
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

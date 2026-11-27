@@ -11,7 +11,6 @@ mod reimportar;
 mod svg;
 mod validar;
 
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -1513,16 +1512,4 @@ fn slug(s: &str) -> String {
 fn round(v: f64, d: i32) -> f64 {
     let f = 10f64.powi(d);
     (v * f).round() / f
-}
-
-#[allow(dead_code)]
-fn counts_by_family(p: &Project) -> BTreeMap<String, usize> {
-    let mut m = BTreeMap::new();
-    for n in p.nodes.iter().filter(|n| !n.deleted) {
-        *m.entry(n.family.clone()).or_insert(0) += 1;
-    }
-    for l in p.links.iter().filter(|l| !l.deleted) {
-        *m.entry(l.family.clone()).or_insert(0) += 1;
-    }
-    m
 }

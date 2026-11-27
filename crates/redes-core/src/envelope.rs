@@ -269,11 +269,6 @@ impl Envelope {
         self
     }
 
-    pub fn with_explain(mut self, v: serde_json::Value) -> Envelope {
-        self.explain = Some(v);
-        self
-    }
-
     pub fn with_artifact(mut self, kind: &str, path: &str) -> Envelope {
         let bytes = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
         self.artifacts.push(Artifact {

@@ -114,6 +114,7 @@ impl AttrType {
             AttrType::Enum(_) => "enum",
         }
     }
+    #[cfg(test)]
     pub fn options(self) -> &'static [&'static str] {
         match self {
             AttrType::Enum(o) => o,
@@ -146,18 +147,11 @@ impl Value {
             _ => None,
         }
     }
+    #[cfg(test)]
     pub fn as_bool(&self) -> Option<bool> {
         match self {
             Value::Bool(b) => Some(*b),
             _ => None,
-        }
-    }
-    pub fn type_key(&self) -> &'static str {
-        match self {
-            Value::Num(_) => "num",
-            Value::Int(_) => "int",
-            Value::Bool(_) => "bool",
-            Value::Text(_) => "text",
         }
     }
 }
@@ -531,6 +525,7 @@ pub fn family(key: &str) -> Option<&'static FamilyDef> {
 }
 
 /// Familias de una categoría.
+#[cfg(test)]
 pub fn by_category(c: Category) -> impl Iterator<Item = &'static FamilyDef> {
     FAMILIES.iter().filter(move |f| f.category == c)
 }

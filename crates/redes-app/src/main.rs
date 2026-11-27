@@ -13,7 +13,7 @@ mod validacion;
 
 use std::sync::{Arc, Mutex};
 
-use redes_core::families::{self, caps, family};
+use redes_core::families::{self, family};
 use redes_core::model::{EstadoObjeto, Project};
 use redes_core::seleccion::RejillaSeleccion;
 use redes_core::terrain::Terrain;
@@ -1601,18 +1601,6 @@ fn camara_pozos(s: &mut State) {
     }
     s.fitted = true;
     s.rebuild();
-}
-
-#[allow(dead_code)]
-fn caps_of(family_key: &str) -> u32 {
-    family(family_key).map(|f| f.caps).unwrap_or(0)
-}
-
-#[allow(dead_code)]
-fn is_viewable(family_key: &str) -> bool {
-    family(family_key)
-        .map(|f| f.can(caps::HYDRAULIC_NODE) || f.can(caps::ATTACHABLE))
-        .unwrap_or(false)
 }
 
 #[cfg(test)]
