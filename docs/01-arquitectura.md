@@ -79,7 +79,7 @@ crates/
 |---|---|---|
 | `geom` | P2/P3, distancias, áreas, bbox, índice de segmentos | — |
 | `terrain` | Nube de puntos → TIN (Delaunay), cota interpolada, curvas, aligerado para dibujo | `geom` |
-| `families` | Registro de las 17 familias: atributos, unidades, subtipos, capacidades | — |
+| `families` | Registro de las 46 familias (315 subtipos): atributos, unidades, subtipos, capacidades | — |
 | `model` | `Project`, `Node`, `Link`, `Dato`, estados de revisión, identidad | `geom`, `families` |
 | `indice` | Índices de `Project` por id, por código y nodo → tramos (no se guardan) | `model` |
 | `topology` | Grafo derivado: incidencia, grados, componentes, sentido de flujo | `model` |
@@ -107,14 +107,19 @@ crates/
 Una familia nueva se añade **en un solo lugar** (`families::build()`): la UI, el inspector, la
 CLI y el exportador la leen del mismo esquema. No hay `match` por familia en el motor.
 
-### 4.2 Las 17 familias
+### 4.2 Las familias
+
+El registro tiene **46 familias y 315 subtipos** (docs/23, prueba
+`capacidades_publica_el_registro_completo`). La tabla muestra las 17 familias de partida; las 29
+restantes (cadena de agua cruda, plantas por unidad, comunes) y el detalle de cada una están en
+docs/20 y en `redes esquema`.
 
 | Familia | Rol | Geometría | Subtipos |
 |---|---|---|---|
 | `saneamiento.pozo` | nodo | punto | inspección, caída, resalto, ciego, bombeo, limpieza, ventilación |
 | `saneamiento.tuberia` | arco | polilínea 3D | colector, interceptor, emisario, conducto, rebose |
 | `saneamiento.descarga` | nodo | punto | emisario final, alivio, rebose de tanque, disipador |
-| `saneamiento.camara` | nodo | punto | reunión, carga, quiebre, válvulas, medición |
+| `saneamiento.camara` | nodo | punto | desarenadora, reunión, inspección, cámara seca, compensación |
 | `saneamiento.acometida` | arco | polilínea | agua potable, alcantarillado, pluvial |
 | `saneamiento.sumidero` | nodo | punto | calzada, cuneta |
 | `saneamiento.canal` | arco | polilínea | rectangular, trapezoidal, triangular, circular |
@@ -124,9 +129,9 @@ CLI y el exportador la leen del mismo esquema. No hay `match` por familia en el 
 | `agua.valvula` | dispositivo | punto | compuerta, mariposa, retención, aire, purga, RP, reguladora, alivio |
 | `agua.llave` | dispositivo | punto | corporación, banqueta, hidrante, tapón |
 | `agua.tanque` | nodo | polígono | apoyado, elevado, cisterna, contacto |
-| `agua.captacion` | nodo | punto | manantial, pozo profundo, galería, toma de río |
+| `agua.captacion` | nodo | punto | manantial, pozo profundo, galería |
 | `agua.medidor` | dispositivo | punto | domiciliario, macromedidor, electromagnético, ultrasónico |
-| `agua.planta` | nodo | polígono | PTAP, PTAR, laguna, desalinizadora |
+| `agua.planta` | nodo | polígono | PTAP, PTAR, desalinizadora |
 | `comun.cruce` | apoyo | punto | río, vía, otra red, aéreo, subfluvial |
 | `comun.hito` | apoyo | punto | BM, punto de control, sondeo |
 

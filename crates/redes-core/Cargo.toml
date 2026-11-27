@@ -1,6 +1,6 @@
 [package]
 name = "redes-core"
-description = "Motor headless de Mamut Redes: modelo de objeto, topología, hidráulica y movimiento de tierras."
+description = "Motor headless de Mamut Redes: modelo de objetos con procedencia, topología, ingesta, vista y exportación; sin cálculo de ingeniería (D4)."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

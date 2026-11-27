@@ -51,7 +51,7 @@
 ## Reglas técnicas
 - Coordenadas UTM en `f64` absoluto con `origin` local. El render resta el origen en `f64` y solo después baja a `f32`. Construir geometría en `f32` con UTM rompió los tubos (docs/15): no lo repitas.
 - No reintroducir bugs ya corregidos: NaN al guardar, guardado no atómico, pánico del TIN.
-- `vendor/rune`: NO editar ni formatear. Los cambios a Rune van como `vendor/parches/*.patch` documentados en `vendor/LEEME.md`. Mantén la tabla `[patch.crates-io]` del `Cargo.toml` raíz.
+- `vendor/rune`: NO editar ni formatear. No hay parches propios sobre Rune: la tabla `[patch.crates-io]` del `Cargo.toml` raíz apunta a las dependencias que Rune ya trae en `vendor/rune/vendor/*` y se mantiene igual que la suya. Un cambio en Rune se hace upstream y se trae la revisión nueva a `vendor/rune` (ver `vendor/LEEME.md`).
 - `vendor/rune` está fuera del workspace: no lo metas en comandos de cargo del producto.
 - Edition 2024. El CI solo exige clippy `correctness`, pero no añadas avisos nuevos.
 

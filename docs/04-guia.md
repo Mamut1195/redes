@@ -59,6 +59,8 @@ Dentro del visor:
 | Desplazar | Arrastrar con el botón derecho (o central) |
 | Acercar / alejar | Rueda del ratón |
 | Encuadrar todo | Botón **Encuadrar** |
+| Ver por dentro | **Foco**, **Corte** y **Explosión** sobre el objeto seleccionado (docs/11) |
+| Ver lo enterrado | Botón **Rayos X** (o `--rayos-x` al arrancar): solera, fuste y escalera translúcidos |
 | Vistas fijas | **Planta**, **Isométrica**, botón *Perfil* en el panel izquierdo |
 | Apagar una capa | Panel izquierdo → **Capas** |
 | Seleccionar un objeto | Clic sobre el pozo o la tubería |

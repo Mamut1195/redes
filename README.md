@@ -219,6 +219,9 @@ En la app: `--scene ptap` y `--scene ptar` enfocan la planta y la salida del alc
 
 ## Estado
 
-Esqueleto caminante verificado: importa, dibuja en 3D, revisa, aprueba y exporta DXF
-(ida y vuelta sin pérdida: 44 objetos → DXF → 44 objetos). Rune está en pre-release y se
-consume fijado a una revisión de `dev`.
+Release 0.1.0 publicada. Registro de 46 familias y 315 subtipos; importa el plan
+(`redes.plan/1`) y el DXF propio, dibuja en 3D (con pase de profundidad `--gpu3d`), valida la
+geometría, revisa y aprueba objeto a objeto, saca perfil, acta y cantidades, y exporta DXF
+(ida y vuelta sin pérdida), GeoJSON y glTF. Qué está hecho y qué falta, con las cifras:
+[docs/23](docs/23-estado-y-pendientes.md) y [docs/21](docs/21-cifras-medidas.md). Rune está en
+pre-release y se consume fijado a una revisión de `dev`.

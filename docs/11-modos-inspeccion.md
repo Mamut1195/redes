@@ -29,6 +29,14 @@ se recorta la geometría contra el semiplano y se dibuja la **arista de corte** 
 - `Shift + rueda` desplaza el plano (2 cm por punto de rueda).
 - Sirve para ver el interior real del pozo: espesor de pared, escalera, banqueo, tubos entrando.
 - El recorte es por triángulo (Sutherland-Hodgman en el semiplano), así que también corta tubos.
+- La cara de corte lleva **poché**: una trama de rayitas que la hace leer como sección (F10-02).
+
+## 2.1 Rayos X
+
+`Rayos X` (botón de la barra superior, clave `btn-rayos-x`; o `--rayos-x` al arrancar) dibuja
+**translúcido lo enterrado** de cada pozo: solera, fuste y escalera pasan a opacidad 0,35, así se
+ve lo que queda por debajo de la rasante sin cortar. El botón muestra `Rayos X *` mientras está
+activo y la barra de estado lo avisa. No cambia el proyecto (F10-04).
 
 ## 3. Explosión
 
@@ -52,6 +60,8 @@ seleccionado recibe una etiqueta con `código · subtipo`.
 
 - Presupuesto: **24 etiquetas** como máximo, las más cercanas; la del objeto seleccionado se
   dibuja al final para que nada la tape.
+- Se reparten en **7 carriles** sin solaparse; si una se mueve de su sitio, una línea guía la une
+  a su pieza, y la que no cabe en ningún carril se omite en vez de pisar otra (F10-03).
 - Se dibujan como texto real (capa superpuesta al canvas), no como parte de la malla: se leen a
   cualquier zoom y no engordan el triángulo.
 
@@ -108,7 +118,6 @@ Escenas headless para revisar sin tocar el ratón: `--scene foco`, `--scene cort
 
 ## 9. Lo que sigue
 
-1. Corte con **cara de sección** rellena (hoy es la arista; falta el relleno tramado).
-2. Etiquetas con **seis carriles** y detección de solapes (hoy es una lista sin colisión).
-
-(Se retiró «Ficha editable para todos los parámetros»: la app no edita el diseño, D12.)
+Lo que esta sección daba por pendiente ya está hecho en F10: el poché en la cara de corte (§2) y
+las etiquetas en carriles sin solapes (§4). Se retiró «Ficha editable para todos los parámetros»:
+la app no edita el diseño (D12).

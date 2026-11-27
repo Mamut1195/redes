@@ -16,7 +16,8 @@ serde_json = "1"
 
 # Rune se consume del checkout vendorizado y fijado (ver docs/00-investigacion-rune.md).
 # Un `[patch]` de una dependencia no aplica al workspace que la consume: toda app que
-# compile Rune repite los parches de Rune.
+# compile Rune repite esta tabla, que apunta a las dependencias que Rune trae en
+# vendor/rune/vendor/*. No hay parches propios sobre Rune (vendor/LEEME.md).
 [patch.crates-io]
 wgpu-hal = { path = "vendor/rune/vendor/wgpu-hal" }
 winit = { path = "vendor/rune/vendor/winit" }

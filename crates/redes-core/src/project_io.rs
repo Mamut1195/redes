@@ -18,8 +18,7 @@ pub const EXT: &str = "redes";
 
 /// Guarda de forma atómica: escribe un temporal y lo renombra.
 ///
-/// Nota: el motor no llama a esto desde el bucle de frames de la UI; el autoguardado corre en
-/// un trabajador (regla "cero E/S en el frame loop").
+/// No hay autoguardado: solo se llama cuando el usuario pulsa Guardar o desde la CLI.
 pub fn save(p: &Project, path: &Path) -> Result<(), String> {
     // Blindaje: `serde_json` escribe `null` para NaN/infinito y el archivo deja de poder abrirse.
     // Se rechaza antes de tocar el disco.

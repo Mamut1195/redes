@@ -26,8 +26,12 @@ del repositorio. No es un fork: no hay cambios propios en su código.
 
 - **No se formatea ni se edita** `vendor/rune` (`cargo fmt --all` lo alcanza: usar
   `cargo fmt -p redes-core -p redes-cli -p redes-app`).
-- Si algún día hay que cambiar Rune, **no se toca en su sitio**: se crea un fork, se mantiene el
-  parche en `vendor/parches/*.patch` con un script que lo aplique, y se documenta aquí el motivo,
-  el commit base y cómo revertirlo.
+- No hay parches propios sobre Rune. Lo único que se «parchea» son las dependencias que Rune ya
+  trae corregidas en `vendor/rune/vendor/*` (`wgpu-hal`, `winit`, `parley_engine`,
+  `accesskit_windows`, `accesskit_macos`): la tabla `[patch.crates-io]` del `Cargo.toml` raíz
+  apunta a esas carpetas y hay que mantenerla igual que la de Rune.
+- Si algún día hay que cambiar Rune, **no se toca en su sitio**: se cambia upstream (o en un fork)
+  y se trae la revisión nueva a `vendor/rune` (`scripts/traer-rune.ps1` deja el checkout en
+  `out/rune-upstream` para comparar), anotando aquí el commit y el motivo.
 - Actualizar de revisión = una tarea con ticket propio: cambiar el commit, compilar, ejecutar la
   suite y revisar a mano los modos (foco, corte, explosión, `--gpu3d`).
