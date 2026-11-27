@@ -29,15 +29,15 @@ $mutaciones = @(
         Nombre = "corte-tubos"
         Archivo = "crates/redes-core/src/view.rs"
         Patron = 'Some\(xc\) => cortar_tri\(verts, xc\),'
-        Reemplazo = 'Some(_) => (vec![verts], None),'
+        Reemplazo = 'Some(_) => (Trozos::uno(verts), None),'
         Prueba = "el_corte_secciona_las_tuberias"
         Que = "dejar de seccionar las tuberias en el corte"
     },
     @{
         Nombre = "terreno-plano"
         Archivo = "crates/redes-core/src/view.rs"
-        Patron = 'let depth = \(cam\.depth\(pa\) \+ cam\.depth\(pb\) \+ cam\.depth\(pc\)\) as f32 / 3\.0;'
-        Reemplazo = 'let depth = 0.0f32; let _ = (pa, pb, pc);'
+        Patron = 'let depth = \(da \+ db \+ dc\) as f32 / 3\.0;'
+        Reemplazo = 'let depth = 0.0f32; let _ = (da, db, dc);'
         Prueba = "el_terreno_queda_ordenado_de_lejos_a_cerca"
         Que = "dejar el terreno sin orden de profundidad"
     },
@@ -200,6 +200,63 @@ $mutaciones = @(
         Paquete = "redes-app"
         Prueba = "el_proxy_se_calcula_una_vez_por_pieza"
         Que = "recalcular el proxy por instancia (F14-06)"
+    },
+    @{
+        Nombre = "recorte-de-mas"
+        Archivo = "crates/redes-core/src/view.rs"
+        Patron = 'x1: w \+ Self::MARGEN,'
+        Reemplazo = 'x1: w * 0.5,'
+        Prueba = "el_recorte_solo_quita_lo_que_no_se_ve"
+        Que = "recortar media pantalla que si se ve (F14-07)"
+    },
+    @{
+        Nombre = "recorte-apagado"
+        Archivo = "crates/redes-core/src/view.rs"
+        Patron = 'Pantalla::de\(&pr\)'
+        Reemplazo = 'Pantalla::infinita()'
+        Prueba = "el_recorte_solo_quita_lo_que_no_se_ve"
+        Que = "ordenar tambien lo que cae fuera de pantalla (F14-07)"
+    },
+    @{
+        Nombre = "esfera-pozo-corta"
+        Archivo = "crates/redes-core/src/view.rs"
+        Patron = 'h\.max\(0\.8\) \+ 0\.5 \+ dz_max'
+        Reemplazo = '0.8'
+        Prueba = "la_esfera_previa_del_pozo_envuelve_su_malla"
+        Que = "descartar pozos que asoman por el borde (F14-07)"
+    },
+    @{
+        Nombre = "orden-negativos"
+        Archivo = "crates/redes-core/src/view.rs"
+        Patron = '\(clave_de_orden\(d\) as u32\) \^ 0x8000_0000'
+        Reemplazo = 'clave_de_orden(d) as u32'
+        Prueba = "el_orden_del_pintor_es_el_estable_de_antes"
+        Que = "ordenar mal las profundidades negativas (F14-04)"
+    },
+    @{
+        Nombre = "bloques-desordenados"
+        Archivo = "crates/redes-core/src/view.rs"
+        Patron = '\.chunks\(tam\)'
+        Reemplazo = '.chunks(tam).rev()'
+        Prueba = "los_bloques_conservan_el_orden"
+        Que = "juntar los bloques de hilos fuera de orden (F14-04)"
+    },
+    @{
+        Nombre = "rejilla-sin-reparto"
+        Archivo = "crates/redes-core/src/seleccion.rs"
+        Patron = 'const CELDA: f32 = 32\.0;'
+        Reemplazo = 'const CELDA: f32 = 1.0e6;'
+        Destino = "escena"
+        Prueba = "la_rejilla_elige_como_el_recorrido_lineal_mirando_poco"
+        Que = "una sola celda: cada clic recorre toda la red (F14-07)"
+    },
+    @{
+        Nombre = "rejilla-pierde-vecinos"
+        Archivo = "crates/redes-core/src/seleccion.rs"
+        Patron = '> r \+ media'
+        Reemplazo = '> r'
+        Prueba = "la_rejilla_elige_lo_mismo_que_el_recorrido_lineal"
+        Que = "olvidar tramos en las celdas que rozan (F14-07)"
     }
 )
 

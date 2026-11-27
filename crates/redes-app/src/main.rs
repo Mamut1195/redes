@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex};
 
 use redes_core::families::{self, caps, family};
 use redes_core::model::{EstadoObjeto, Project};
+use redes_core::seleccion::RejillaSeleccion;
 use redes_core::terrain::Terrain;
 use redes_core::view::{self, Camera, Layers, Opciones, Prim, Scene};
 use rune::tok::type_;
@@ -147,6 +148,8 @@ struct State {
     validacion: validacion::Panel,
     /// Campo de texto del inspector para observar o cerrar observaciones (F13-03).
     obs_texto: rune::TextEdit,
+    /// Rejilla de selección de la cámara actual (F14-07); `None` tras cada `rebuild`.
+    rejilla: Option<RejillaSeleccion>,
 }
 
 /// Lo que define la malla del pase 3D. La cámara, la selección y los modos de detalle no entran:
@@ -224,6 +227,7 @@ impl State {
             perfil: None,
             validacion: Default::default(),
             obs_texto: rune::TextEdit::new(""),
+            rejilla: None,
         };
         // Modo rayos X por línea de comandos (útil para capturas y para los agentes).
         if rune::extra_args().iter().any(|a| a == "--rayos-x") {
@@ -261,6 +265,8 @@ impl State {
     /// y la malla se regenera únicamente si cambió lo que la define (F14-02).
     fn rebuild(&mut self) {
         self.cam.viewport = self.viewport;
+        // La selección se proyecta con esta cámara y este proyecto: se rehace al primer clic.
+        self.rejilla = None;
         if self.gpu3d {
             self.scene = Scene {
                 etiquetas: view::etiquetas(
@@ -628,50 +634,16 @@ impl State {
     }
 
     /// Selecciona el objeto más cercano al puntero en pantalla.
-    fn pick(&self, at: [f32; 2]) -> Option<String> {
-        let o = self.project.origin;
-        let mut best: Option<(f32, String)> = None;
-        for n in self.project.nodes.iter().filter(|n| !n.deleted) {
-            let p = [n.pos.x - o.x, n.pos.y - o.y, n.z_rim];
-            if let Some(s) = self.cam.project(p) {
-                let d = ((s[0] - at[0]).powi(2) + (s[1] - at[1]).powi(2)).sqrt();
-                if d < 18.0 && best.as_ref().is_none_or(|(bd, _)| d < *bd) {
-                    best = Some((d, n.code.clone()));
-                }
-            }
-        }
-        for l in self.project.links.iter().filter(|l| !l.deleted) {
-            if l.path.len() < 2 {
-                continue;
-            }
-            let a = l.path[0];
-            let b = l.path[l.path.len() - 1];
-            let (Some(sa), Some(sb)) = (
-                self.cam.project([a.x - o.x, a.y - o.y, a.z]),
-                self.cam.project([b.x - o.x, b.y - o.y, b.z]),
-            ) else {
-                continue;
-            };
-            let d = dist_seg(at, sa, sb);
-            if d < 14.0 && best.as_ref().is_none_or(|(bd, _)| d < *bd) {
-                best = Some((d, l.code.clone()));
-            }
-        }
-        best.map(|(_, c)| c)
+    ///
+    /// Con la rejilla de selección (F14-07): se arma una vez por cámara (`rebuild` la invalida)
+    /// y cada clic mira solo los objetos de su celda.
+    fn pick(&mut self, at: [f32; 2]) -> Option<String> {
+        let rejilla = self
+            .rejilla
+            .get_or_insert_with(|| RejillaSeleccion::nueva(&self.project, &self.cam));
+        rejilla.elegir(at).map(str::to_string)
     }
 }
-
-fn dist_seg(p: [f32; 2], a: [f32; 2], b: [f32; 2]) -> f32 {
-    let ab = [b[0] - a[0], b[1] - a[1]];
-    let len2 = ab[0] * ab[0] + ab[1] * ab[1];
-    if len2 <= 1e-6 {
-        return ((p[0] - a[0]).powi(2) + (p[1] - a[1]).powi(2)).sqrt();
-    }
-    let t = (((p[0] - a[0]) * ab[0] + (p[1] - a[1]) * ab[1]) / len2).clamp(0.0, 1.0);
-    let q = [a[0] + ab[0] * t, a[1] + ab[1] * t];
-    ((p[0] - q[0]).powi(2) + (p[1] - q[1]).powi(2)).sqrt()
-}
-
 fn load_project() -> (Project, Option<PathBuf>, Option<String>) {
     // 1) Argumento propio: `--abrir <ruta>` (o una ruta `*.redes` suelta).
     let extra = rune::extra_args();

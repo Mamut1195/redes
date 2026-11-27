@@ -39,6 +39,7 @@ pub mod perfil;
 pub mod project_io;
 pub mod reimportar;
 pub mod revision;
+pub mod seleccion;
 pub mod terrain;
 pub mod topology;
 pub mod validar;

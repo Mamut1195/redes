@@ -167,17 +167,10 @@ impl Camera {
     }
 
     /// Proyecta un punto del mundo local (origen ya restado). `None` si está detrás.
+    ///
+    /// Para muchos puntos con la misma cámara use [`Camera::proyector`]: esto rehace la base.
     pub fn project(&self, p: [f64; 3]) -> Option<[f32; 2]> {
-        let (eye, right, up) = self.basis();
-        let v = [p[0] - eye[0], p[1] - eye[1], p[2] - eye[2]];
-        let z = dot(v, self.forward());
-        if z <= 0.05 {
-            return None;
-        }
-        let f = z / self.focal();
-        let x = (dot(v, right) / f) as f32;
-        let y = (dot(v, up) / f) as f32;
-        Some([self.viewport[0] * 0.5 + x, self.viewport[1] * 0.5 - y])
+        self.proyector().project(p)
     }
 
     fn forward(&self) -> [f64; 3] {
@@ -195,19 +188,93 @@ impl Camera {
 
     /// Distancia del punto al plano de la cámara (para ordenar).
     pub fn depth(&self, p: [f64; 3]) -> f64 {
-        dot(
-            [
-                p[0] - self.eye()[0],
-                p[1] - self.eye()[1],
-                p[2] - self.eye()[2],
-            ],
-            self.forward(),
-        )
+        self.proyector().depth(p)
     }
 
     /// Proyecta un segmento recortándolo contra el plano cercano.
     pub fn project_segment(&self, a: [f64; 3], b: [f64; 3]) -> Option<([f32; 2], [f32; 2])> {
-        let (da, db) = (self.depth(a), self.depth(b));
+        self.proyector().project_segment(a, b)
+    }
+
+    /// La cámara precalculada (F14-04): ojo, base, eje de visión y focal se calculan una vez y
+    /// cada punto cuesta tres productos escalares. Antes cada `project` rehacía la base (seis
+    /// llamadas trigonométricas y dos normalizaciones) y cada `depth` el ojo dos veces.
+    ///
+    /// Da los mismos números que [`Camera::project`] y [`Camera::depth`], bit a bit: es la
+    /// misma cuenta en el mismo orden, solo que hecha una vez.
+    pub fn proyector(&self) -> Proyector {
+        let (eye, right, up) = self.basis();
+        Proyector {
+            eye,
+            right,
+            up,
+            forward: self.forward(),
+            focal: self.focal(),
+            viewport: self.viewport,
+        }
+    }
+}
+
+/// Cámara precalculada para proyectar muchos puntos (F14-04). Se obtiene con
+/// [`Camera::proyector`] y no se guarda: si la cámara cambia, se pide otro.
+#[derive(Clone, Copy, Debug)]
+pub struct Proyector {
+    eye: [f64; 3],
+    right: [f64; 3],
+    up: [f64; 3],
+    forward: [f64; 3],
+    focal: f64,
+    viewport: [f32; 2],
+}
+
+impl Proyector {
+    /// Proyecta un punto del mundo local (origen ya restado). `None` si está detrás.
+    #[inline]
+    pub fn project(&self, p: [f64; 3]) -> Option<[f32; 2]> {
+        self.proyectar(p).map(|(s, _)| s)
+    }
+
+    /// Proyección y profundidad de un punto a la vez (la profundidad es la `z` de la
+    /// proyección: sale gratis). `None` si está detrás.
+    #[inline]
+    pub fn proyectar(&self, p: [f64; 3]) -> Option<([f32; 2], f64)> {
+        let v = [p[0] - self.eye[0], p[1] - self.eye[1], p[2] - self.eye[2]];
+        let z = dot(v, self.forward);
+        if z <= 0.05 {
+            return None;
+        }
+        let f = z / self.focal;
+        let x = (dot(v, self.right) / f) as f32;
+        let y = (dot(v, self.up) / f) as f32;
+        Some(([self.viewport[0] * 0.5 + x, self.viewport[1] * 0.5 - y], z))
+    }
+
+    /// Distancia del punto al plano de la cámara (para ordenar).
+    #[inline]
+    pub fn depth(&self, p: [f64; 3]) -> f64 {
+        dot(
+            [p[0] - self.eye[0], p[1] - self.eye[1], p[2] - self.eye[2]],
+            self.forward,
+        )
+    }
+
+    /// Distancia focal en puntos: un objeto de `r` metros a `d` metros mide `r·focal/d` puntos.
+    pub fn focal(&self) -> f64 {
+        self.focal
+    }
+
+    /// Tamaño del viewport en puntos.
+    pub fn viewport(&self) -> [f32; 2] {
+        self.viewport
+    }
+
+    /// Proyecta un segmento recortándolo contra el plano cercano.
+    pub fn project_segment(&self, a: [f64; 3], b: [f64; 3]) -> Option<([f32; 2], [f32; 2])> {
+        self.segmento(a, b, self.depth(a), self.depth(b))
+    }
+
+    /// [`Proyector::project_segment`] con las profundidades de los extremos ya calculadas.
+    fn segmento(&self, a: [f64; 3], b: [f64; 3], da: f64, db: f64) -> Option<([f32; 2], [f32; 2])> {
         let (a, b) = if da <= 0.05 && db <= 0.05 {
             return None;
         } else if da <= 0.05 {
@@ -269,7 +336,7 @@ impl Default for Layers {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Prim {
     /// Polígono relleno ya proyectado.
     Poly {
@@ -316,6 +383,9 @@ pub struct Scene {
     pub line_count: usize,
     /// Etiquetas ya proyectadas, en orden de dibujo (lejos → cerca).
     pub etiquetas: Vec<Etiqueta>,
+    /// Primitivas, tramos y piezas descartados por caer enteros fuera de pantalla: no entran
+    /// en el ordenamiento del pintor (F14-07).
+    pub descartadas: usize,
 }
 
 /// Construye la escena: terreno sombreado, tubos, pozos y resaltado.
@@ -362,10 +432,33 @@ pub fn build_opts(
     selected: Option<&str>,
     opts: &Opciones,
 ) -> Scene {
+    construir(p, terrain, cam, layers, selected, opts, true)
+}
+
+/// [`build_opts`] con el recorte por pantalla a elección: las pruebas comparan con y sin él.
+fn construir(
+    p: &Project,
+    terrain: Option<&crate::terrain::Terrain>,
+    cam: &Camera,
+    layers: Layers,
+    selected: Option<&str>,
+    opts: &Opciones,
+    recortar: bool,
+) -> Scene {
     let o = p.origin;
     let zr = cam.target[2];
     let k = cam.z_scale;
     let to_local = move |q: P3| [q.x - o.x, q.y - o.y, (q.z - zr) * k + zr];
+    // Cámara precalculada una vez por escena (F14-04).
+    let pr = cam.proyector();
+    // Recorte por pantalla (F14-07): lo que cae entero fuera del viewport no entra en las listas
+    // y, por tanto, no se ordena. Sin recorte, la pantalla es infinita.
+    let pantalla = if recortar {
+        Pantalla::de(&pr)
+    } else {
+        Pantalla::infinita()
+    };
+    let mut descartadas = 0usize;
     let mut prims: Vec<Prim> = Vec::new();
     // La red se dibuja despues del terreno (modo rayos X): las tuberias van enterradas
     // y en una revision hay que verlas aunque el terreno las tape.
@@ -401,18 +494,23 @@ pub fn build_opts(
                 n = [-n[0], -n[1], -n[2]];
             }
             let shade = (0.42 + 0.58 * dot(n, light).max(0.0)) as f32;
-            let (Some(sa), Some(sb), Some(sc)) =
-                (cam.project(pa), cam.project(pb), cam.project(pc))
+            let (Some((sa, da)), Some((sb, db)), Some((sc, dc))) =
+                (pr.proyectar(pa), pr.proyectar(pb), pr.proyectar(pc))
             else {
                 continue;
             };
-            let depth = (cam.depth(pa) + cam.depth(pb) + cam.depth(pc)) as f32 / 3.0;
+            let pts = expand([sa, sb, sc], 0.6);
+            if !pantalla.ve(&pts) {
+                descartadas += 1;
+                continue;
+            }
+            let depth = (da + db + dc) as f32 / 3.0;
             let fog = fog(depth, cam.distance as f32);
             // Color por cota (verde valle ? ocre altura) con sombreado por normal.
             let t01 = (((a.z + b.z + c.z) / 3.0 - zmin) / zspan).clamp(0.0, 1.0) as f32;
             let base = [0.26 + 0.34 * t01, 0.40 + 0.16 * t01, 0.26 + 0.06 * t01];
             prims.push(Prim::Poly {
-                pts: expand(&[sa, sb, sc], 0.6),
+                pts: pts.to_vec(),
                 // Opaco: la niebla se mezcla contra el fondo en el color, no con alfa.
                 // Con alfa, los triangulos solapados dejarian costuras brillantes.
                 fill: [
@@ -461,42 +559,46 @@ pub fn build_opts(
                     crate::geom::P2::new(b.x - nx, b.y - ny),
                     crate::geom::P2::new(a.x - nx, a.y - ny),
                 ];
-                let mut pts = Vec::with_capacity(4);
-                let mut prof = Vec::with_capacity(4);
+                let mut pts = [[0.0f32; 2]; 4];
+                let mut prof = [0.0f64; 4];
                 let mut ok = true;
-                for q in esquinas {
+                for (i, q) in esquinas.into_iter().enumerate() {
                     let Some(z) = z_de(q) else {
                         ok = false;
                         break;
                     };
                     let local = to_local(P3::new(q.x, q.y, z + 0.22));
-                    match cam.project(local) {
-                        Some(s) => {
-                            pts.push(s);
-                            prof.push(cam.depth(local));
+                    match pr.proyectar(local) {
+                        Some((s, d)) => {
+                            pts[i] = s;
+                            prof[i] = d;
                         }
                         None => ok = false,
                     }
                 }
-                if !ok || pts.len() < 4 {
+                if !ok {
                     continue;
                 }
-                let depth = prof.iter().sum::<f64>() as f32 / prof.len() as f32;
-                roads.push(Prim::Poly {
-                    pts: pts.clone(),
-                    fill: [0.175, 0.185, 0.205, 1.0],
-                    depth,
-                });
+                if pantalla.ve(&pts) {
+                    let depth = prof.iter().sum::<f64>() as f32 / 4.0;
+                    roads.push(Prim::Poly {
+                        pts: pts.to_vec(),
+                        fill: [0.175, 0.185, 0.205, 1.0],
+                        depth,
+                    });
+                } else {
+                    descartadas += 1;
+                }
                 // Aceras: dos franjas claras a los lados de la calzada.
                 for lado in [-1.0f64, 1.0] {
                     let off = lado * (half + 1.2);
                     let ancho_acera = 2.2;
                     let sx = -(b.y - a.y) / d;
                     let sy = (b.x - a.x) / d;
-                    let mut apts = Vec::with_capacity(4);
-                    let mut aprof = Vec::with_capacity(4);
+                    let mut apts = [[0.0f32; 2]; 4];
+                    let mut aprof = [0.0f64; 4];
                     let mut aok = true;
-                    for (px, py) in [
+                    for (i, (px, py)) in [
                         (a.x + sx * off, a.y + sy * off),
                         (b.x + sx * off, b.y + sy * off),
                         (
@@ -507,25 +609,30 @@ pub fn build_opts(
                             a.x + sx * (off + lado * ancho_acera),
                             a.y + sy * (off + lado * ancho_acera),
                         ),
-                    ] {
+                    ]
+                    .into_iter()
+                    .enumerate()
+                    {
                         let q = crate::geom::P2::new(px, py);
                         let Some(z) = z_de(q) else {
                             aok = false;
                             break;
                         };
                         let local = to_local(P3::new(px, py, z + 0.26));
-                        match cam.project(local) {
-                            Some(s) => {
-                                apts.push(s);
-                                aprof.push(cam.depth(local));
+                        match pr.proyectar(local) {
+                            Some((s, d)) => {
+                                apts[i] = s;
+                                aprof[i] = d;
                             }
                             None => aok = false,
                         }
                     }
-                    if aok && apts.len() == 4 {
+                    if aok && !pantalla.ve(&apts) {
+                        descartadas += 1;
+                    } else if aok {
                         let ad = aprof.iter().sum::<f64>() as f32 / 4.0;
                         roads.push(Prim::Poly {
-                            pts: apts,
+                            pts: apts.to_vec(),
                             fill: [0.42, 0.42, 0.43, 1.0],
                             depth: ad,
                         });
@@ -579,14 +686,14 @@ pub fn build_opts(
                         to_local(P3::new(b.x, b.y, top)),
                         to_local(P3::new(a.x, a.y, top)),
                     ];
-                    let mut pts = Vec::with_capacity(4);
-                    let mut prof = Vec::with_capacity(4);
+                    let mut pts = [[0.0f32; 2]; 4];
+                    let mut prof = [0.0f64; 4];
                     let mut ok = true;
-                    for q in quad {
-                        match cam.project(q) {
-                            Some(s) => {
-                                pts.push(s);
-                                prof.push(cam.depth(q));
+                    for (i, q) in quad.into_iter().enumerate() {
+                        match pr.proyectar(q) {
+                            Some((s, d)) => {
+                                pts[i] = s;
+                                prof[i] = d;
                             }
                             None => ok = false,
                         }
@@ -594,11 +701,15 @@ pub fn build_opts(
                     if !ok {
                         continue;
                     }
+                    if !pantalla.ve(&pts) {
+                        descartadas += 1;
+                        continue;
+                    }
                     let depth = prof.iter().sum::<f64>() as f32 / 4.0;
                     let shade = 0.70 + 0.30 * (((p2.x - p1.x) as f32 / 18.0).cos().abs());
                     let f = fog(depth, cam.distance as f32);
                     city.push(Prim::Poly {
-                        pts,
+                        pts: pts.to_vec(),
                         fill: [
                             wr * v * shade * f + 0.050 * (1.0 - f),
                             wg * v * shade * f + 0.055 * (1.0 - f),
@@ -613,19 +724,22 @@ pub fn build_opts(
             let cx = mz.poligono.iter().map(|q| q.x).sum::<f64>() / n as f64;
             let cy = mz.poligono.iter().map(|q| q.y).sum::<f64>() / n as f64;
             let centro = to_local(P3::new(cx, cy, top));
-            let Some(cs) = cam.project(centro) else {
+            let Some((cs, cd)) = pr.proyectar(centro) else {
                 continue;
             };
-            let cd = cam.depth(centro);
             for i in 0..n {
                 let q1 = mz.poligono[i];
                 let q2 = mz.poligono[(i + 1) % n];
                 let a = to_local(P3::new(q1.x, q1.y, top));
                 let b = to_local(P3::new(q2.x, q2.y, top));
-                let (Some(sa), Some(sb)) = (cam.project(a), cam.project(b)) else {
+                let (Some((sa, da)), Some((sb, db))) = (pr.proyectar(a), pr.proyectar(b)) else {
                     continue;
                 };
-                let depth = ((cd + cam.depth(a) + cam.depth(b)) / 3.0) as f32;
+                if !pantalla.ve(&[cs, sa, sb]) {
+                    descartadas += 1;
+                    continue;
+                }
+                let depth = ((cd + da + db) / 3.0) as f32;
                 let f = fog(depth, cam.distance as f32);
                 city.push(Prim::Poly {
                     pts: vec![cs, sa, sb],
@@ -642,213 +756,69 @@ pub fn build_opts(
     }
 
     // --- arcos: tubo paramétrico si se ve grande; si no, línea ---
-    for l in p.links.iter().filter(|l| !l.deleted) {
-        let es_agua = l.family.starts_with("agua");
-        if (es_agua && !layers.agua) || (!es_agua && !layers.alcantarillado) {
-            continue;
-        }
-        if l.path.len() < 2 {
-            continue;
-        }
-        let sel = selected.map(|s| s == l.code).unwrap_or(false);
-        let (lr, lg, lb): (f32, f32, f32) = if es_agua {
-            (0.33, 0.63, 0.96)
-        } else {
-            (0.87, 0.60, 0.31)
-        };
-        let mat = if es_agua {
-            crate::parts::Material::new(0.34, 0.55, 0.82)
-        } else {
-            crate::parts::Material::new(0.78, 0.62, 0.44)
-        };
-        // El tubo se dibuja por su eje (solera + DI/2) con el diámetro exterior; no atraviesa
-        // el pozo: se recorta en su pared.
-        let mut traza = l.eje();
-        let d_ext = l.diametro_exterior_m();
-        let link_material = l.get("material").and_then(|v| v.as_str()).unwrap_or("");
-        let r0 = p
-            .node(l.from)
-            .map(|n| n.diametro() * 0.5 + 0.15)
-            .unwrap_or(0.4);
-        let r1 = p
-            .node(l.to)
-            .map(|n| n.diametro() * 0.5 + 0.15)
-            .unwrap_or(0.4);
-        recortar_extremos(&mut traza, r0, r1);
-
-        // Los tubos se construyen en coordenadas LOCALES: con UTM en f32 el paso es ~1 m y la
-        // sección colapsaría (los tubos se verían como cintas).
-        for w in traza.windows(2) {
-            let wa = P3::new(w[0].x - p.origin.x, w[0].y - p.origin.y, w[0].z);
-            let wb = P3::new(w[1].x - p.origin.x, w[1].y - p.origin.y, w[1].z);
-            let a = to_local(w[0]);
-            let b = to_local(w[1]);
-            let Some((sa, sb)) = cam.project_segment(a, b) else {
-                continue;
-            };
-            let depth = ((cam.depth(a) + cam.depth(b)) * 0.5) as f32;
-            let r_px = (d_ext * 0.5 * cam.focal() / depth.max(1.0) as f64) as f32;
-
-            // Sin DN o sin cota (F12-03): línea gris fina, nunca un tubo de diámetro inventado.
-            let sin_dato = l.dibujo_sin_dato();
-            if r_px < 2.2 || sin_dato {
-                // A lo lejos, la tubería es una línea: mismo color, mucho menos coste.
-                let width = if sel {
-                    4.5
-                } else if sin_dato {
-                    1.4
-                } else {
-                    (r_px * 2.0).clamp(1.2, 6.0)
-                };
-                let fog = fog(depth, cam.distance as f32);
-                let [cr, cg, cb] = if sin_dato {
-                    COLOR_SIN_DATO
-                } else {
-                    [lr, lg, lb]
-                };
-                net.push(Prim::Line {
-                    a: sa,
-                    b: sb,
-                    w: width,
-                    color: [cr, cg, cb, fog],
-                    depth,
-                });
-                line_count += 1;
-                continue;
-            }
-
-            // De cerca, tubo con juntas.
-            let lod = if r_px > 6.0 { 2 } else { 1 };
-            let malla =
-                crate::parts::tuberia_de_material(wa, wb, d_ext as f32, lod, mat, link_material);
-            for tri in &malla.tris {
-                // La malla ya está en local: se aplica solo la exageración vertical.
-                let verts = [
-                    [
-                        tri.p[0][0] as f64,
-                        tri.p[0][1] as f64,
-                        (tri.p[0][2] as f64 - zr) * k + zr,
-                    ],
-                    [
-                        tri.p[1][0] as f64,
-                        tri.p[1][1] as f64,
-                        (tri.p[1][2] as f64 - zr) * k + zr,
-                    ],
-                    [
-                        tri.p[2][0] as f64,
-                        tri.p[2][1] as f64,
-                        (tri.p[2][2] as f64 - zr) * k + zr,
-                    ],
-                ];
-                // El corte secciona también las tuberías.
-                let (trozos, arista) = match opts.corte_x {
-                    Some(xc) => cortar_tri(verts, xc),
-                    None => (vec![verts], None),
-                };
-                if let Some((ca, cb)) = arista
-                    && let (Some(sa), Some(sb)) = (cam.project(ca), cam.project(cb))
-                {
-                    net.push(Prim::Line {
-                        a: sa,
-                        b: sb,
-                        w: 1.4,
-                        color: [0.98, 0.86, 0.42, 1.0],
-                        depth: ((cam.depth(ca) + cam.depth(cb)) * 0.5) as f32,
-                    });
-                    line_count += 1;
-                }
-                for trozo in trozos {
-                    let mut pts = Vec::with_capacity(3);
-                    let mut d = 0.0;
-                    let mut ok = true;
-                    for v in trozo {
-                        match cam.project(v) {
-                            Some(s) => {
-                                pts.push(s);
-                                d += cam.depth(v);
-                            }
-                            None => ok = false,
-                        }
-                    }
-                    if !ok {
-                        continue;
-                    }
-                    let depth_t = (d / 3.0) as f32;
-                    let f = fog(depth_t, cam.distance as f32);
-                    let c = if sel {
-                        [0.36, 0.95, 0.56, 1.0]
-                    } else {
-                        [tri.color[0], tri.color[1], tri.color[2], 1.0]
-                    };
-                    net.push(Prim::Poly {
-                        pts: expand(&pts, 0.35),
-                        fill: [
-                            c[0] * f + 0.050 * (1.0 - f),
-                            c[1] * f + 0.055 * (1.0 - f),
-                            c[2] * f + 0.066 * (1.0 - f),
-                            1.0,
-                        ],
-                        depth: depth_t,
-                    });
-                    line_count += 1;
-                }
-            }
-        }
+    // Con muchos tramos se reparten en bloques entre varios hilos (F14-04): cada bloque produce
+    // sus primitivas en orden y se concatenan en el orden de los bloques, así que la escena es
+    // idéntica a la de un solo hilo.
+    let cx = Contexto {
+        p,
+        pr,
+        pantalla,
+        layers,
+        selected,
+        corte_x: opts.corte_x,
+        zr,
+        k,
+        distancia: cam.distance as f32,
+    };
+    for b in en_bloques(&p.links, |bloque| dibujar_tramos(bloque, &cx)) {
+        net.extend(b.prims);
+        line_count += b.lineas;
+        descartadas += b.descartadas;
     }
 
     // --- nodos: piezas paramétricas por familia ---
+    // Primero, en bloques y en paralelo, lo que no depende del presupuesto de triángulos: qué
+    // nodos se dibujan, su tamaño en pantalla y los rombos de los lejanos. Después, en orden, las
+    // piezas (su nivel de detalle depende de los triángulos ya emitidos).
     if layers.nodos {
-        for n in p.nodes.iter().filter(|n| !n.deleted) {
-            let Some(def) = family(&n.family) else {
-                continue;
+        let clases = en_bloques(&p.nodes, |bloque| clasificar_nodos(bloque, &cx));
+        for clase in clases.into_iter().flatten() {
+            let (n, top, r_px, sel, tinte) = match clase {
+                Clase::Rombo(prim) => {
+                    net.push(prim);
+                    tri_count += 1;
+                    continue;
+                }
+                Clase::Fuera => {
+                    descartadas += 1;
+                    continue;
+                }
+                Clase::Pieza {
+                    n,
+                    top,
+                    r_px,
+                    sel,
+                    tinte,
+                } => (n, top, r_px, sel, tinte),
             };
-            // Se dibuja lo que tiene forma: nodos hidráulicos, acometidas y también el resto de
-            // familias con geometría propia (accesorios, tapas, hitos, cruces…).
-            if !def.can(caps::HYDRAULIC_NODE)
-                && !def.can(caps::ATTACHABLE)
-                && !def.can(caps::REPORTABLE)
-                && !def.can(caps::STRUCTURAL)
-            {
-                continue;
-            }
-            let es_agua = n.family.starts_with("agua");
-            if (es_agua && !layers.agua) || (!es_agua && !layers.alcantarillado) {
-                continue;
-            }
-            let sel = selected.map(|s| s == n.code).unwrap_or(false);
-            let observado = n.estado == EstadoObjeto::Observado;
-            let tinte: Option<[f32; 3]> = if sel {
-                Some([0.36, 0.95, 0.56])
-            } else if observado {
-                Some([0.98, 0.45, 0.42])
+
+            // Explosión: cada parte nombrada del objeto enfocado sube a su altura.
+            let altura_pieza = (n.z_rim - n.z_invert).max(0.5) as f32;
+            let explotar = opts.explosion > 0.0 && opts.foco == Some(n.id);
+
+            // Una pieza entera fuera de pantalla no se proyecta (su etiqueta sí se calcula, como
+            // antes: el reparto de etiquetas no depende del recorte). Los pozos se descartan sin
+            // teselarlos, con una esfera que se sabe de antemano; el resto, con la de su malla.
+            let dz_max = if explotar {
+                (opts.explosion * altura_pieza * 0.85) as f64
             } else {
-                None
+                0.0
             };
-
-            let (top, r_px) = nodo_en_pantalla(n, cam, &to_local);
-
-            // Muy lejos: símbolo de tamaño fijo (una ciudad no se llena de cilindros).
-            if r_px < 3.0
-                && let Some(c) = cam.project(top)
+            if let Some((centro, radio)) = esfera_previa(n, dz_max, &to_local, k)
+                && !pantalla.ve_esfera(&pr, centro, radio)
             {
-                let sz = if sel { 6.0 } else { 3.6 };
-                let base: [f32; 3] = if es_agua {
-                    [0.33, 0.63, 0.96]
-                } else {
-                    [0.87, 0.60, 0.31]
-                };
-                let col = tinte.unwrap_or(base);
-                net.push(Prim::Poly {
-                    pts: vec![
-                        [c[0] - sz, c[1]],
-                        [c[0], c[1] - sz],
-                        [c[0] + sz, c[1]],
-                        [c[0], c[1] + sz],
-                    ],
-                    fill: [col[0], col[1], col[2], 1.0],
-                    depth: cam.depth(top) as f32,
-                });
-                tri_count += 1;
+                descartadas += 1;
+                etiquetas.extend(etiqueta_de(n, &pr, top, r_px, sel));
                 continue;
             }
 
@@ -861,9 +831,13 @@ pub fn build_opts(
             if partes.is_empty() {
                 continue;
             }
-            // Explosión: cada parte nombrada del objeto enfocado sube a su altura.
-            let altura_pieza = (n.z_rim - n.z_invert).max(0.5) as f32;
-            let explotar = opts.explosion > 0.0 && opts.foco == Some(n.id);
+            if let Some((centro, radio)) = esfera_de_pieza(&partes, n, dz_max, &to_local, k)
+                && !pantalla.ve_esfera(&pr, centro, radio)
+            {
+                descartadas += 1;
+                etiquetas.extend(etiqueta_de(n, &pr, top, r_px, sel));
+                continue;
+            }
 
             for (indice_parte, parte) in partes.iter().enumerate() {
                 for tri in &parte.mesh.tris {
@@ -895,20 +869,24 @@ pub fn build_opts(
                     // Corte vertical: se recorta el triángulo y se marca la arista de corte.
                     let (trozos, corte) = match opts.corte_x {
                         Some(xc) => cortar_tri(tri_local, xc),
-                        None => (vec![tri_local], None),
+                        None => (Trozos::uno(tri_local), None),
                     };
                     if let Some((a, b)) = corte
-                        && let (Some(sa), Some(sb)) = (cam.project(a), cam.project(b))
+                        && let (Some((sa, da)), Some((sb, db))) = (pr.proyectar(a), pr.proyectar(b))
                     {
-                        let d = ((cam.depth(a) + cam.depth(b)) * 0.5) as f32;
-                        net.push(Prim::Line {
-                            a: sa,
-                            b: sb,
-                            w: 1.6,
-                            color: [0.98, 0.86, 0.42, 1.0],
-                            depth: d,
-                        });
-                        line_count += 1;
+                        let d = ((da + db) * 0.5) as f32;
+                        if pantalla.ve_linea(sa, sb, 1.6) {
+                            net.push(Prim::Line {
+                                a: sa,
+                                b: sb,
+                                w: 1.6,
+                                color: [0.98, 0.86, 0.42, 1.0],
+                                depth: d,
+                            });
+                            line_count += 1;
+                        } else {
+                            descartadas += 1;
+                        }
 
                         // Poché: la cara de corte se traman con rayitas perpendiculares, para que
                         // la sección se lea como un plano y no como un alambre amarillo.
@@ -921,36 +899,39 @@ pub fn build_opts(
                             let mut s = paso * 0.5;
                             while s < largo {
                                 let (cx, cy) = (sa[0] + ux * s, sa[1] + uy * s);
-                                net.push(Prim::Line {
-                                    a: [cx - px * 2.6 + ux * 1.6, cy - py * 2.6 + uy * 1.6],
-                                    b: [cx + px * 2.6 - ux * 1.6, cy + py * 2.6 - uy * 1.6],
-                                    w: 1.0,
-                                    color: [0.86, 0.74, 0.40, 1.0],
-                                    depth: d,
-                                });
-                                line_count += 1;
+                                let (ra, rb) = (
+                                    [cx - px * 2.6 + ux * 1.6, cy - py * 2.6 + uy * 1.6],
+                                    [cx + px * 2.6 - ux * 1.6, cy + py * 2.6 - uy * 1.6],
+                                );
+                                if pantalla.ve_linea(ra, rb, 1.0) {
+                                    net.push(Prim::Line {
+                                        a: ra,
+                                        b: rb,
+                                        w: 1.0,
+                                        color: [0.86, 0.74, 0.40, 1.0],
+                                        depth: d,
+                                    });
+                                    line_count += 1;
+                                } else {
+                                    descartadas += 1;
+                                }
                                 s += paso;
                             }
                         }
                     }
 
-                    for q in trozos {
-                        let mut pts = Vec::with_capacity(3);
-                        let mut prof = 0.0;
-                        let mut ok = true;
-                        for v in q {
-                            match cam.project(v) {
-                                Some(s) => {
-                                    pts.push(s);
-                                    prof += cam.depth(v);
-                                }
-                                None => ok = false,
-                            }
-                        }
-                        if !ok {
+                    for q in trozos.iter() {
+                        let (Some((s0, d0)), Some((s1, d1)), Some((s2, d2))) =
+                            (pr.proyectar(q[0]), pr.proyectar(q[1]), pr.proyectar(q[2]))
+                        else {
+                            continue;
+                        };
+                        let pts = expand([s0, s1, s2], 0.3);
+                        if !pantalla.ve(&pts) {
+                            descartadas += 1;
                             continue;
                         }
-                        let depth = (prof / 3.0) as f32;
+                        let depth = ((d0 + d1 + d2) / 3.0) as f32;
                         let f = fog(depth, cam.distance as f32);
                         let base = tinte.unwrap_or([tri.color[0], tri.color[1], tri.color[2]]);
                         // Un objeto seleccionado u observado conserva el sombreado pero cambia de tono.
@@ -965,7 +946,7 @@ pub fn build_opts(
                         let enterrada = matches!(parte.nombre, "solera" | "fuste" | "escalera");
                         let alfa = if opts.rayos_x && enterrada { 0.35 } else { 1.0 };
                         net.push(Prim::Poly {
-                            pts: expand(&pts, 0.3),
+                            pts: pts.to_vec(),
                             fill: [
                                 cr * f + 0.050 * (1.0 - f),
                                 cg * f + 0.055 * (1.0 - f),
@@ -979,7 +960,7 @@ pub fn build_opts(
                 }
             }
 
-            etiquetas.extend(etiqueta_de(n, cam, top, r_px, sel));
+            etiquetas.extend(etiqueta_de(n, &pr, top, r_px, sel));
         }
     }
 
@@ -987,20 +968,351 @@ pub fn build_opts(
     // (modo rayos X), de modo que las tuberias enterradas siempre se ven.
     sort_far_first(&mut prims);
     sort_far_first(&mut roads);
-    prims.extend(roads);
+    juntar(&mut prims, roads);
     // La red se dibuja sobre el terreno (modo rayos X) pero **bajo** los edificios: así las
     // tuberías se ven a través del suelo y quedan ocultas detrás de una fachada, como debe ser.
     sort_far_first(&mut net);
     // Las líneas guía de las etiquetas entran en `net` y se ordenan con el resto de la red.
     let etiquetas = ordenar_etiquetas(etiquetas, &mut net);
-    prims.extend(net);
+    juntar(&mut prims, net);
     sort_far_first(&mut city);
-    prims.extend(city);
+    juntar(&mut prims, city);
     Scene {
         prims,
         tri_count,
         line_count,
         etiquetas,
+        descartadas,
+    }
+}
+
+/// Objetos por hilo a partir de los cuales la escena reparte tramos y nodos entre hilos.
+const OBJETOS_POR_HILO: usize = 2_500;
+
+/// Lo que comparten los tramos de una escena (solo lectura: se reparte entre hilos).
+struct Contexto<'a> {
+    p: &'a Project,
+    pr: Proyector,
+    pantalla: Pantalla,
+    layers: Layers,
+    selected: Option<&'a str>,
+    corte_x: Option<f32>,
+    zr: f64,
+    k: f64,
+    distancia: f32,
+}
+
+impl Contexto<'_> {
+    /// UTM → local con la exageración vertical (el origen se resta en `f64`, docs/15).
+    fn local(&self, q: P3) -> [f64; 3] {
+        let o = self.p.origin;
+        [q.x - o.x, q.y - o.y, (q.z - self.zr) * self.k + self.zr]
+    }
+}
+
+/// Reparte `items` en bloques consecutivos entre varios hilos si son muchos y devuelve el
+/// resultado de cada bloque en orden (F14-04). Con pocos, un solo bloque en este hilo.
+fn en_bloques<'a, T: Sync, R: Send>(items: &'a [T], f: impl Fn(&'a [T]) -> R + Sync) -> Vec<R> {
+    let hilos = if items.len() >= OBJETOS_POR_HILO * 2 {
+        std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1)
+            .clamp(1, 8)
+            .min(items.len() / OBJETOS_POR_HILO)
+    } else {
+        1
+    };
+    if hilos <= 1 {
+        return vec![f(items)];
+    }
+    let tam = items.len().div_ceil(hilos);
+    let f = &f;
+    std::thread::scope(|s| {
+        let tareas: Vec<_> = items
+            .chunks(tam)
+            .map(|bloque| s.spawn(move || f(bloque)))
+            .collect();
+        tareas
+            .into_iter()
+            .map(|t| t.join().expect("hilo de la escena"))
+            .collect()
+    })
+}
+
+/// Qué hacer con un nodo dibujable.
+enum Clase<'a> {
+    /// Rombo de un nodo lejano, ya proyectado.
+    Rombo(Prim),
+    /// Rombo de un nodo lejano que cae fuera de pantalla.
+    Fuera,
+    /// Pieza con malla: se tesela después, en orden.
+    Pieza {
+        n: &'a crate::model::Node,
+        top: [f64; 3],
+        r_px: f32,
+        sel: bool,
+        tinte: Option<[f32; 3]>,
+    },
+}
+
+/// Clasifica los nodos de un bloque, en orden. Los que no se dibujan no aparecen.
+fn clasificar_nodos<'a>(nodes: &'a [crate::model::Node], cx: &Contexto) -> Vec<Clase<'a>> {
+    let mut out = Vec::new();
+    for n in nodes.iter().filter(|n| !n.deleted) {
+        let Some(def) = family(&n.family) else {
+            continue;
+        };
+        // Se dibuja lo que tiene forma: nodos hidráulicos, acometidas y también el resto de
+        // familias con geometría propia (accesorios, tapas, hitos, cruces…).
+        if !def.can(caps::HYDRAULIC_NODE)
+            && !def.can(caps::ATTACHABLE)
+            && !def.can(caps::REPORTABLE)
+            && !def.can(caps::STRUCTURAL)
+        {
+            continue;
+        }
+        let es_agua = n.family.starts_with("agua");
+        if (es_agua && !cx.layers.agua) || (!es_agua && !cx.layers.alcantarillado) {
+            continue;
+        }
+        let sel = cx.selected.map(|s| s == n.code).unwrap_or(false);
+        let observado = n.estado == EstadoObjeto::Observado;
+        let tinte: Option<[f32; 3]> = if sel {
+            Some([0.36, 0.95, 0.56])
+        } else if observado {
+            Some([0.98, 0.45, 0.42])
+        } else {
+            None
+        };
+
+        let (top, r_px, top_px) = nodo_en_pantalla(n, &cx.pr, &|q| cx.local(q));
+
+        // Muy lejos: símbolo de tamaño fijo (una ciudad no se llena de cilindros).
+        if r_px < 3.0
+            && let Some((c, d)) = top_px
+        {
+            let sz = if sel { 6.0 } else { 3.6 };
+            let rombo = [
+                [c[0] - sz, c[1]],
+                [c[0], c[1] - sz],
+                [c[0] + sz, c[1]],
+                [c[0], c[1] + sz],
+            ];
+            if !cx.pantalla.ve(&rombo) {
+                out.push(Clase::Fuera);
+                continue;
+            }
+            let base: [f32; 3] = if es_agua {
+                [0.33, 0.63, 0.96]
+            } else {
+                [0.87, 0.60, 0.31]
+            };
+            let col = tinte.unwrap_or(base);
+            out.push(Clase::Rombo(Prim::Poly {
+                pts: rombo.to_vec(),
+                fill: [col[0], col[1], col[2], 1.0],
+                depth: d as f32,
+            }));
+            continue;
+        }
+        out.push(Clase::Pieza {
+            n,
+            top,
+            r_px,
+            sel,
+            tinte,
+        });
+    }
+    out
+}
+
+/// Primitivas de un bloque de tramos, en orden, con sus contadores.
+#[derive(Default)]
+struct Salida {
+    prims: Vec<Prim>,
+    lineas: usize,
+    descartadas: usize,
+}
+
+fn dibujar_tramos(links: &[crate::model::Link], cx: &Contexto) -> Salida {
+    let mut out = Salida::default();
+    // Un solo búfer para el eje de todos los tramos: sin un `Vec` por tramo (F14-04).
+    let mut traza: Vec<P3> = Vec::new();
+    for l in links.iter().filter(|l| !l.deleted) {
+        dibujar_tramo(l, cx, &mut traza, &mut out);
+    }
+    out
+}
+
+/// Tubo paramétrico si se ve grande; si no, línea.
+fn dibujar_tramo(l: &crate::model::Link, cx: &Contexto, traza: &mut Vec<P3>, out: &mut Salida) {
+    let es_agua = l.family.starts_with("agua");
+    if (es_agua && !cx.layers.agua) || (!es_agua && !cx.layers.alcantarillado) {
+        return;
+    }
+    if l.path.len() < 2 {
+        return;
+    }
+    let sel = cx.selected.map(|s| s == l.code).unwrap_or(false);
+    let (lr, lg, lb): (f32, f32, f32) = if es_agua {
+        (0.33, 0.63, 0.96)
+    } else {
+        (0.87, 0.60, 0.31)
+    };
+    let mat = if es_agua {
+        crate::parts::Material::new(0.34, 0.55, 0.82)
+    } else {
+        crate::parts::Material::new(0.78, 0.62, 0.44)
+    };
+    // El tubo se dibuja por su eje (solera + DI/2) con el diámetro exterior; no atraviesa
+    // el pozo: se recorta en su pared.
+    // Lo mismo que `l.eje()` y `l.diametro_exterior_m()`, con el diámetro interior leído una vez.
+    let di = l.diametro_interior_m();
+    let d_ext = di + 2.0 * l.espesor_pared_m();
+    traza.clear();
+    traza.extend(l.path.iter().map(|q| P3::new(q.x, q.y, q.z + di * 0.5)));
+    // Sin DN o sin cota (F12-03): línea gris fina, nunca un tubo de diámetro inventado.
+    let sin_dato = l.dibujo_sin_dato();
+    let r0 =
+        cx.p.node(l.from)
+            .map(|n| n.diametro() * 0.5 + 0.15)
+            .unwrap_or(0.4);
+    let r1 =
+        cx.p.node(l.to)
+            .map(|n| n.diametro() * 0.5 + 0.15)
+            .unwrap_or(0.4);
+    recortar_extremos(traza, r0, r1);
+
+    // Los tubos se construyen en coordenadas LOCALES: con UTM en f32 el paso es ~1 m y la
+    // sección colapsaría (los tubos se verían como cintas).
+    for w in traza.windows(2) {
+        let wa = P3::new(w[0].x - cx.p.origin.x, w[0].y - cx.p.origin.y, w[0].z);
+        let wb = P3::new(w[1].x - cx.p.origin.x, w[1].y - cx.p.origin.y, w[1].z);
+        let a = cx.local(w[0]);
+        let b = cx.local(w[1]);
+        let (da, db) = (cx.pr.depth(a), cx.pr.depth(b));
+        let Some((sa, sb)) = cx.pr.segmento(a, b, da, db) else {
+            continue;
+        };
+        let depth = ((da + db) * 0.5) as f32;
+        let r_px = (d_ext * 0.5 * cx.pr.focal() / depth.max(1.0) as f64) as f32;
+
+        if r_px < 2.2 || sin_dato {
+            // A lo lejos, la tubería es una línea: mismo color, mucho menos coste.
+            let width = if sel {
+                4.5
+            } else if sin_dato {
+                1.4
+            } else {
+                (r_px * 2.0).clamp(1.2, 6.0)
+            };
+            if !cx.pantalla.ve_linea(sa, sb, width) {
+                out.descartadas += 1;
+                continue;
+            }
+            let fog = fog(depth, cx.distancia);
+            let [cr, cg, cb] = if sin_dato {
+                COLOR_SIN_DATO
+            } else {
+                [lr, lg, lb]
+            };
+            out.prims.push(Prim::Line {
+                a: sa,
+                b: sb,
+                w: width,
+                color: [cr, cg, cb, fog],
+                depth,
+            });
+            out.lineas += 1;
+            continue;
+        }
+
+        // Un tramo entero fuera de pantalla no se tesela: la junta más gruesa cabe en una
+        // esfera de 1,1·DE alrededor del eje (estirada por la exageración vertical).
+        let radio = d_ext * 1.1 * cx.k.max(1.0);
+        if !cx.pantalla.ve_tubo(&cx.pr, (sa, da), (sb, db), radio) {
+            out.descartadas += 1;
+            continue;
+        }
+
+        // De cerca, tubo con juntas.
+        let lod = if r_px > 6.0 { 2 } else { 1 };
+        let link_material = l.get("material").and_then(|v| v.as_str()).unwrap_or("");
+        let malla =
+            crate::parts::tuberia_de_material(wa, wb, d_ext as f32, lod, mat, link_material);
+        for tri in &malla.tris {
+            // La malla ya está en local: se aplica solo la exageración vertical.
+            let verts = [
+                [
+                    tri.p[0][0] as f64,
+                    tri.p[0][1] as f64,
+                    (tri.p[0][2] as f64 - cx.zr) * cx.k + cx.zr,
+                ],
+                [
+                    tri.p[1][0] as f64,
+                    tri.p[1][1] as f64,
+                    (tri.p[1][2] as f64 - cx.zr) * cx.k + cx.zr,
+                ],
+                [
+                    tri.p[2][0] as f64,
+                    tri.p[2][1] as f64,
+                    (tri.p[2][2] as f64 - cx.zr) * cx.k + cx.zr,
+                ],
+            ];
+            // El corte secciona también las tuberías.
+            let (trozos, arista) = match cx.corte_x {
+                Some(xc) => cortar_tri(verts, xc),
+                None => (Trozos::uno(verts), None),
+            };
+            if let Some((ca, cb)) = arista
+                && let (Some((sa, da)), Some((sb, db))) = (cx.pr.proyectar(ca), cx.pr.proyectar(cb))
+            {
+                if cx.pantalla.ve_linea(sa, sb, 1.4) {
+                    out.prims.push(Prim::Line {
+                        a: sa,
+                        b: sb,
+                        w: 1.4,
+                        color: [0.98, 0.86, 0.42, 1.0],
+                        depth: ((da + db) * 0.5) as f32,
+                    });
+                    out.lineas += 1;
+                } else {
+                    out.descartadas += 1;
+                }
+            }
+            for trozo in trozos.iter() {
+                let (Some((s0, d0)), Some((s1, d1)), Some((s2, d2))) = (
+                    cx.pr.proyectar(trozo[0]),
+                    cx.pr.proyectar(trozo[1]),
+                    cx.pr.proyectar(trozo[2]),
+                ) else {
+                    continue;
+                };
+                let pts = expand([s0, s1, s2], 0.35);
+                if !cx.pantalla.ve(&pts) {
+                    out.descartadas += 1;
+                    continue;
+                }
+                let depth_t = ((d0 + d1 + d2) / 3.0) as f32;
+                let f = fog(depth_t, cx.distancia);
+                let c = if sel {
+                    [0.36, 0.95, 0.56, 1.0]
+                } else {
+                    [tri.color[0], tri.color[1], tri.color[2], 1.0]
+                };
+                out.prims.push(Prim::Poly {
+                    pts: pts.to_vec(),
+                    fill: [
+                        c[0] * f + 0.050 * (1.0 - f),
+                        c[1] * f + 0.055 * (1.0 - f),
+                        c[2] * f + 0.066 * (1.0 - f),
+                        1.0,
+                    ],
+                    depth: depth_t,
+                });
+                out.lineas += 1;
+            }
+        }
     }
 }
 
@@ -1022,18 +1334,19 @@ pub fn etiquetas(
     let zr = cam.target[2];
     let k = cam.z_scale;
     let to_local = move |q: P3| [q.x - o.x, q.y - o.y, (q.z - zr) * k + zr];
+    let pr = cam.proyector();
     let mut etiquetas = Vec::new();
     for n in p.nodes.iter().filter(|n| !n.deleted) {
         if !nodo_dibujable(n, layers) {
             continue;
         }
         let sel = selected.map(|s| s == n.code).unwrap_or(false);
-        let (top, r_px) = nodo_en_pantalla(n, cam, &to_local);
+        let (top, r_px, top_px) = nodo_en_pantalla(n, &pr, &to_local);
         // Mismos descartes que la escena: lejos es un símbolo y sin pieza no hay etiqueta.
-        if r_px < 3.0 && cam.project(top).is_some() {
+        if r_px < 3.0 && top_px.is_some() {
             continue;
         }
-        let Some(e) = etiqueta_de(n, cam, top, r_px, sel) else {
+        let Some(e) = etiqueta_de(n, &pr, top, r_px, sel) else {
             continue;
         };
         if pieza_partes(n, 1).is_empty() {
@@ -1063,38 +1376,43 @@ fn nodo_dibujable(n: &crate::model::Node, layers: Layers) -> bool {
     !((es_agua && !layers.agua) || (!es_agua && !layers.alcantarillado))
 }
 
-/// Punto superior del nodo (local, con exageración) y su radio en pantalla.
+/// Punto proyectado en pantalla con su profundidad.
+type EnPantalla = ([f32; 2], f64);
+
+/// Punto superior del nodo (local, con exageración), su radio en pantalla y su proyección con
+/// profundidad (`None` si queda detrás de la cámara).
 fn nodo_en_pantalla(
     n: &crate::model::Node,
-    cam: &Camera,
+    pr: &Proyector,
     to_local: &impl Fn(P3) -> [f64; 3],
-) -> ([f64; 3], f32) {
+) -> ([f64; 3], f32, Option<EnPantalla>) {
     let r = n.diametro() * 0.5;
     let top = to_local(P3::new(n.pos.x, n.pos.y, n.z_rim));
     let edge = to_local(P3::new(n.pos.x + r, n.pos.y, n.z_rim));
-    let r_px = match (cam.project(top), cam.project(edge)) {
-        (Some(a), Some(b)) => ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt(),
+    let top_px = pr.proyectar(top);
+    let r_px = match (top_px, pr.project(edge)) {
+        (Some((a, _)), Some(b)) => ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt(),
         _ => 0.0,
     };
-    (top, r_px)
+    (top, r_px, top_px)
 }
 
 /// Etiqueta del nodo: solo cuando la pieza ya se distingue o está seleccionada.
 fn etiqueta_de(
     n: &crate::model::Node,
-    cam: &Camera,
+    pr: &Proyector,
     top: [f64; 3],
     r_px: f32,
     sel: bool,
 ) -> Option<Etiqueta> {
     if (r_px > 9.0 || sel)
-        && let Some(c) = cam.project(top)
+        && let Some((c, d)) = pr.proyectar(top)
     {
         return Some(Etiqueta {
             pos: [c[0], c[1] - 10.0],
             texto: format!("{} · {}", n.code, n.ty.replace('_', " ")),
             seleccion: sel,
-            depth: cam.depth(top) as f32,
+            depth: d as f32,
         });
     }
     None
@@ -1181,18 +1499,55 @@ fn acomodar_etiquetas(mut etiquetas: Vec<Etiqueta>, net: &mut Vec<Prim>) -> Vec<
 }
 
 /// Ordena de mas lejano a mas cercano (algoritmo del pintor).
+///
+/// Ordena claves enteras de la profundidad y luego coloca las primitivas una vez
+/// (`sort_by_cached_key`): mover primitivas enteras y comparar flotantes en cada paso costaba
+/// más que todo lo demás de la escena (F14-04). Es estable, como antes: a igual profundidad se
+/// respeta el orden de llegada.
 fn sort_far_first(list: &mut [Prim]) {
-    list.sort_by(|a, b| {
-        let da = match a {
-            Prim::Poly { depth, .. } => *depth,
-            Prim::Line { depth, .. } => *depth,
-        };
-        let db = match b {
-            Prim::Poly { depth, .. } => *depth,
-            Prim::Line { depth, .. } => *depth,
-        };
-        db.partial_cmp(&da).unwrap_or(std::cmp::Ordering::Equal)
-    });
+    // Clave de 64 bits: profundidad descendente arriba y posición de llegada abajo. Ordenar
+    // enteros sin estabilidad con la posición dentro equivale al ordenamiento estable de antes.
+    let mut claves: Vec<u64> = list
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            let d = match p {
+                Prim::Poly { depth, .. } => *depth,
+                Prim::Line { depth, .. } => *depth,
+            };
+            let ascendente = (clave_de_orden(d) as u32) ^ 0x8000_0000;
+            ((!ascendente as u64) << 32) | i as u64
+        })
+        .collect();
+    claves.sort_unstable();
+    // `origen[j]`: qué primitiva va en el puesto `j`. Se aplica en su sitio, ciclo a ciclo.
+    let mut origen: Vec<u32> = claves.iter().map(|c| *c as u32).collect();
+    for i in 0..origen.len() {
+        let mut j = i;
+        while origen[j] as usize != i {
+            let k = origen[j] as usize;
+            list.swap(j, k);
+            origen[j] = j as u32;
+            j = k;
+        }
+        origen[j] = j as u32;
+    }
+}
+
+/// Añade `mas` al final de `lista`; si `lista` está vacía, la sustituye sin copiar.
+fn juntar(lista: &mut Vec<Prim>, mas: Vec<Prim>) {
+    if lista.is_empty() {
+        *lista = mas;
+    } else {
+        lista.extend(mas);
+    }
+}
+
+/// Entero que ordena como la profundidad: los flotantes positivos ordenan como sus bits y los
+/// negativos al revés. `-0,0` y `0,0` dan la misma clave (son iguales para el pintor).
+fn clave_de_orden(d: f32) -> i32 {
+    let b = (d + 0.0).to_bits() as i32;
+    b ^ (((b >> 31) as u32) >> 1) as i32
 }
 
 /// Niebla por distancia: acerca el color al fondo con la lejanía.
@@ -1200,17 +1555,197 @@ fn sort_far_first(list: &mut [Prim]) {
 ///
 /// Los triangulos del terreno se antialiasan por separado y dejarian una costura de un pixel
 /// entre vecinos; solaparlos un poco la hace invisible.
-fn expand(pts: &[[f32; 2]], px: f32) -> Vec<[f32; 2]> {
-    let n = pts.len().max(1) as f32;
+///
+/// Trabaja en la pila (F14-04): el único `Vec` del triángulo es el de la primitiva que se guarda.
+fn expand<const N: usize>(pts: [[f32; 2]; N], px: f32) -> [[f32; 2]; N] {
+    let n = N.max(1) as f32;
     let cx = pts.iter().map(|p| p[0]).sum::<f32>() / n;
     let cy = pts.iter().map(|p| p[1]).sum::<f32>() / n;
-    pts.iter()
-        .map(|p| {
-            let (dx, dy) = (p[0] - cx, p[1] - cy);
-            let l = (dx * dx + dy * dy).sqrt().max(1e-3);
-            [p[0] + dx / l * px, p[1] + dy / l * px]
-        })
-        .collect()
+    pts.map(|p| {
+        let (dx, dy) = (p[0] - cx, p[1] - cy);
+        let l = (dx * dx + dy * dy).sqrt().max(1e-3);
+        [p[0] + dx / l * px, p[1] + dy / l * px]
+    })
+}
+
+/// Rectángulo visible del viewport, en puntos, con un margen para el antialias (F14-07).
+///
+/// Lo que cae entero fuera no se dibuja, así que no entra en las listas que se ordenan. El
+/// recorte es exacto (por caja de la primitiva ya proyectada) o conservador (por esfera o cápsula
+/// de una pieza o un tramo entero, antes de teselarlo): nunca quita nada que se vería.
+#[derive(Clone, Copy, Debug)]
+struct Pantalla {
+    x0: f32,
+    y0: f32,
+    x1: f32,
+    y1: f32,
+}
+
+impl Pantalla {
+    /// Margen en puntos: antialias y anchos de línea redondeados.
+    const MARGEN: f32 = 2.0;
+    /// Margen extra de una pieza entera: la trama del corte sobresale ~3,6 px de la arista.
+    const MARGEN_PIEZA: f32 = 6.0;
+
+    fn de(pr: &Proyector) -> Pantalla {
+        let [w, h] = pr.viewport();
+        Pantalla {
+            x0: -Self::MARGEN,
+            y0: -Self::MARGEN,
+            x1: w + Self::MARGEN,
+            y1: h + Self::MARGEN,
+        }
+    }
+
+    /// Sin recorte: todo se ve.
+    fn infinita() -> Pantalla {
+        Pantalla {
+            x0: f32::NEG_INFINITY,
+            y0: f32::NEG_INFINITY,
+            x1: f32::INFINITY,
+            y1: f32::INFINITY,
+        }
+    }
+
+    fn ve_caja(&self, min: [f32; 2], max: [f32; 2]) -> bool {
+        !(max[0] < self.x0 || min[0] > self.x1 || max[1] < self.y0 || min[1] > self.y1)
+    }
+
+    /// ¿El polígono toca la pantalla? (por su caja: exacto para decidir que no se ve).
+    fn ve(&self, pts: &[[f32; 2]]) -> bool {
+        let mut min = [f32::INFINITY; 2];
+        let mut max = [f32::NEG_INFINITY; 2];
+        for p in pts {
+            min = [min[0].min(p[0]), min[1].min(p[1])];
+            max = [max[0].max(p[0]), max[1].max(p[1])];
+        }
+        self.ve_caja(min, max)
+    }
+
+    fn ve_linea(&self, a: [f32; 2], b: [f32; 2], w: f32) -> bool {
+        let m = w * 0.5;
+        self.ve_caja(
+            [a[0].min(b[0]) - m, a[1].min(b[1]) - m],
+            [a[0].max(b[0]) + m, a[1].max(b[1]) + m],
+        )
+    }
+
+    /// ¿Puede verse algo de una cápsula de radio `radio` (m) alrededor del segmento `a`–`b`?
+    /// Recibe los extremos ya proyectados con su profundidad.
+    ///
+    /// Un punto a `radio` del eje se proyecta a menos de `focal·radio·(1 + t)/(d − radio)` de
+    /// la proyección del eje, con `d` la profundidad mínima de los extremos y `t` la mayor
+    /// pendiente de visión de los extremos (|x|/z, |y|/z). Si la cápsula toca el plano cercano no
+    /// se acota: se dibuja y el recorte por triángulo decide.
+    fn ve_tubo(
+        &self,
+        pr: &Proyector,
+        (sa, da): ([f32; 2], f64),
+        (sb, db): ([f32; 2], f64),
+        radio: f64,
+    ) -> bool {
+        let d = da.min(db) - radio;
+        if d <= 0.05 {
+            return true;
+        }
+        let [w, h] = pr.viewport();
+        let (cx, cy) = (w as f64 * 0.5, h as f64 * 0.5);
+        let t = [sa, sb]
+            .iter()
+            .map(|s| ((s[0] as f64 - cx).abs()).max((s[1] as f64 - cy).abs()))
+            .fold(0.0f64, f64::max)
+            / pr.focal();
+        let m = (pr.focal() * radio * (1.0 + t) / d) as f32 + Self::MARGEN_PIEZA;
+        self.ve_caja(
+            [sa[0].min(sb[0]) - m, sa[1].min(sb[1]) - m],
+            [sa[0].max(sb[0]) + m, sa[1].max(sb[1]) + m],
+        )
+    }
+
+    /// ¿Puede verse algo de una esfera (centro local, radio en m)?
+    fn ve_esfera(&self, pr: &Proyector, centro: [f64; 3], radio: f64) -> bool {
+        let d = pr.depth(centro);
+        if d + radio <= 0.05 {
+            // Entera detrás del plano cercano: ningún vértice se proyecta.
+            return false;
+        }
+        match pr.proyectar(centro) {
+            Some((s, dc)) => self.ve_tubo(pr, (s, dc), (s, dc), radio),
+            None => true,
+        }
+    }
+}
+
+/// Holgura horizontal de la esfera previa de un pozo sobre su radio: cubre la solera ensanchada,
+/// el marco de la tapa y la bajante exterior de los pozos de caída (prueba
+/// `la_esfera_previa_del_pozo_envuelve_su_malla`).
+const HOLGURA_POZO: f64 = 1.5;
+
+/// Esfera que envuelve un pozo o una cámara de bombeo **sin teselarlo** (F14-07): su malla cabe
+/// en un cilindro de radio `D/2 + 1,5 m` y de `−0,5 m` a la altura más `0,5 m`. Así un pozo fuera
+/// de pantalla no cuesta su malla. `None` para el resto de familias (o sin altura finita).
+fn esfera_previa(
+    n: &crate::model::Node,
+    dz_max: f64,
+    to_local: &impl Fn(P3) -> [f64; 3],
+    k: f64,
+) -> Option<([f64; 3], f64)> {
+    let d = match n.family.as_str() {
+        "saneamiento.pozo" => n.diametro(),
+        "saneamiento.bombeo" => n.diametro().max(1.8),
+        _ => return None,
+    };
+    let h = n.z_rim - n.z_invert;
+    if !h.is_finite() || !d.is_finite() || !n.z_invert.is_finite() {
+        return None;
+    }
+    let r = (d * 0.5).max(0.3) + HOLGURA_POZO;
+    let (z0, z1) = (-0.5, h.max(0.8) + 0.5 + dz_max);
+    let centro = to_local(P3::new(n.pos.x, n.pos.y, n.z_invert + (z0 + z1) * 0.5));
+    let hz = (z1 - z0) * 0.5 * k.abs();
+    Some((centro, (2.0 * r * r + hz * hz).sqrt()))
+}
+
+/// Esfera que envuelve la pieza ya colocada (centro local con exageración, radio en m), para
+/// descartarla entera antes de proyectar sus triángulos. `None` si no tiene triángulos.
+fn esfera_de_pieza(
+    partes: &[crate::parts::Parte],
+    n: &crate::model::Node,
+    dz_max: f64,
+    to_local: &impl Fn(P3) -> [f64; 3],
+    k: f64,
+) -> Option<([f64; 3], f64)> {
+    let mut min = [f32::INFINITY; 3];
+    let mut max = [f32::NEG_INFINITY; 3];
+    for v in partes
+        .iter()
+        .flat_map(|p| p.mesh.tris.iter().flat_map(|t| t.p))
+    {
+        for i in 0..3 {
+            min[i] = min[i].min(v[i]);
+            max[i] = max[i].max(v[i]);
+        }
+    }
+    if min[0] > max[0] {
+        return None;
+    }
+    let (min, max) = (min.map(|c| c as f64), max.map(|c| c as f64));
+    // La explosión sube las partes hasta `dz_max`: la caja crece por arriba.
+    let max = [max[0], max[1], max[2] + dz_max];
+    let c = [
+        (min[0] + max[0]) * 0.5,
+        (min[1] + max[1]) * 0.5,
+        (min[2] + max[2]) * 0.5,
+    ];
+    let centro = to_local(P3::new(c[0] + n.pos.x, c[1] + n.pos.y, c[2] + n.z_invert));
+    let (hx, hy, hz) = (
+        (max[0] - min[0]) * 0.5,
+        (max[1] - min[1]) * 0.5,
+        (max[2] - min[2]) * 0.5 * k.abs(),
+    );
+    // Holgura relativa por el redondeo de los vértices en `f32`.
+    let radio = (hx * hx + hy * hy + hz * hz).sqrt() * 1.001 + 0.01;
+    Some((centro, radio))
 }
 
 fn fog(depth: f32, distance: f32) -> f32 {
@@ -1241,37 +1776,77 @@ fn recortar_extremos(pts: &mut [P3], r0: f64, r1: f64) {
     );
 }
 
+/// Triángulos que quedan de uno al cortarlo (cero, uno o dos), en la pila (F14-04).
+#[derive(Clone, Copy, Debug)]
+struct Trozos {
+    tris: [[[f64; 3]; 3]; 2],
+    n: usize,
+}
+
+impl Trozos {
+    fn ninguno() -> Trozos {
+        Trozos {
+            tris: [[[0.0; 3]; 3]; 2],
+            n: 0,
+        }
+    }
+
+    fn uno(t: [[f64; 3]; 3]) -> Trozos {
+        Trozos {
+            tris: [t, [[0.0; 3]; 3]],
+            n: 1,
+        }
+    }
+
+    fn iter(&self) -> std::slice::Iter<'_, [[f64; 3]; 3]> {
+        self.tris[..self.n].iter()
+    }
+
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        self.n
+    }
+
+    #[cfg(test)]
+    fn is_empty(&self) -> bool {
+        self.n == 0
+    }
+}
+
+/// Trozos de un triángulo al cortarlo y, si el plano lo atraviesa, la arista de corte.
+type Corte = (Trozos, Option<([f64; 3], [f64; 3])>);
+
 /// Recorta un triángulo contra el semiespacio `x <= xc` y devuelve los trozos que quedan
 /// más la arista de corte (si el plano lo atraviesa).
-/// Trozos de un triángulo al cortarlo y, si el plano lo atraviesa, la arista de corte.
-type Corte = (Vec<[[f64; 3]; 3]>, Option<([f64; 3], [f64; 3])>);
-
 fn cortar_tri(tri: [[f64; 3]; 3], xc: f32) -> Corte {
     let xc = xc as f64;
     let dentro = |p: [f64; 3]| p[0] <= xc;
     let n_dentro = tri.iter().filter(|p| dentro(**p)).count();
     if n_dentro == 0 {
-        return (Vec::new(), None);
+        return (Trozos::ninguno(), None);
     }
     if n_dentro == 3 {
-        return (vec![tri], None);
+        return (Trozos::uno(tri), None);
     }
 
-    let mut poligono: Vec<[f64; 3]> = Vec::with_capacity(4);
+    let mut poligono = [[0.0f64; 3]; 4];
+    let mut lados = 0usize;
     let mut arista: Option<([f64; 3], [f64; 3])> = None;
     for i in 0..3 {
         let a = tri[i];
         let b = tri[(i + 1) % 3];
         let (da, db) = (dentro(a), dentro(b));
         if da {
-            poligono.push(a);
+            poligono[lados] = a;
+            lados += 1;
         }
         if da != db {
             let t =
                 (xc - a[0]) / (b[0] - a[0]).abs().max(1e-9) * if b[0] > a[0] { 1.0 } else { -1.0 };
             let t = t.clamp(0.0, 1.0);
             let p = [xc, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
-            poligono.push(p);
+            poligono[lados] = p;
+            lados += 1;
             arista = match arista {
                 None => Some((p, p)),
                 Some((p0, _)) => Some((p0, p)),
@@ -1279,11 +1854,14 @@ fn cortar_tri(tri: [[f64; 3]; 3], xc: f32) -> Corte {
         }
     }
 
-    let mut trozos = Vec::new();
-    if poligono.len() >= 3 {
-        trozos.push([poligono[0], poligono[1], poligono[2]]);
-        if poligono.len() == 4 {
-            trozos.push([poligono[0], poligono[2], poligono[3]]);
+    // Con uno o dos vértices dentro, el polígono recortado tiene tres o cuatro lados.
+    let mut trozos = Trozos::ninguno();
+    if lados >= 3 {
+        trozos.tris[0] = [poligono[0], poligono[1], poligono[2]];
+        trozos.n = 1;
+        if lados == 4 {
+            trozos.tris[1] = [poligono[0], poligono[2], poligono[3]];
+            trozos.n = 2;
         }
     }
     (trozos, arista)
@@ -1680,7 +2258,7 @@ mod tests {
         let (trozos, arista) = cortar_tri(tri, 1.0);
         assert_eq!(trozos.len(), 2, "el recorte debe dar dos triángulos");
         assert!(arista.is_some(), "el plano atraviesa el triángulo");
-        for tri in &trozos {
+        for tri in trozos.iter() {
             for v in tri.iter() {
                 assert!(
                     v[0] <= 1.0 + 1e-9,
@@ -1744,6 +2322,9 @@ mod tests {
             .iter()
             .find(|n| !n.deleted && n.family == "saneamiento.pozo")
             .unwrap();
+        // La cámara mira al pozo: fuera de pantalla no se dibujaría y no habría nada que mover
+        // (F14-07).
+        cam.target = [n.pos.x - p.origin.x, n.pos.y - p.origin.y, n.z_rim];
         let code = n.code.clone();
         let id = n.id;
         let normal = build_opts(
@@ -2212,5 +2793,190 @@ mod tests {
             primer_vertice(&otro),
             "el orden del terreno no depende de la cámara"
         );
+    }
+
+    fn profundidad(p: &Prim) -> f32 {
+        match p {
+            Prim::Poly { depth, .. } | Prim::Line { depth, .. } => *depth,
+        }
+    }
+
+    /// ¿Toca la primitiva el viewport (con 2 pt de margen)? Cuenta propia, sin `Pantalla`: si
+    /// el recorte se equivoca de rectángulo, esta prueba no se equivoca con él.
+    fn se_ve(viewport: [f32; 2], p: &Prim) -> bool {
+        let (mut min, mut max) = ([f32::INFINITY; 2], [f32::NEG_INFINITY; 2]);
+        let mut caja = |q: [f32; 2], m: f32| {
+            min = [min[0].min(q[0] - m), min[1].min(q[1] - m)];
+            max = [max[0].max(q[0] + m), max[1].max(q[1] + m)];
+        };
+        match p {
+            Prim::Poly { pts, .. } => pts.iter().for_each(|q| caja(*q, 0.0)),
+            Prim::Line { a, b, w, .. } => {
+                caja(*a, w * 0.5);
+                caja(*b, w * 0.5);
+            }
+        }
+        max[0] >= -2.0
+            && min[0] <= viewport[0] + 2.0
+            && max[1] >= -2.0
+            && min[1] <= viewport[1] + 2.0
+    }
+
+    /// Cámara cerca de un pozo de la demo: piezas con malla y casi toda la red fuera.
+    fn de_cerca(p: &Project) -> Camera {
+        let mut c = demo_cam();
+        let n = p
+            .nodes
+            .iter()
+            .find(|n| n.family == "saneamiento.pozo")
+            .unwrap();
+        c.target = [n.pos.x - p.origin.x, n.pos.y - p.origin.y, n.z_rim];
+        c.distance = 25.0;
+        c.azimuth = 35.0;
+        c
+    }
+
+    /// F14-07: el recorte por pantalla solo quita lo que no se ve. La escena recortada es la
+    /// completa sin las primitivas que caen enteras fuera del viewport, en el mismo orden.
+    #[test]
+    fn el_recorte_solo_quita_lo_que_no_se_ve() {
+        let mut casos = 0;
+        for p in [crate::demo::project(), crate::demo_city::ciudad()] {
+            let cerca = de_cerca(&p);
+            let mut con_corte = cerca.clone();
+            con_corte.distance = 12.0;
+            let xc = con_corte.target[0] as f32;
+            for (cam, opts) in [
+                (demo_cam(), Opciones::default()),
+                (cerca, Opciones::default()),
+                (
+                    con_corte,
+                    Opciones {
+                        corte_x: Some(xc),
+                        ..Opciones::default()
+                    },
+                ),
+            ] {
+                let t = p.terrain.as_ref();
+                let todo = construir(&p, t, &cam, Layers::default(), None, &opts, false);
+                let recortada = construir(&p, t, &cam, Layers::default(), None, &opts, true);
+                // Sin recorte solo se descarta lo que queda entero detrás de la cámara.
+                assert!(recortada.descartadas >= todo.descartadas);
+                let mut i = 0;
+                for prim in &todo.prims {
+                    if recortada.prims.get(i) == Some(prim) {
+                        i += 1;
+                    } else {
+                        assert!(
+                            !se_ve(cam.viewport, prim),
+                            "el recorte quitó algo visible: {prim:?}"
+                        );
+                    }
+                }
+                assert_eq!(
+                    i,
+                    recortada.prims.len(),
+                    "la escena recortada no es una sub-lista"
+                );
+                casos += (recortada.descartadas > todo.descartadas) as usize;
+            }
+        }
+        assert!(casos >= 2, "de cerca el recorte debe descartar algo");
+    }
+
+    /// F14-04: el orden por claves enteras es el mismo que el ordenamiento estable por
+    /// profundidad de antes, con empates, negativos y ceros con signo.
+    #[test]
+    fn el_orden_del_pintor_es_el_estable_de_antes() {
+        let mut lista: Vec<Prim> = (0..500u32)
+            .map(|i| {
+                let d = match i % 7 {
+                    0 => 0.0,
+                    1 => -0.0,
+                    2 => -((i % 13) as f32) * 0.5,
+                    _ => ((i * 7919) % 101) as f32 * 0.25,
+                };
+                Prim::Line {
+                    a: [i as f32, 0.0],
+                    b: [0.0, 0.0],
+                    w: 1.0,
+                    color: [0.0; 4],
+                    depth: d,
+                }
+            })
+            .collect();
+        let mut antes = lista.clone();
+        antes.sort_by(|a, b| {
+            profundidad(b)
+                .partial_cmp(&profundidad(a))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        sort_far_first(&mut lista);
+        assert_eq!(lista, antes);
+    }
+
+    /// F14-04: los bloques entre hilos devuelven los resultados en el orden de la lista.
+    #[test]
+    fn los_bloques_conservan_el_orden() {
+        let items: Vec<u32> = (0..(OBJETOS_POR_HILO as u32 * 6 + 17)).collect();
+        let bloques = en_bloques(&items, |b| b.to_vec());
+        if std::thread::available_parallelism().map_or(1, |n| n.get()) > 1 {
+            assert!(bloques.len() > 1, "con muchos objetos se reparten");
+        }
+        assert_eq!(bloques.concat(), items);
+        assert_eq!(en_bloques(&items[..10], |b| b.len()), vec![10]);
+    }
+
+    /// F14-07: la esfera previa de un pozo (sin teselarlo) envuelve su malla, con explosión
+    /// y exageración vertical, para todos los subtipos de pozo y de bombeo.
+    #[test]
+    fn la_esfera_previa_del_pozo_envuelve_su_malla() {
+        let base = crate::demo::project();
+        let pozo = base
+            .nodes
+            .iter()
+            .find(|n| n.family == "saneamiento.pozo")
+            .unwrap()
+            .clone();
+        let o = base.origin;
+        let mut probados = 0;
+        for familia in ["saneamiento.pozo", "saneamiento.bombeo"] {
+            for ty in &family(familia).unwrap().types {
+                for (diametro, k, dz) in [(1.2, 1.0, 0.0), (1.8, 2.6, 1.5), (0.6, 2.0, 0.0)] {
+                    let mut n = pozo.clone();
+                    n.family = familia.to_string();
+                    n.ty = ty.key.to_string();
+                    n.attrs.insert(
+                        "diametro_interior".into(),
+                        crate::families::Value::Num(diametro),
+                    );
+                    let zr = n.z_invert + 1.0;
+                    let to_local = |q: P3| [q.x - o.x, q.y - o.y, (q.z - zr) * k + zr];
+                    let (centro, radio) = esfera_previa(&n, dz, &to_local, k).unwrap();
+                    for parte in pieza_partes(&n, 2) {
+                        for v in parte.mesh.tris.iter().flat_map(|t| t.p) {
+                            for sube in [0.0, dz] {
+                                let q = to_local(P3::new(
+                                    n.pos.x + v[0] as f64,
+                                    n.pos.y + v[1] as f64,
+                                    n.z_invert + v[2] as f64 + sube,
+                                ));
+                                let d = ((q[0] - centro[0]).powi(2)
+                                    + (q[1] - centro[1]).powi(2)
+                                    + (q[2] - centro[2]).powi(2))
+                                .sqrt();
+                                assert!(
+                                    d <= radio + 1e-6,
+                                    "{familia}/{} D={diametro}: vértice a {d:.3} m, radio {radio:.3}",
+                                    ty.key
+                                );
+                            }
+                        }
+                    }
+                    probados += 1;
+                }
+            }
+        }
+        assert!(probados >= 6);
     }
 }
