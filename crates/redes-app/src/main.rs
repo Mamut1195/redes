@@ -121,7 +121,7 @@ struct State {
     drag_last: [f32; 2],
     /// Modos de detalle: corte, explosión y foco.
     opts: Opciones,
-    /// Pila de deshacer para la edición paramétrica (máx. 20).
+    /// Pila de deshacer de la revisión y del modelo elegido (máx. 20).
     historial: Vec<Project>,
     /// Aviso breve en la barra de estado.
     aviso: Option<String>,
@@ -593,44 +593,6 @@ impl State {
         }
     }
 
-    /// Edición paramétrica en vivo: ajusta un parámetro y reconstruye.
-    fn ajustar(&mut self, clave: &str, delta: f64) {
-        let Some(code) = self.sel.clone() else { return };
-        self.recordar();
-        let project = Arc::make_mut(&mut self.project);
-        if let Some(n) = project.node_by_code_mut(&code) {
-            match clave {
-                // Sin altura con datos no hay solera que mover: se movería un valor de dibujo.
-                "profundidad" if n.sin_altura() => {}
-                "profundidad" => {
-                    // Más profundo = solera más baja; los límites se ordenan para no invertir el clamp.
-                    let (bajo, alto) = (n.z_terrain - 12.0, n.z_rim - 0.6);
-                    n.z_invert = (n.z_invert + delta).clamp(bajo.min(alto), bajo.max(alto));
-                    n.attrs
-                        .insert("cota_solera".to_string(), families::Value::Num(n.z_invert));
-                }
-                "diametro" => {
-                    let actual = n.diametro();
-                    let nuevo = (actual + delta).clamp(0.4, 4.0);
-                    n.attrs
-                        .insert("diametro_interior".to_string(), families::Value::Num(nuevo));
-                }
-                _ => {
-                    let actual = n.num("diametro_nominal").unwrap_or(200.0);
-                    let nuevo = (actual + delta).clamp(25.0, 1200.0);
-                    n.attrs.insert(
-                        "diametro_nominal".to_string(),
-                        families::Value::Int(nuevo as i64),
-                    );
-                }
-            }
-        }
-        // La edición entra en el journal del proyecto, como cualquier otro cambio.
-        project.commit("ui.parametro");
-        self.dirty = true;
-        self.rebuild();
-    }
-
     fn fit(&mut self) {
         self.cam.fit(&self.project);
         self.rebuild();
@@ -1067,47 +1029,7 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
                 }
             }
 
-            right = right.child(el().h(6.0));
-            right = right.child(section("Parámetros (en vivo)"));
-            right = right.child(
-                row()
-                    .gap(4.0)
-                    .child(
-                        chip("− DN", false)
-                            .key("btn-dn-menos")
-                            .on_press(|s: &mut State| s.ajustar("dn", -25.0)),
-                    )
-                    .child(
-                        chip("+ DN", false)
-                            .key("btn-dn-mas")
-                            .on_press(|s: &mut State| s.ajustar("dn", 25.0)),
-                    )
-                    .child(
-                        chip("− Ø", false)
-                            .key("btn-dia-menos")
-                            .on_press(|s: &mut State| s.ajustar("diametro", -0.1)),
-                    )
-                    .child(
-                        chip("+ Ø", false)
-                            .key("btn-dia-mas")
-                            .on_press(|s: &mut State| s.ajustar("diametro", 0.1)),
-                    ),
-            );
-            right = right.child(
-                row()
-                    .gap(4.0)
-                    .child(
-                        chip("− prof.", false)
-                            .key("btn-prof-menos")
-                            .on_press(|s: &mut State| s.ajustar("profundidad", 0.25)),
-                    )
-                    .child(
-                        chip("+ prof.", false)
-                            .key("btn-prof-mas")
-                            .on_press(|s: &mut State| s.ajustar("profundidad", -0.25)),
-                    ),
-            );
-
+            // Sin controles de edición: la app no edita el diseño (D12).
             if !n.datos.is_empty() {
                 right = right.child(el().h(6.0));
                 right = right.child(section("Datos importados (no calculados)"));
@@ -1936,12 +1858,14 @@ mod tests {
         assert!(rt.state.opts.explosion > 0.0, "la explosión queda activa");
     }
 
-    /// Edición paramétrica: + DN cambia el atributo, marca sucio y Deshacer lo revierte.
+    /// La app no edita el diseño (D12): con un pozo seleccionado el inspector no monta ningún
+    /// control para cambiar DN, diámetro o profundidad (se retiró «Parámetros (en vivo)»).
     #[test]
-    fn los_parametros_se_editan_en_vivo_y_se_deshacen() {
+    fn el_inspector_no_edita_parametros_del_diseno() {
         let mut st = State::new();
         st.sel = Some("PZ-001".to_string());
         st.rebuild();
+        let revision = st.project.revision;
         let mut rt = Runtime::new(
             st,
             view,
@@ -1952,38 +1876,23 @@ mod tests {
             },
         );
         rt.frame(0.0);
-        let (x, y) = rt
-            .find("btn-dn-mas")
-            .expect("el chip + DN debe estar montado");
-        rt.pointer_down(x, y);
-        rt.pointer_up(x, y);
-        rt.frame(1.0 / 60.0);
-
-        let n = rt
-            .state
-            .project
-            .node_by_code("PZ-001")
-            .expect("PZ-001 existe");
-        assert_eq!(n.num("diametro_nominal"), Some(225.0), "el DN sube 25 mm");
-        assert!(rt.state.dirty, "el cambio deja el documento sucio");
-        assert_eq!(rt.state.historial.len(), 1, "se apila un paso de deshacer");
-
-        let (x, y) = rt
-            .find("btn-deshacer")
-            .expect("el botón Deshacer debe estar montado");
-        rt.pointer_down(x, y);
-        rt.pointer_up(x, y);
-        rt.frame(1.0 / 60.0);
-        let n = rt
-            .state
-            .project
-            .node_by_code("PZ-001")
-            .expect("PZ-001 existe");
-        assert_eq!(
-            n.num("diametro_nominal"),
-            None,
-            "Deshacer revierte el parámetro"
-        );
+        // El inspector sí está montado: la revisión sigue disponible.
+        assert!(rt.find("btn-deshacer").is_some(), "Deshacer montado");
+        for clave in [
+            "btn-dn-menos",
+            "btn-dn-mas",
+            "btn-dia-menos",
+            "btn-dia-mas",
+            "btn-prof-menos",
+            "btn-prof-mas",
+        ] {
+            assert!(
+                rt.find(clave).is_none(),
+                "{clave}: la app no edita parámetros del diseño (D12)"
+            );
+        }
+        assert_eq!(rt.state.project.revision, revision);
+        assert!(!rt.state.dirty);
     }
 
     /// Salir vuelve al modo normal.

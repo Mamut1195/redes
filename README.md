@@ -54,12 +54,11 @@ simple / completo). Decisiones y comparación de motores en
 | **Corte** | plano vertical por el centro: recorta la geometría y marca la arista en amarillo |
 | **Explosión** | separa solera, cono y tapa en bandas |
 | **Salir** | vuelve al encuadre general |
-| **Deshacer** | revierte la última edición paramétrica |
+| **Deshacer** | revierte el último cambio de revisión o de modelo asignado |
 
 Además: **etiquetas** con código y subtipo sobre cada pieza visible, **leyenda** por forma y
-texto (no solo color) y **ficha paramétrica en vivo** (`− DN`, `+ DN`, `− Ø`, `+ Ø`, `− prof.`,
-`+ prof.`) que cambia la geometría al instante. `Shift + rueda` mueve el plano de corte o abre la
-explosión.
+texto (no solo color) e inspector de **solo lectura**: la app no edita el diseño (D12).
+`Shift + rueda` mueve el plano de corte o abre la explosión.
 
 Detalle y limitaciones en [11-modos-inspeccion.md](docs/11-modos-inspeccion.md).
 

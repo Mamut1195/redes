@@ -5,8 +5,8 @@
 > [`21-cifras-medidas.md`](21-cifras-medidas.md). Este documento se conserva como historia.
 
 
-> Lo que se implementó después del catálogo: ver la pieza por dentro, separarla, leer sus datos y
-> cambiarlos en vivo. Todo dentro del visor, sin otra aplicación.
+> Lo que se implementó después del catálogo: ver la pieza por dentro, separarla y leer sus datos.
+> Todo dentro del visor, sin otra aplicación. La app **no edita** el diseño (D12).
 
 ![Modos](img/modos.gif)
 
@@ -69,23 +69,22 @@ La leyenda del panel izquierdo usa **forma + texto**, no solo color:
 
 Los conteos salen del proyecto en vivo; al aprobar u observar, la leyenda cambia.
 
-## 6. Ficha paramétrica en vivo
+## 6. Ficha del objeto (solo lectura)
 
-En el inspector, el bloque **Parámetros (en vivo)** tiene `− DN`, `+ DN`, `− Ø`, `+ Ø`,
-`− prof.`, `+ prof.`:
+El inspector muestra los datos del objeto (geometría, datos importados con su fuente y
+atributos) **sin controles para cambiarlos**. Hubo un bloque **Parámetros (en vivo)** con
+`− DN`, `+ DN`, `− Ø`, `+ Ø`, `− prof.`, `+ prof.` que escribía en el proyecto (journal
+`ui.parametro`) e inventaba un DN de 200 mm cuando faltaba el dato; se retiró el 27/11/2026
+porque la app no edita el diseño (D12, `docs/22-decisiones.md`). Lo que no cuadra se marca como
+observación y se corrige en la aplicación de origen. Prueba:
+`el_inspector_no_edita_parametros_del_diseno`.
 
-- `DN` ajusta `diametro_nominal` (25 mm por clic, 25–1200).
-- `Ø` ajusta `diametro_interior` (0,1 m por clic, 0,4–4,0) y **se ve cambiar la pieza**.
-- `prof.` mueve la clave (`z_invert`, 0,25 m por clic) con tope en la tapa menos 0,6 m.
-
-Cada cambio: apila un paso de deshacer, marca el documento sucio y reconstruye la escena. La
-profundidad y el diámetro son los mismos parámetros que generan la malla, así que la pieza y el
-inspector nunca se contradicen.
+![Inspector de solo lectura](img/inspector-solo-lectura.png)
 
 ## 7. Deshacer
 
-`Deshacer` recupera el proyecto anterior de una pila de **20 pasos**. Cubre la edición
-paramétrica; la revisión (aprobar/observar) se guarda en el archivo, no en la pila.
+`Deshacer` recupera el proyecto anterior de una pila de **20 pasos**. Cubre la revisión hecha
+en el inspector (observaciones) y el modelo de biblioteca elegido.
 
 ## 8. Verificación
 
@@ -101,7 +100,7 @@ Pruebas automáticas que sostienen estos modos:
 | `el_boton_foco_acerca_la_camara` | distancia < 20 m y `z_scale = 1` |
 | `el_boton_corte_activa_y_desactiva_el_plano` | ida y vuelta del plano |
 | `el_boton_explosion_separa_la_pieza` | factor de explosión > 0 |
-| `los_parametros_se_editan_en_vivo_y_se_desHacen` | +25 mm de DN, sucio, deshacer revierte |
+| `el_inspector_no_edita_parametros_del_diseno` | con selección no hay controles de DN, Ø ni profundidad (D12) |
 | `salir_del_modo_vuelve_a_la_vista_general` | cámara y opciones limpias |
 
 Escenas headless para revisar sin tocar el ratón: `--scene foco`, `--scene corte`,
@@ -111,4 +110,5 @@ Escenas headless para revisar sin tocar el ratón: `--scene foco`, `--scene cort
 
 1. Corte con **cara de sección** rellena (hoy es la arista; falta el relleno tramado).
 2. Etiquetas con **seis carriles** y detección de solapes (hoy es una lista sin colisión).
-3. Ficha editable para **todos** los parámetros, no solo tres.
+
+(Se retiró «Ficha editable para todos los parámetros»: la app no edita el diseño, D12.)
