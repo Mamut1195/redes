@@ -86,10 +86,29 @@ pub fn escena_ms(p: &Project, veces: usize) -> f64 {
     t[t.len() / 2]
 }
 
-/// Importa, dibuja, busca, guarda, abre y reimporta una red de `tramos` tramos; devuelve los
-/// tiempos en ms (`ingesta`, `escena` —mediana de 9 `build_opts`—, `busquedas`, `abrir`,
-/// `reimportar`).
-pub fn banco(tramos: usize) -> BTreeMap<&'static str, f64> {
+/// GPU scene of the 3D pass (F14-05): instanced prototypes, LODs and static batches.
+pub fn gpu_scene(p: &Project) -> redes_core::scene3d::Scene {
+    redes_core::scene3d::Scene::build(
+        p,
+        Layers::default(),
+        &[],
+        &mut redes_core::mallas::CachePiezas::default(),
+        redes_core::scene3d::GPU_BUDGET,
+    )
+}
+
+/// Size of the GPU scene measured by the bench.
+#[derive(Debug)]
+pub struct GpuMesh {
+    pub bytes_per_object: f64,
+    pub megabytes: f64,
+    pub warning: Option<String>,
+}
+
+/// Importa, dibuja, arma la malla 3D, busca, guarda, abre y reimporta una red de `tramos`
+/// tramos; devuelve los tiempos en ms (`ingesta`, `escena` —mediana de 9 `build_opts`—,
+/// `malla3d`, `busquedas`, `abrir`, `reimportar`) y el tamaño de la malla 3D.
+pub fn banco(tramos: usize) -> (BTreeMap<&'static str, f64>, GpuMesh) {
     let ruta = temporal(&format!("plan-{tramos}.json"));
     std::fs::write(&ruta, plan_sintetico(tramos)).unwrap();
     let mut t = BTreeMap::new();
@@ -103,6 +122,16 @@ pub fn banco(tramos: usize) -> BTreeMap<&'static str, f64> {
     assert!(vivos >= tramos, "{vivos} tramos");
 
     t.insert("escena", escena_ms(&p, 9));
+
+    let t0 = Instant::now();
+    let scene = gpu_scene(&p);
+    t.insert("malla3d", ms(t0));
+    let gpu = GpuMesh {
+        bytes_per_object: scene.gpu_bytes() as f64 / scene.objects.len().max(1) as f64,
+        megabytes: scene.gpu_bytes() as f64 / (1024.0 * 1024.0),
+        warning: scene.warning.clone(),
+    };
+    drop(scene);
 
     let t0 = Instant::now();
     for l in p.links.iter().filter(|l| !l.deleted) {
@@ -132,5 +161,5 @@ pub fn banco(tramos: usize) -> BTreeMap<&'static str, f64> {
 
     let _ = std::fs::remove_file(&ruta);
     let _ = std::fs::remove_file(&archivo);
-    t
+    (t, gpu)
 }

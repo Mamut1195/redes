@@ -178,20 +178,60 @@ $mutaciones = @(
     @{
         Nombre = "gpu3d-sube-cada-frame"
         Archivo = "crates/redes-app/src/gpu3d.rs"
-        Patron = 'subir: \(self\.generacion != subida\)\.then'
-        Reemplazo = 'subir: true.then'
+        Patron = 'upload: \(self\.generation != uploaded\)\.then'
+        Reemplazo = 'upload: true.then'
         Paquete = "redes-app"
-        Prueba = "la_escena_quieta_no_se_vuelve_a_subir"
-        Que = "volver a subir la malla en cada frame con la escena quieta (F14-03)"
+        Prueba = "a_still_scene_is_not_uploaded_again"
+        Que = "volver a subir la escena en cada frame con la escena quieta (F14-03)"
     },
     @{
         Nombre = "gpu3d-tope-fijo"
         Archivo = "crates/redes-app/src/gpu3d.rs"
-        Patron = 'let tope = limite\.min\(TOPE_PRUDENTE\);'
-        Reemplazo = 'let tope = TOPE_PRUDENTE;'
+        Patron = 'let budget = limit\.min\(scene3d::GPU_BUDGET\);'
+        Reemplazo = 'let budget = scene3d::GPU_BUDGET;'
         Paquete = "redes-app"
-        Prueba = "el_tope_del_bufer_respeta_el_limite_del_dispositivo"
+        Prueba = "the_budget_respects_the_device_limit"
         Que = "ignorar max_buffer_size del dispositivo: panico con 5k pozos en una GPU de 256 MB (F14-05)"
+    },
+    @{
+        Nombre = "escena3d-sin-compartir"
+        Archivo = "crates/redes-core/src/scene3d.rs"
+        Patron = '\.find\(\|c\| self\.signatures\[\*c as usize\] == self\.signature\)'
+        Reemplazo = '.find(|_| false)'
+        Prueba = "manholes_of_different_depth_share_prototypes"
+        Que = "no compartir prototipos: cada pozo vuelve a copiar su malla (F14-05)"
+    },
+    @{
+        Nombre = "escena3d-sin-escala-z"
+        Archivo = "crates/redes-core/src/scene3d.rs"
+        Patron = 'scale: \[1\.0, 1\.0, part\.scale_z\],'
+        Reemplazo = 'scale: [1.0, 1.0, 1.0],'
+        Prueba = "instancing_reproduces_the_exported_mesh"
+        Que = "colocar el prototipo sin su escala en Z: fustes de otra altura (F14-05)"
+    },
+    @{
+        Nombre = "escena3d-lod-fijo"
+        Archivo = "crates/redes-core/src/scene3d.rs"
+        Patron = 'if radius_px >= FULL_DETAIL_PX \{'
+        Reemplazo = 'if true {'
+        Prueba = "distant_objects_draw_as_boxes_and_near_ones_in_full"
+        Que = "dibujar todo con el detalle completo, aunque ocupe un pixel (F14-05)"
+    },
+    @{
+        Nombre = "escena3d-sin-recorte"
+        Archivo = "crates/redes-core/src/scene3d.rs"
+        Patron = 'outside\.iter\(\)\.any\(\|o\| \*o\)'
+        Reemplazo = 'false'
+        Prueba = "objects_outside_the_view_are_culled"
+        Que = "dibujar lo que cae fuera de la camara (F14-05)"
+    },
+    @{
+        Nombre = "escena3d-sin-tope"
+        Archivo = "crates/redes-core/src/scene3d.rs"
+        Patron = 'if instance_bytes \+ v \+ i > budget \{'
+        Reemplazo = 'if false {'
+        Prueba = "a_scene_over_budget_is_trimmed_and_warns"
+        Que = "subir la escena entera aunque pase del tope de GPU, sin aviso (F14-05)"
     },
     @{
         Nombre = "cache-piezas-sin-acierto"

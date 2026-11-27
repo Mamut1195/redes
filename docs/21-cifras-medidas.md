@@ -123,11 +123,33 @@ De cerca, el recorte por pantalla deja fuera lo que no se ve antes de teselarlo 
 selección por rejilla: con 20k encuadrados un clic mira < 10 % de los 40 299 objetos (las filas
 lejanas se apiñan); de cerca, < 50.
 
+### 4.4 Pase 3D con instancias, LOD y recorte (F14-05)
+
+Red en peine de `plan.py` (la misma que `tests/comun`), importada con `redes importar plan`.
+Captura `redes-app --gpu3d --snap … --scene iso` en release, el 27/11/2026, en una AMD Radeon
+integrada (DX12) cuyo `max_buffer_size` es **256 MB**. «MB de GPU» es lo que pide la escena:
+antes, vértices sin índices; ahora, vértices + índices + búfer de instancias del peor caso. El
+tiempo es el del proceso entero, de arrancar a escribir el PNG. La RAM es el pico del proceso.
+
+| Red | MB de GPU antes → después | Triángulos dibujados | Primer frame | Proceso entero | RAM pico |
+|---|---:|---:|---:|---:|---:|
+| 5k tramos (10 374 objetos) | 285 (recortado a 255) → **5,9** | 2,8 M → 124 488 | 219 → **60 ms** | 4,7 → **0,9 s** | 1 023 → **243 MB** |
+| 20k tramos (40 299 objetos) | 1 110 (recortado a 255: se veía ~¼ de la red) → **22,9** | 10,8 M → 483 588 | 2 750 → **135 ms** | 12,9 → **1,1 s** | 2 920 → **319 MB** |
+| Ciudad demo | — → — | 33 320 → 11 874 | 48 → 41 ms | 0,97 → 0,65 s | 243 → 208 MB |
+
+Antes, con 5k y 20k, la escena no cabía en el búfer de 256 MB y se dibujaba solo una parte. Ahora
+se dibuja entera y sin aviso. La captura de la ciudad se ve igual que antes: misma vista, LOD
+completo de cerca y cajas de 1 a 3 px de lejos. En la escena `pozos` el recorte deja 960
+triángulos de 33 320. Captura de la red de 20k entera: `docs/img/gpu3d-20k.png`.
+
+Banco (`tests/banco.rs`, release, fase «malla 3D»): la escena de 20k tramos se arma en ~85 ms
+(umbral CI 1 000 ms) y pide 22,9 MB, 1 188 bytes por objeto (tope 4 000; antes ~55 kB por pozo).
+
 ## 5. Pruebas
 
 | Suite | Pruebas |
 |---|---:|
-| Núcleo (`redes-core`, unitarias) | **150** |
+| Núcleo (`redes-core`, unitarias) | **155** |
 | Validación geométrica (`redes-core/tests/validar.rs`) | **13** |
 | Acta de revisión (`redes-core/tests/acta.rs`) | **5** |
 | Reimportar (`redes-core/tests/reimportar.rs`) | **8** |
@@ -137,16 +159,16 @@ lejanas se apiñan); de cerca, < 50.
 | Índices del proyecto (`tests/indices.rs`) | **3** |
 | Banco 20k (`tests/banco.rs`, + 1 de 50k ignorado) | **1** |
 | Escena y selección (`tests/escena.rs`, + 1 banco ignorado) | **2** |
-| Interfaz (`redes-app`) | **24** |
+| Interfaz (`redes-app`) | **25** |
 | Contrato del CLI (`tests/contrato.rs`) | **19** |
 | Perfil del CLI (`tests/perfil.rs`) | **3** |
 | Validar del CLI (`tests/validar.rs`) | **4** |
 | Acta del CLI (`tests/acta.rs`) | **2** |
 | Reimportar del CLI (`tests/reimportar.rs`) | **2** |
 | Doctest | **1** |
-| **Total** | **274** |
+| **Total** | **280** |
 
-Más el arnés de mutación: `powershell -File scripts/mutar.ps1` rompe veintiocho comportamientos (cinco
+Más el arnés de mutación: `powershell -File scripts/mutar.ps1` rompe treinta y cuatro comportamientos (cinco
 de vista, tres de `redes validar`, el estado derivado de las observaciones y dos del acta: escapar el
 HTML y no sacar columnas de autor sin registrarlo, D2; y tres de reimportar: reiniciar el aprobado
 cuyo diseño cambió, conservar las observaciones y no dar de baja en silencio; y abrir un `.redes` de otra versión sin
@@ -154,7 +176,7 @@ migrar, F15-01, D10; y olvidar el nodo final en el índice de tramos por nodo, F
 al mover la cámara, F14-02, y volver a subirla en cada frame, F14-03; una escena cuadrática en el banco, F14-10;
 dos de la caché de piezas y proxies, F14-06; y siete de la escena y la selección, F14-04/07: recortar de más,
 no recortar, esfera de pozo corta, orden de negativos, bloques de hilos desordenados, rejilla de una celda y
-rejilla que pierde tramos) y exige que la suite falle.
+rejilla que pierde tramos; y cinco de la escena 3D instanciada, F14-05: no compartir prototipos, olvidar la escala en Z, LOD fijo, sin recorte y sin tope) y exige que la suite falle.
 
 ## 6. Qué cifras de los informes anteriores son falsas
 

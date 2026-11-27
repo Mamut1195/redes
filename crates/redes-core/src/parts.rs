@@ -60,6 +60,9 @@ pub struct Tri {
 #[derive(Clone, Debug, Default)]
 pub struct Mesh {
     pub tris: Vec<Tri>,
+    /// Triangle indices where an appended part starts. The GPU scene splits the mesh there and
+    /// shares identical parts between pieces (F14-05).
+    pub part_breaks: Vec<u32>,
 }
 
 impl Mesh {
@@ -88,6 +91,12 @@ impl Mesh {
     }
 
     pub fn extend(&mut self, other: Mesh) {
+        let start = self.tris.len() as u32;
+        if start > 0 && !other.is_empty() {
+            self.part_breaks.push(start);
+        }
+        self.part_breaks
+            .extend(other.part_breaks.iter().map(|b| b + start));
         self.tris.extend(other.tris);
     }
 

@@ -63,45 +63,76 @@ pub fn triangulos_con_cache(
     cache: &mut crate::mallas::CachePiezas,
 ) -> Malla {
     let mut out = Malla::default();
+    let mut families = FamilyTable::default();
     cache.iniciar_pasada();
-    let mut indice: BTreeMap<String, u16> = BTreeMap::new();
-    let mut familia = |nombre: &str| -> u16 {
-        if let Some(i) = indice.get(nombre) {
-            return *i;
-        }
-        let i = out.familias.len() as u16;
-        out.familias.push(nombre.to_string());
-        indice.insert(nombre.to_string(), i);
-        i
-    };
-    let a_local = |q: P3| -> [f32; 3] {
-        [
-            (q.x - p.origin.x) as f32,
-            (q.y - p.origin.y) as f32,
-            q.z as f32,
-        ]
-    };
-
     for n in p.nodes.iter().filter(|n| !n.deleted) {
         let malla = cache.pieza(n, 2);
+        let family = families.id(&mut out, &n.family);
         for tri in &malla.tris {
             let pos = tri.p.map(|v| {
-                a_local(P3::new(
-                    v[0] as f64 + n.pos.x,
-                    v[1] as f64 + n.pos.y,
-                    v[2] as f64 + n.z_invert,
-                ))
+                to_local(
+                    p,
+                    P3::new(
+                        v[0] as f64 + n.pos.x,
+                        v[1] as f64 + n.pos.y,
+                        v[2] as f64 + n.z_invert,
+                    ),
+                )
             });
             out.tris.push(Triangulo {
                 pos,
                 normal: normal_de(pos),
                 color: [tri.color[0], tri.color[1], tri.color[2]],
-                familia: familia(&n.family),
+                familia: family,
             });
         }
     }
     cache.podar();
+    push_static_triangles(p, con_terreno, &mut out, &mut families);
+    out
+}
 
+/// Everything but the node pieces: pipes, urban context and terrain. The GPU scene draws these
+/// as culled batches and the pieces as instances (F14-05).
+pub fn static_triangles(p: &Project, with_terrain: bool) -> Malla {
+    let mut out = Malla::default();
+    push_static_triangles(p, with_terrain, &mut out, &mut FamilyTable::default());
+    out
+}
+
+#[derive(Default)]
+struct FamilyTable {
+    index: BTreeMap<String, u16>,
+}
+
+impl FamilyTable {
+    fn id(&mut self, malla: &mut Malla, name: &str) -> u16 {
+        if let Some(i) = self.index.get(name) {
+            return *i;
+        }
+        let i = malla.familias.len() as u16;
+        malla.familias.push(name.to_string());
+        self.index.insert(name.to_string(), i);
+        i
+    }
+}
+
+/// Subtracts the origin in `f64` before going down to `f32` (docs/15).
+fn to_local(p: &Project, q: P3) -> [f32; 3] {
+    [
+        (q.x - p.origin.x) as f32,
+        (q.y - p.origin.y) as f32,
+        q.z as f32,
+    ]
+}
+
+fn push_static_triangles(
+    p: &Project,
+    con_terreno: bool,
+    out: &mut Malla,
+    families: &mut FamilyTable,
+) {
+    let a_local = |q: P3| to_local(p, q);
     for l in p.links.iter().filter(|l| !l.deleted) {
         if l.path.len() < 2 {
             continue;
@@ -115,6 +146,7 @@ pub fn triangulos_con_cache(
         // Eje = solera + DI/2; sección = diámetro exterior (F12-02).
         let d_ext = l.diametro_exterior_m() as f32;
         let material = l.get("material").and_then(|v| v.as_str()).unwrap_or("");
+        let family = families.id(out, &l.family);
         for w in l.eje().windows(2) {
             // En local: construir tubos con coordendas UTM en f32 los colapsa.
             let wa = P3::new(w[0].x - p.origin.x, w[0].y - p.origin.y, w[0].z);
@@ -128,7 +160,7 @@ pub fn triangulos_con_cache(
                     pos,
                     normal: normal_de(pos),
                     color: [tri.color[0], tri.color[1], tri.color[2]],
-                    familia: familia(&l.family),
+                    familia: family,
                 });
             }
         }
@@ -140,6 +172,7 @@ pub fn triangulos_con_cache(
         let asfalto = [0.18f32, 0.19, 0.21];
         for calle in &ent.calles {
             let half = calle.ancho as f32 * 0.5;
+            let family = families.id(out, &calle.nombre);
             for w in calle.eje.windows(2) {
                 let (a, b) = (w[0].p2(), w[1].p2());
                 let d = ((b.x - a.x).powi(2) + (b.y - a.y).powi(2)).sqrt();
@@ -170,7 +203,7 @@ pub fn triangulos_con_cache(
                         pos: tri,
                         normal: normal_de(tri),
                         color: asfalto,
-                        familia: familia(&calle.nombre),
+                        familia: family,
                     });
                 }
             }
@@ -192,6 +225,8 @@ pub fn triangulos_con_cache(
                 [0.70f32, 0.64, 0.55]
             };
             let n = mz.poligono.len();
+            let family = families.id(out, &mz.uso);
+            let roof = families.id(out, "cubierta");
             for i in 0..n {
                 let q1 = mz.poligono[i];
                 let q2 = mz.poligono[(i + 1) % n];
@@ -208,7 +243,7 @@ pub fn triangulos_con_cache(
                         pos: tri,
                         normal: normal_de(tri),
                         color: pared,
-                        familia: familia(&mz.uso),
+                        familia: family,
                     });
                 }
             }
@@ -228,7 +263,7 @@ pub fn triangulos_con_cache(
                     pos: tri,
                     normal: normal_de(tri),
                     color: [0.38, 0.36, 0.35],
-                    familia: familia("cubierta"),
+                    familia: roof,
                 });
             }
         }
@@ -237,6 +272,7 @@ pub fn triangulos_con_cache(
     if con_terreno && let Some(t) = &p.terrain {
         let (zmin, zmax) = t.z_range();
         let zspan = (zmax - zmin).max(1e-6);
+        let family = families.id(out, "terreno");
         for tri in &t.tris {
             let pts = [
                 &t.points[tri[0] as usize],
@@ -250,11 +286,10 @@ pub fn triangulos_con_cache(
                 pos,
                 normal: normal_de(pos),
                 color: [0.26 + 0.34 * t01, 0.40 + 0.16 * t01, 0.26 + 0.06 * t01],
-                familia: familia("terreno"),
+                familia: family,
             });
         }
     }
-    out
 }
 
 /// Exporta el proyecto a un binario glTF (`.glb`).

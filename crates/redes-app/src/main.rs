@@ -128,7 +128,7 @@ struct State {
     /// Pase 3D con profundidad activo (fase 5).
     gpu3d: bool,
     /// Geometría compartida con el compositor GPU.
-    geom: Arc<Mutex<gpu3d::Geometria>>,
+    geom: Arc<Mutex<gpu3d::Geometry>>,
     /// De qué se generó la malla del pase 3D: si no cambia, la cámara no la regenera (F14-02).
     clave_malla: Option<ClaveMalla>,
     /// Rectángulo del lienzo en puntos (x, y, ancho, alto): el pase 3D se limita a él.
@@ -142,8 +142,8 @@ struct State {
     bib: Option<(std::path::PathBuf, Arc<redes_core::biblioteca::Biblioteca>)>,
     /// Aviso de política de dibujo (modelos pesados sin `--gpu3d`).
     aviso_modelos: Option<String>,
-    /// Aviso del pase 3D cuando la escena no cabe en el búfer que admite la GPU (lo fija el
-    /// compositor con el límite del dispositivo).
+    /// Aviso del pase 3D cuando la escena no cabe en el tope de GPU (el compositor baja el tope
+    /// al límite del dispositivo y regenera la escena).
     aviso_gpu: Option<String>,
     /// Perfil longitudinal abierto desde el inspector de un tramo (F13-02).
     perfil: Option<redes_core::perfil::Perfil>,
@@ -218,7 +218,7 @@ impl State {
             historial: Vec::new(),
             gpu3d: gpu3d::activo(),
             aviso: error_carga,
-            geom: Arc::new(Mutex::new(gpu3d::Geometria::default())),
+            geom: Arc::new(Mutex::new(gpu3d::Geometry::default())),
             clave_malla: None,
             // Estimación para el primer frame (el layout aún no ha corrido): 1280×800 con los
             // paneles de 214 y 292 pt. `on_layout` la sustituye por el rectángulo real.
@@ -338,12 +338,13 @@ impl State {
             };
             if let Ok(mut g) = self.geom.lock() {
                 if let Some(instancias) = instancias {
-                    g.cargar_con_modelos(&self.project, self.layers, &instancias, &mut self.piezas);
+                    g.load_with_models(&self.project, self.layers, &instancias, &mut self.piezas);
                     self.clave_malla = Some(clave);
+                    self.aviso_gpu = g.scene.warning.clone();
                 }
-                g.fijar_camara(&self.cam);
-                // La barra de estado cuenta los triángulos que dibuja la GPU.
-                self.scene.tri_count = (g.vertices / 3) as usize;
+                g.set_camera(&self.cam);
+                // La barra de estado cuenta los triángulos que dibuja la GPU con esta cámara.
+                self.scene.tri_count = g.plan.triangles as usize;
             }
         }
     }
@@ -1708,8 +1709,8 @@ mod tests {
         let mut st = State::new();
         st.gpu3d = true;
         st.rebuild();
-        let generacion = |rt: &Runtime<State>| rt.state.geom.lock().unwrap().generacion;
-        let vp = |rt: &Runtime<State>| rt.state.geom.lock().unwrap().vp;
+        let generacion = |rt: &Runtime<State>| rt.state.geom.lock().unwrap().generation;
+        let vp = |rt: &Runtime<State>| rt.state.geom.lock().unwrap().view_proj;
         let mut rt = Runtime::new(
             st,
             view,
@@ -1723,7 +1724,7 @@ mod tests {
         rt.frame(1.0 / 60.0);
         let g0 = generacion(&rt);
         assert!(g0 > 0, "la malla inicial se generó");
-        assert!(rt.state.geom.lock().unwrap().vertices > 0);
+        assert!(!rt.state.geom.lock().unwrap().scene.is_empty());
         assert!(
             rt.state.scene.prims.is_empty(),
             "en 3D no se arma la escena del pintor"
