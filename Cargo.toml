@@ -23,3 +23,13 @@ winit = { path = "vendor/rune/vendor/winit" }
 parley_engine = { path = "vendor/rune/vendor/parley_engine" }
 accesskit_windows = { path = "vendor/rune/vendor/accesskit_windows" }
 accesskit_macos = { path = "vendor/rune/vendor/accesskit_macos" }
+
+# F14-09. Release: LTO fina y una sola unidad de código (binario más rápido en el banco, a cambio
+# de compilar más despacio). Dev: las dependencias (Rune, wgpu, serde…) optimizadas para que la app
+# y las pruebas sean usables; los crates del workspace siguen en opt-level 0 (compilación rápida).
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+[profile.dev.package."*"]
+opt-level = 2
