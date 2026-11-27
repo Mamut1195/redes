@@ -53,6 +53,13 @@
 - `spike/` y `vendor/rune` están fuera del workspace: no los metas en comandos de cargo del producto.
 - Edition 2024. El CI solo exige clippy `correctness`, pero no añadas avisos nuevos.
 
+## Herramientas para agentes (Codegraph y Archify)
+- **Codegraph** indexa `crates/` (sin `vendor/` ni `spike/`) en `.codegraph/` (ignorado por git). Si falta: `codegraph init .`; tras cambios grandes: `codegraph sync .`.
+  - Úsalo ANTES de grep+Read para entender código: herramienta MCP `codegraph_explore` con `projectPath` = raíz del repo, o CLI `codegraph explore|callers|callees|impact <símbolo> .`.
+  - Antes de cambiar una función pública de `redes-core`, mira su radio de impacto con `codegraph impact <símbolo> .`.
+- **Archify** (skill `archify`): diagramas de arquitectura/flujo respaldados por el código y "Code Analysis" de acoplamiento. Salidas en `out/auditoria/` (ignorado). Usa `archify-pr` para explicar ramas o PRs con cambios de arquitectura.
+- Subagentes: dales en el prompt estas dos herramientas y la ruta del repo; sus worktrees viven en `.claude/worktrees/` y se borran al fusionar.
+
 ## Antes de cambiar algo, mira
 - Alcance: docs/01-arquitectura.md, docs/22-decisiones.md. Qué falta: docs/23 y docs/18.
 - Uso de la CLI y la app: docs/04-guia.md. Ingesta: docs/03-skill-ingesta.md.

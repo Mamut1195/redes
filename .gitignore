@@ -31,3 +31,6 @@ desktop.ini
 
 # Worktrees de agentes
 .claude/worktrees/
+
+# Índice local de Codegraph (se regenera con `codegraph init` / `codegraph sync`)
+.codegraph/
