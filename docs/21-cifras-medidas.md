@@ -208,11 +208,24 @@ Se rehace con un plan de N pozos con `diametro`, `cota`, `cota_tapa` y `attrs.es
 `redes -p x.redes biblioteca hornear --receta tools/blender/build_manhole.receta.json` dos veces
 (la primera hornea, la segunda sale de la caché) y `segundos_blender` del sobre.
 
+### 4.8 Pozo piloto en la red (F17-03)
+
+Blender 5.1.0, CLI en release, Windows 11, 28/11/2026 (detalle en docs/17 §12.7).
+
+| Medida | Valor |
+|---|---:|
+| Pozos de `redes proyecto cadena` horneados | 18 de 18 |
+| Piezas distintas (las anclas entran en la clave) | 7 |
+| Hornear las 7 en un proceso, con `.blend` | 2,49 s |
+| Triángulos por pozo: sin tubos / con dos / piloto con tres | 1 676 / 1 868 / 1 940 |
+| Piloto versionado (`tools/blender/piloto/`) | 93 kB, cerrado, 1,7 × 1,7 × 2,6 m |
+| Triángulos del pintor, escena `foco` de la cadena con modelos | 6 134 |
+
 ## 5. Pruebas
 
 | Suite | Pruebas |
 |---|---:|
-| Núcleo (`redes-core`, unitarias) | **162** |
+| Núcleo (`redes-core`, unitarias) | **170** |
 | Validación geométrica (`redes-core/tests/validar.rs`) | **13** |
 | Acta de revisión (`redes-core/tests/acta.rs`) | **5** |
 | Reimportar (`redes-core/tests/reimportar.rs`) | **8** |
@@ -223,17 +236,18 @@ Se rehace con un plan de N pozos con `diametro`, `cota`, `cota_tapa` y `attrs.es
 | Banco 20k (`tests/banco.rs`, + 1 de 50k ignorado) | **1** |
 | Escena y selección (`tests/escena.rs`, + 1 banco ignorado) | **2** |
 | Deshacer por diferencias (`tests/undo.rs`) | **6** |
-| Interfaz (`redes-app`) | **26** |
+| Pozo piloto horneado (`tests/pozo_horneado.rs`, sin Blender) | **3** |
+| Interfaz (`redes-app`) | **28** |
 | Contrato del CLI (`tests/contrato.rs`) | **19** |
 | Perfil del CLI (`tests/perfil.rs`) | **3** |
 | Validar del CLI (`tests/validar.rs`) | **4** |
 | Acta del CLI (`tests/acta.rs`) | **2** |
 | Reimportar del CLI (`tests/reimportar.rs`) | **2** |
-| Hornear del CLI (`tests/hornear.rs`; la de Blender se salta sin Blender) | **4** |
+| Hornear del CLI (`tests/hornear.rs`; las dos de Blender se saltan sin Blender) | **5** |
 | Doctest | **1** |
-| **Total** | **299** |
+| **Total** | **313** |
 
-Más el arnés de mutación: `powershell -File scripts/mutar.ps1` rompe cuarenta y un comportamientos (cinco
+Más el arnés de mutación: `powershell -File scripts/mutar.ps1` rompe cuarenta y seis comportamientos (cinco
 de vista, tres de `redes validar`, el estado derivado de las observaciones y dos del acta: escapar el
 HTML y no sacar columnas de autor sin registrarlo, D2; y tres de reimportar: reiniciar el aprobado
 cuyo diseño cambió, conservar las observaciones y no dar de baja en silencio; y abrir un `.redes` de otra versión sin
@@ -243,7 +257,9 @@ dos de la caché de piezas y proxies, F14-06; y siete de la escena y la selecci�
 no recortar, esfera de pozo corta, orden de negativos, bloques de hilos desordenados, rejilla de una celda y
 rejilla que pierde tramos; y cinco de la escena 3D instanciada, F14-05: no compartir prototipos, olvidar la escala en Z, LOD fijo, sin recorte y sin tope; y dos del `.glb`: una malla por nodo y el largo truncado a `u32`; y cuatro del deshacer, F14-08: guardar cada objeto
 en cada paso, no devolver la revisión, no rehacer los índices tras un alta y no registrar la
-revisión de la app; y una clave de horneado que no cambia al editar la receta, F17-02) y exige que la suite falle.
+revisión de la app; y una clave de horneado que no cambia al editar la receta, F17-02; y cinco del pozo piloto, F17-03: apoyarlo
+en la tapa, dibujar la paramétrica además del modelo en el pase 3D o en vez de él en el pintor, guardar
+los `extras` de un solo nodo e inventar la cota de un tramo para ponerle ancla) y exige que la suite falle.
 
 ## 6. Qué cifras de los informes anteriores son falsas
 

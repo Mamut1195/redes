@@ -281,16 +281,6 @@ impl State {
                 ),
                 ..Scene::default()
             };
-        } else {
-            self.scene = view::build_opts(
-                &self.project,
-                self.display.as_ref(),
-                &self.cam,
-                self.layers,
-                self.sel.as_deref(),
-                &self.opts,
-            );
-            self.anadir_proxies();
         }
         // Manifiesto de la biblioteca: se resuelve una vez por proyecto.
         if self.bib.is_none() && self.project.biblioteca.is_some() {
@@ -301,24 +291,28 @@ impl State {
                 .map(|d| d.to_path_buf())
                 .unwrap_or_else(|| std::path::PathBuf::from("."));
             self.bib = modelos::biblioteca_del_proyecto(&self.project, &dir);
-            if self.bib.is_none() {
-                self.aviso_modelos =
-                    Some("El proyecto declara una biblioteca que no se pudo abrir".to_string());
-            }
         }
+        let biblioteca_rota = self.bib.is_none() && self.project.biblioteca.is_some();
+        self.aviso_modelos = biblioteca_rota
+            .then(|| "El proyecto declara una biblioteca que no se pudo abrir".to_string());
 
-        let con_modelo = self
-            .project
-            .nodes
-            .iter()
-            .filter(|n| n.modelo.is_some())
-            .count();
-        if con_modelo > 0 && !self.gpu3d {
-            self.aviso_modelos = Some(format!(
-                "{con_modelo} objetos tienen modelo y el pase 3D está apagado: se dibuja la pieza paramétrica. Arranque con --gpu3d para verlos."
-            ));
-        } else {
-            self.aviso_modelos = None;
+        if !self.gpu3d {
+            let (modelos, simplificados) = self.piezas_pintor();
+            self.scene = view::build_with_models(
+                &self.project,
+                self.display.as_ref(),
+                &self.cam,
+                self.layers,
+                self.sel.as_deref(),
+                &self.opts,
+                &modelos,
+            );
+            if simplificados > 0 {
+                self.aviso_modelos = Some(format!(
+                    "{simplificados} objetos tienen un modelo de más de {} triángulos: sin el pase 3D se ven simplificados. Arranque con --gpu3d para verlos enteros.",
+                    modelos::TRIANGULOS_PINTOR
+                ));
+            }
         }
 
         if self.gpu3d {
@@ -365,7 +359,7 @@ impl State {
         let Some(n) = self.project.node_by_code(&code) else {
             return;
         };
-        let (pos, rim, inv, diam) = (n.pos, n.z_rim, n.z_invert, n.diametro());
+        let (pos, rim, inv, diam) = (n.pos, n.z_rim, n.z_invert, n.drawing_diameter_m());
         let id = n.id;
         let modelo_id = n.modelo.clone();
         let alto = (rim - inv).max(0.4);
@@ -382,7 +376,9 @@ impl State {
         if let (Some(modelo_id), Some((carpeta, bib))) = (modelo_id, self.bib.clone())
             && let Some(pieza) = bib.piezas.iter().find(|x| x.id == modelo_id).cloned()
             && let Some(malla) = self.modelos.malla(&carpeta, &pieza)
+            && let Some(n) = self.project.node_by_code(&code)
         {
+            let base = redes_core::biblioteca::cota_base_modelo(n, &pieza.anclas);
             let (mut min, mut max) = ([f32::MAX; 3], [f32::MIN; 3]);
             for v in malla.iter() {
                 for k in 0..3 {
@@ -394,7 +390,7 @@ impl State {
                 centro = [
                     (pos.x - self.project.origin.x) + ((min[0] + max[0]) * 0.5) as f64,
                     (pos.y - self.project.origin.y) + ((min[1] + max[1]) * 0.5) as f64,
-                    rim + ((min[2] + max[2]) * 0.5) as f64,
+                    base + ((min[2] + max[2]) * 0.5) as f64,
                 ];
                 tamano = ((max[0] - min[0]).hypot(max[1] - min[1])).max(max[2]) as f64;
             }
@@ -446,72 +442,15 @@ impl State {
         self.rebuild();
     }
 
-    /// Sin pase 3D, dibuja una silueta decimada del modelo (proxy) en lugar de nada.
+    /// The library models the painter draws in place of the parametric pieces (no `--gpu3d`).
     ///
-    /// La biblioteca se comparte por `Arc` y el proxy sale de la caché (F14-06).
-    ///
-    /// El pase 3D dibuja la malla real; aquí basta con que el objeto se reconozca cuando la GPU
-    /// está apagada. Los triángulos entran como polígonos del pintor, con su profundidad.
-    fn anadir_proxies(&mut self) {
-        if self.gpu3d {
-            return;
-        }
-        let Some((carpeta, bib)) = self.bib.clone() else {
-            return;
-        };
-        let objetos: Vec<(f64, f64, f64, String)> = self
-            .project
-            .nodes
-            .iter()
-            .filter(|n| !n.deleted)
-            .filter_map(|n| n.modelo.clone().map(|m| (n.pos.x, n.pos.y, n.z_rim, m)))
-            .collect();
-        if objetos.is_empty() {
-            return;
-        }
-        let (ox, oy) = (self.project.origin.x, self.project.origin.y);
-        let zr = self.cam.target[2];
-        let k = self.cam.z_scale;
-        let mut extra: Vec<Prim> = Vec::new();
-        for (x, y, z, modelo) in objetos {
-            let Some(pieza) = bib.piezas.iter().find(|p| p.id == modelo) else {
-                continue;
-            };
-            // El proxy se calcula una vez por pieza, no por instancia ni por reconstrucción.
-            let Some(dec) = self.modelos.proxy(&carpeta, pieza, PASO_PROXY) else {
-                continue;
-            };
-            for tri in dec.chunks_exact(3) {
-                let mut pts: Vec<[f32; 2]> = Vec::with_capacity(3);
-                let mut prof = 0.0f64;
-                let mut ok = true;
-                for v in tri {
-                    let q = [
-                        x - ox + v.pos[0] as f64,
-                        y - oy + v.pos[1] as f64,
-                        (z + v.pos[2] as f64 - zr) * k + zr,
-                    ];
-                    match self.cam.project(q) {
-                        Some(s) => {
-                            pts.push(s);
-                            prof += self.cam.depth(q);
-                        }
-                        None => ok = false,
-                    }
-                }
-                if !ok {
-                    continue;
-                }
-                let c = tri[0].color;
-                extra.push(Prim::Poly {
-                    pts,
-                    fill: [c[0], c[1], c[2], 0.92],
-                    depth: (prof / 3.0) as f32,
-                });
+    /// The library is shared by `Arc` and each piece is shaded (or decimated) once (F14-06).
+    fn piezas_pintor(&mut self) -> (view::ModelPieces, usize) {
+        match self.bib.clone() {
+            Some((carpeta, bib)) => {
+                modelos::piezas_pintor(&self.project, &carpeta, &bib, &mut self.modelos, PASO_PROXY)
             }
-        }
-        if !extra.is_empty() {
-            self.scene.prims.extend(extra);
+            None => (view::ModelPieces::new(), 0),
         }
     }
 
@@ -705,6 +644,11 @@ fn chip(label: &str, on: bool) -> El {
 fn metros(v: Option<f64>, decimales: usize) -> String {
     v.map(|x| format!("{x:.decimales$} m"))
         .unwrap_or_else(|| redes_core::model::SIN_DATO.to_string())
+}
+
+/// The declared inner diameter, or `—`: the fallback drawing size is not data (D4).
+fn inner_diameter_text(n: &redes_core::model::Node) -> String {
+    metros(n.inner_diameter_m(), 2)
 }
 
 fn kv(k: &str, v: String) -> El {
@@ -1012,7 +956,7 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
             right = right.child(kv("cota tapa", metros(n.cota_tapa(), 3)));
             right = right.child(kv("cota solera", metros(n.cota_solera(), 3)));
             right = right.child(kv("altura", metros(n.altura_dato(), 2)));
-            right = right.child(kv("diámetro", format!("{:.2} m", n.diametro())));
+            right = right.child(kv("diámetro", inner_diameter_text(n)));
             // Modelos de la biblioteca para esta familia: se eligen aquí, sin tocar la CLI.
             if let Some((_, bib)) = s.bib.clone() {
                 let candidatos: Vec<String> = bib
@@ -1530,24 +1474,27 @@ fn main() {
             (
                 "foco",
                 (|s: &mut State| {
-                    s.sel = s
-                        .project
-                        .nodes
-                        .iter()
-                        .find(|n| !n.deleted && n.family == "saneamiento.pozo")
-                        .map(|n| n.code.clone());
+                    s.sel = sample_manhole(&s.project);
                     s.enfocar();
+                }) as fn(&mut State),
+            ),
+            (
+                "pozo-modelo",
+                (|s: &mut State| {
+                    // The sample manhole up close, without terrain or selection tint: the piece
+                    // as it was baked, with its materials, also under the ground in `--gpu3d`.
+                    s.sel = sample_manhole(&s.project);
+                    s.enfocar();
+                    s.layers.terreno = false;
+                    s.sel = None;
+                    s.cam.elevation = 24.0;
+                    s.rebuild();
                 }) as fn(&mut State),
             ),
             (
                 "corte",
                 (|s: &mut State| {
-                    s.sel = s
-                        .project
-                        .nodes
-                        .iter()
-                        .find(|n| !n.deleted && n.family == "saneamiento.pozo")
-                        .map(|n| n.code.clone());
+                    s.sel = sample_manhole(&s.project);
                     s.enfocar();
                     s.alternar_corte();
                     // Un paso de corte para que se vea el interior.
@@ -1562,12 +1509,7 @@ fn main() {
             (
                 "explosion",
                 (|s: &mut State| {
-                    s.sel = s
-                        .project
-                        .nodes
-                        .iter()
-                        .find(|n| !n.deleted && n.family == "saneamiento.pozo")
-                        .map(|n| n.code.clone());
+                    s.sel = sample_manhole(&s.project);
                     s.enfocar();
                     s.alternar_explosion();
                     s.opts.explosion = 1.1;
@@ -1592,6 +1534,20 @@ fn main() {
     } else {
         rune::run(spec);
     }
+}
+
+/// Manhole the focus, cut and explosion scenes show: the first one drawn with a library model
+/// and connected to pipes (its anchors and channel are then in view), else the first manhole.
+fn sample_manhole(p: &Project) -> Option<String> {
+    let manholes = || {
+        p.nodes
+            .iter()
+            .filter(|n| !n.deleted && n.family == "saneamiento.pozo")
+    };
+    manholes()
+        .find(|n| n.modelo.is_some() && p.tramos_de(n.id).count() >= 2)
+        .or_else(|| manholes().next())
+        .map(|n| n.code.clone())
 }
 
 /// Escena `pozos`: primer plano del primer pozo (cono, marco, tapa y escalera). El objetivo sale
@@ -1621,6 +1577,26 @@ fn camara_pozos(s: &mut State) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_manhole_without_inner_diameter_shows_no_diameter() {
+        let mut n = redes_core::demo::project()
+            .nodes
+            .into_iter()
+            .find(|n| n.family == "saneamiento.pozo")
+            .unwrap();
+        n.attrs.insert(
+            "diametro_interior".into(),
+            redes_core::families::Value::Num(1.5),
+        );
+        assert_eq!(super::inner_diameter_text(&n), "1.50 m");
+        n.attrs.remove("diametro_interior");
+        assert_eq!(super::inner_diameter_text(&n), redes_core::model::SIN_DATO);
+        assert!(
+            n.drawing_diameter_m() > 0.0,
+            "the fallback piece still has a size"
+        );
+    }
+
     use super::*;
     use rune::{Env, Runtime};
 

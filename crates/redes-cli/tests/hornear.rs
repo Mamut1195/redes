@@ -123,7 +123,7 @@ fn expected_keys(project: &Path) -> Vec<String> {
     p.nodes
         .iter()
         .filter(|n| loaded.recipe.applies_to(n))
-        .filter_map(|n| loaded.recipe.params_for_node(n).ok())
+        .filter_map(|n| loaded.recipe.params_for_node(&p, n).ok())
         .map(|set| loaded.key(&set))
         .collect()
 }
@@ -189,6 +189,10 @@ fn cached_pieces_need_no_blender_and_missing_data_keeps_the_fallback() {
     assert_eq!(d["sin_hornear"][0]["codigo"], "PZ-3");
     assert_eq!(d["sin_hornear"][0]["faltan"][0], "espesor_pared");
     assert_eq!(v["warnings"][0]["code"], "W_PARAMETRO_FALTANTE", "{v}");
+    // Lone manholes bake without anchors, and the envelope says so (F17-03).
+    assert_eq!(d["sin_ancla"].as_array().unwrap().len(), 2, "{v}");
+    assert_eq!(d["sin_ancla"][0]["motivo"], "sin tramos conectados");
+    assert_eq!(v["warnings"][1]["code"], "W_SIN_ANCLA", "{v}");
 
     let p = redes_core::project_io::load(&project).unwrap();
     let piece = format!("saneamiento.pozo.inspeccion-{}", &keys[0][..12]);
@@ -259,8 +263,8 @@ fn blender_bakes_a_batch_once_and_the_cache_serves_it_again() {
     };
     let dir = tempdir("blender");
     let sets = r#"[
-      { "inner_diameter_m": 1.2, "depth_m": 2.5, "wall_thickness_m": 0.15, "body_material": "hormigon" },
-      { "inner_diameter_m": 1.5, "depth_m": 4.0, "wall_thickness_m": 0.2, "body_material": "hormigon" }
+      { "inner_diameter_m": 1.2, "depth_m": 2.5, "wall_thickness_m": 0.15, "body_material": "hormigon", "connections": [] },
+      { "inner_diameter_m": 1.5, "depth_m": 4.0, "wall_thickness_m": 0.2, "body_material": "hormigon", "connections": [] }
     ]"#;
     std::fs::write(dir.join("juegos.json"), sets).unwrap();
     let recipe = recipe_path();
@@ -309,4 +313,36 @@ fn blender_bakes_a_batch_once_and_the_cache_serves_it_again() {
     assert_eq!(run(&args, &dir).0, 0);
     let again: Vec<Vec<u8>> = paths.iter().map(|p| std::fs::read(p).unwrap()).collect();
     assert_eq!(again, bytes);
+}
+
+#[test]
+fn blender_rebakes_the_versioned_pilot_byte_for_byte() {
+    let Some(blender) = installed_blender() else {
+        eprintln!("skipped: Blender 5.1 is not installed (set REDES_BLENDER to run it)");
+        return;
+    };
+    let dir = tempdir("piloto");
+    let pilot = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tools/blender/piloto");
+    let recipe = recipe_path();
+    let given = pilot.join("piloto.json");
+    let (code, v) = run(
+        &[
+            "biblioteca",
+            "hornear",
+            "--receta",
+            recipe.to_str().unwrap(),
+            "--parametros",
+            given.to_str().unwrap(),
+            "--blender",
+            blender.to_str().unwrap(),
+            "--sin-blend",
+        ],
+        &dir,
+    );
+    assert_eq!(code, 0, "{v}");
+    let key = v["data"]["juegos"][0]["clave"].as_str().unwrap();
+    let fresh = std::fs::read(bake::cached_glb(&dir, key)).unwrap();
+    let versioned = std::fs::read(pilot.join(format!("{key}.glb")))
+        .expect("the versioned pilot is named after the current key");
+    assert!(fresh == versioned, "the pilot .glb must be today's bake");
 }

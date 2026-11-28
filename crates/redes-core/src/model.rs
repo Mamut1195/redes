@@ -163,6 +163,10 @@ pub const COTA_VERTICES: &str = "cota_vertices";
 /// Clave de [`Link::sin_dato`]: falta el diámetro nominal.
 pub const DIAMETRO_NOMINAL: &str = "diametro_nominal";
 
+/// Diameter (m) of the fallback piece of a node that declares none. Drawing only: the inspector
+/// shows `—` for the missing datum (D4).
+pub const FALLBACK_DRAWING_DIAMETER_M: f64 = 1.20;
+
 /// Texto con que se muestra un dato ausente.
 pub const SIN_DATO: &str = "—";
 
@@ -207,8 +211,16 @@ impl Node {
     pub fn altura(&self) -> f64 {
         (self.z_terrain - self.z_invert).max(0.0)
     }
-    pub fn diametro(&self) -> f64 {
-        self.num("diametro_interior").unwrap_or(1.20)
+    /// Declared inner diameter (m), if the source brought one.
+    pub fn inner_diameter_m(&self) -> Option<f64> {
+        self.num("diametro_interior")
+            .filter(|d| d.is_finite() && *d > 0.0)
+    }
+    /// Size the fallback piece is drawn with: the declared inner diameter or, without it, a
+    /// drawing constant that is never shown as data (D4).
+    pub fn drawing_diameter_m(&self) -> f64 {
+        self.inner_diameter_m()
+            .unwrap_or(FALLBACK_DRAWING_DIAMETER_M)
     }
     /// Texto de la última observación abierta (lo que antes mostraba la `nota`).
     pub fn nota_vigente(&self) -> Option<&str> {

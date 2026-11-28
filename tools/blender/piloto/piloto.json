@@ -1,0 +1,11 @@
+{
+  "inner_diameter_m": 1.2,
+  "depth_m": 2.4,
+  "wall_thickness_m": 0.15,
+  "body_material": "hormigon",
+  "connections": [
+    { "name": "entrada__TR-A", "azimuth_deg": 170.0, "invert_rise_m": 0.3, "dn_mm": 200 },
+    { "name": "entrada__TR-B", "azimuth_deg": 95.0, "invert_rise_m": 0.45, "dn_mm": 160 },
+    { "name": "salida__TR-C", "azimuth_deg": -10.0, "invert_rise_m": 0.0, "dn_mm": 250 }
+  ]
+}

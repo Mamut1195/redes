@@ -1096,9 +1096,9 @@ mod tests {
             .expect("círculo en el bloque");
         let radio = gf(circ, 40) * gf(e, 41);
         assert!(
-            (radio - pozo.diametro() / 2.0).abs() < 1e-3,
+            (radio - pozo.drawing_diameter_m() / 2.0).abs() < 1e-3,
             "radio dibujado {radio} para DI {}",
-            pozo.diametro()
+            pozo.drawing_diameter_m()
         );
         assert!((gf(e, 30) - pozo.z_rim).abs() < 1e-3, "inserto en la tapa");
         // Atributos tras el INSERT hasta el SEQEND.

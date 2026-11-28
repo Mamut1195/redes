@@ -99,6 +99,27 @@ fn tuberia(
     .unwrap_or_else(|e| panic!("{code}: {e}"))
 }
 
+/// Source of the demo numbers that a real project would bring from its design (F17-03).
+pub const DEMO_SOURCE: &str = "demo: dato de ejemplo, no de un diseño";
+
+/// Wall thickness and material of a demo manhole, so the manhole recipe can bake it (D17: they
+/// are design data). The thickness is a `Dato` that says it is demo data.
+fn declare_demo_manhole_wall(p: &mut Project, code: &str) {
+    let n = p
+        .node_by_code_mut(code)
+        .unwrap_or_else(|| panic!("{code}: demo manhole"));
+    n.datos.insert(
+        "espesor_pared".into(),
+        crate::model::Dato {
+            valor: 0.15,
+            unidad: "m".into(),
+            fuente: DEMO_SOURCE.into(),
+        },
+    );
+    n.attrs
+        .insert("material".into(), Value::Text("hormigon".into()));
+}
+
 /// Proyecto de la cadena completa (≈ 60 objetos).
 pub fn cadena() -> Project {
     let mut p = Project::new("Cadena completa · San Bartolo", "EPSG:32717");
@@ -569,6 +590,7 @@ pub fn cadena() -> Project {
                 cota(x, y) + 0.05,
                 &[("diametro_interior", 1.2)],
             );
+            declare_demo_manhole_wall(&mut p, &code);
             let _ = pozo;
             let val = nodo(
                 &mut p,
@@ -611,6 +633,7 @@ pub fn cadena() -> Project {
             z + 0.05,
             &[("diametro_interior", 1.2)],
         );
+        declare_demo_manhole_wall(&mut p, &code);
         if let Some(prev) = prev_alc {
             let _ = tuberia(
                 &mut p,

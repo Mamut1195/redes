@@ -1,15 +1,18 @@
 //! Modelos de la biblioteca en el visor: caché de mallas y colocación en el proyecto.
 //!
-//! Un objeto con `modelo` asignado se dibuja con ese `.glb` en lugar de (o junto a) la pieza
-//! paramétrica. La malla se carga **una vez** por pieza y se reutiliza en todas las instancias.
+//! Un objeto con `modelo` asignado se dibuja con ese `.glb` en lugar de la pieza paramétrica, en el
+//! pase 3D y en el pintor (D14). La malla se carga **una vez** por pieza y se reutiliza en todas
+//! las instancias.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use redes_core::biblioteca::{Biblioteca, Entrada};
+use redes_core::biblioteca::{Biblioteca, Entrada, cota_base_modelo};
 use redes_core::gltf::Vertice;
-use redes_core::model::Project;
+use redes_core::model::{ElementId, Node, Project};
+use redes_core::parts::{Material, Mesh, Parte};
+use redes_core::view::{ModelPiece, ModelPieces};
 
 /// Malla de una pieza, ya en el espacio del proyecto (Z arriba, metros).
 pub type Malla = Arc<Vec<Vertice>>;
@@ -23,6 +26,8 @@ pub struct Cache {
     /// Proxies por pieza y paso de rejilla (bits del `f32`): se calculan una vez (F14-06).
     proxies: HashMap<(String, u32), Malla>,
     proxies_calculados: usize,
+    /// Shaded pieces for the painter, by piece id (and proxy step, 0 for the full mesh).
+    partes: HashMap<(String, u32), Arc<Parte>>,
 }
 
 impl Cache {
@@ -37,6 +42,33 @@ impl Cache {
         self.proxies_calculados += 1;
         self.proxies.insert(clave, Arc::clone(&dec));
         Some(dec)
+    }
+
+    /// The full mesh of a piece as a shaded painter piece, computed once per piece.
+    pub fn parte(&mut self, pieza: &Entrada, malla: &[Vertice]) -> Option<Arc<Parte>> {
+        let clave = (pieza.id.clone(), 0);
+        Some(Arc::clone(
+            self.partes
+                .entry(clave)
+                .or_insert_with(|| Arc::new(parte_de(malla))),
+        ))
+    }
+
+    /// The proxy of a piece as a shaded painter piece, computed once per piece and step.
+    pub fn parte_proxy(
+        &mut self,
+        carpeta: &Path,
+        pieza: &Entrada,
+        paso: f32,
+    ) -> Option<Arc<Parte>> {
+        let clave = (pieza.id.clone(), paso.to_bits());
+        if let Some(p) = self.partes.get(&clave) {
+            return Some(Arc::clone(p));
+        }
+        let proxy = self.proxy(carpeta, pieza, paso)?;
+        let parte = Arc::new(parte_de(&proxy));
+        self.partes.insert(clave, Arc::clone(&parte));
+        Some(parte)
     }
 
     /// Cuántos proxies se han calculado (para las pruebas).
@@ -81,20 +113,45 @@ impl Cache {
     }
 }
 
-/// Convierte un `.glb` en vértices listos para el pase 3D, pasando de Y-arriba a Z-arriba.
+/// Vertices of a `.glb` ready for the 3D pass: Z up (as the core reads it), metres, one normal per
+/// face so the model is lit like the parametric pieces.
+///
+/// The core reader already turns glTF's Y up into Z up; swapping the axes again here laid every
+/// Blender piece on its side (F17-03).
 pub fn malla_de_glb(bytes: &[u8]) -> Option<Vec<Vertice>> {
     let tris = redes_core::biblioteca::triangulos_de_glb(bytes).ok()?;
     let mut out = Vec::with_capacity(tris.len() * 3);
     for t in &tris {
-        for q in &t.pos {
+        let pos = t.pos.map(|q| [q[0] as f32, q[1] as f32, q[2] as f32]);
+        let normal = face_normal(pos);
+        for q in pos {
             out.push(Vertice {
-                pos: [q[0] as f32, -(q[2] as f32), q[1] as f32],
-                normal: [0.0, 0.0, 1.0],
-                color: t.color.unwrap_or([0.62, 0.60, 0.56]),
+                pos: q,
+                normal,
+                color: t.color.unwrap_or(COLOR_SIN_MATERIAL),
             });
         }
     }
     Some(out)
+}
+
+/// Colour of a model triangle that has neither vertex colour nor material.
+const COLOR_SIN_MATERIAL: [f32; 3] = [0.62, 0.60, 0.56];
+
+fn face_normal(p: [[f32; 3]; 3]) -> [f32; 3] {
+    let u = [p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2]];
+    let v = [p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2]];
+    let n = [
+        u[1] * v[2] - u[2] * v[1],
+        u[2] * v[0] - u[0] * v[2],
+        u[0] * v[1] - u[1] * v[0],
+    ];
+    let l = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+    if l > 0.0 {
+        [n[0] / l, n[1] / l, n[2] / l]
+    } else {
+        [0.0, 0.0, 1.0]
+    }
 }
 
 /// Una instancia colocada en el proyecto.
@@ -103,6 +160,8 @@ pub struct Instancia {
     pub malla: Malla,
     /// Giro alrededor de Z, en grados (0 si el objeto no lo declara).
     pub giro: f32,
+    /// The object it draws: its parametric piece is not drawn as well.
+    pub nodo: ElementId,
 }
 
 /// Manifiesto del proyecto, si lo tiene declarado.
@@ -118,13 +177,19 @@ pub fn biblioteca_del_proyecto(p: &Project, dir: &Path) -> Option<(PathBuf, Arc<
         .map(|b| (carpeta, Arc::new(b)))
 }
 
-/// Resuelve qué malla toca a cada objeto y la coloca en su cota.
-pub fn instancias(
-    p: &Project,
+/// An object with a model it can draw: the manifest entry and the loaded mesh.
+struct Modelado<'a> {
+    nodo: &'a Node,
+    pieza: &'a Entrada,
+    malla: Malla,
+}
+
+fn modelados<'a>(
+    p: &'a Project,
     carpeta: &Path,
-    bib: &Biblioteca,
+    bib: &'a Biblioteca,
     cache: &mut Cache,
-) -> Vec<Instancia> {
+) -> Vec<Modelado<'a>> {
     let mut out = Vec::new();
     for n in p.nodes.iter().filter(|n| !n.deleted) {
         let Some(id) = n.modelo.as_ref() else {
@@ -133,23 +198,97 @@ pub fn instancias(
         let Some(pieza) = bib.piezas.iter().find(|x| &x.id == id) else {
             continue;
         };
+        // A missing or broken `.glb` keeps the parametric piece (docs/17 section 11.4).
         let Some(malla) = cache.malla(carpeta, pieza) else {
             continue;
         };
-        let giro = n.num("giro").map(|v| v as f32).unwrap_or(0.0);
-        // La geometría paramétrica se dibuja en coordenadas locales (origen restado) para no
-        // perder precisión en f32: el modelo tiene que entrar en el mismo espacio.
-        out.push(Instancia {
-            pos: [
-                (n.pos.x - p.origin.x) as f32,
-                (n.pos.y - p.origin.y) as f32,
-                n.z_rim as f32,
-            ],
+        out.push(Modelado {
+            nodo: n,
+            pieza,
             malla,
-            giro,
         });
     }
     out
+}
+
+fn giro(n: &Node) -> f32 {
+    n.num("giro").map(|v| v as f32).unwrap_or(0.0)
+}
+
+/// Resolves which mesh each object draws and places it: in plan at the object, in height where
+/// its z = 0 goes ([`redes_core::biblioteca::cota_base_modelo`]).
+pub fn instancias(
+    p: &Project,
+    carpeta: &Path,
+    bib: &Biblioteca,
+    cache: &mut Cache,
+) -> Vec<Instancia> {
+    modelados(p, carpeta, bib, cache)
+        .into_iter()
+        .map(|m| Instancia {
+            // The origin is subtracted in f64 and only then lowered to f32 (docs/15).
+            pos: [
+                (m.nodo.pos.x - p.origin.x) as f32,
+                (m.nodo.pos.y - p.origin.y) as f32,
+                cota_base_modelo(m.nodo, &m.pieza.anclas) as f32,
+            ],
+            malla: m.malla,
+            giro: giro(m.nodo),
+            nodo: m.nodo.id,
+        })
+        .collect()
+}
+
+/// Models over this many triangles are drawn by their proxy in the painter (no `--gpu3d`):
+/// the painter sorts every triangle in every frame.
+pub const TRIANGULOS_PINTOR: usize = 20_000;
+
+/// The models the painter draws in place of the parametric pieces, and how many of them had to
+/// be simplified to their proxy.
+pub fn piezas_pintor(
+    p: &Project,
+    carpeta: &Path,
+    bib: &Biblioteca,
+    cache: &mut Cache,
+    paso_proxy: f32,
+) -> (ModelPieces, usize) {
+    let mut out = ModelPieces::new();
+    let mut simplificados = 0;
+    for m in modelados(p, carpeta, bib, cache) {
+        let pesado = m.malla.len() / 3 > TRIANGULOS_PINTOR;
+        let parte = if pesado {
+            simplificados += 1;
+            cache.parte_proxy(carpeta, m.pieza, paso_proxy)
+        } else {
+            cache.parte(m.pieza, &m.malla)
+        };
+        let Some(parte) = parte else { continue };
+        out.insert(
+            m.nodo.id,
+            ModelPiece {
+                part: parte,
+                lift_m: cota_base_modelo(m.nodo, &m.pieza.anclas) - m.nodo.z_invert,
+                rotation_deg: giro(m.nodo),
+            },
+        );
+    }
+    (out, simplificados)
+}
+
+/// A mesh as one shaded piece for the painter.
+fn parte_de(malla: &[Vertice]) -> Parte {
+    let mut mesh = Mesh::default();
+    for t in malla.chunks_exact(3) {
+        let material = Material {
+            color: t[0].color,
+            metal: false,
+        };
+        mesh.tri(t[0].pos, t[1].pos, t[2].pos, material);
+    }
+    Parte {
+        nombre: "modelo",
+        mesh,
+    }
 }
 
 #[cfg(test)]
@@ -157,7 +296,7 @@ mod tests {
     use super::*;
 
     fn glb_de_un_cubo() -> Vec<u8> {
-        // Cubo de 2 m con base en 0, en espacio glTF (Y arriba).
+        // 2 m cube with its base at z = 0, Z up.
         let v = [
             [-1.0f32, 0.0, -1.0],
             [1.0, 0.0, -1.0],
@@ -186,7 +325,7 @@ mod tests {
         for (a, b, c) in caras {
             for i in [a, b, c] {
                 verts.push(Vertice {
-                    pos: v[i],
+                    pos: [v[i][0], v[i][2], v[i][1]],
                     normal: [0.0, 0.0, 1.0],
                     color: [0.7, 0.6, 0.5],
                 });
@@ -328,8 +467,41 @@ mod tests {
     }
 
     #[test]
-    fn convierte_de_y_arriba_a_z_arriba() {
-        // Un triángulo con y arriba: el eje Y del glb pasa a ser Z del mundo.
+    fn a_piece_with_an_invert_anchor_sits_on_the_invert_minus_its_slab() {
+        let dir = std::env::temp_dir().join(format!("redes-modelos5-{}", std::process::id()));
+        let mut bib = biblioteca_temporal(&dir);
+        bib.piezas[0].anclas = std::collections::BTreeMap::from([(
+            redes_core::biblioteca::ANCLA_SOLERA.to_string(),
+            [0.0f32, 0.0, 0.2],
+        )]);
+        let p = proyecto_con_dos_valvulas();
+        let mut cache = Cache::default();
+        let inst = instancias(&p, &dir, &bib, &mut cache);
+        assert!(
+            (inst[0].pos[2] - 2499.8).abs() < 1e-3,
+            "invert 2500 - slab 0.2"
+        );
+        assert_eq!(inst[0].nodo, p.nodes[0].id, "it replaces that object");
+        let (painter, simplified) = piezas_pintor(&p, &dir, &bib, &mut cache, 0.05);
+        assert_eq!(simplified, 0);
+        let piece = &painter[&p.nodes[0].id];
+        assert!((piece.lift_m + 0.2).abs() < 1e-6, "lift {}", piece.lift_m);
+        assert_eq!(
+            piece.part.mesh.tris.len(),
+            12,
+            "the whole cube, not a proxy"
+        );
+        let again = piezas_pintor(&p, &dir, &bib, &mut cache, 0.05).0;
+        assert!(
+            Arc::ptr_eq(&piece.part, &again[&p.nodes[0].id].part),
+            "shaded once"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_z_up_mesh_comes_back_z_up() {
+        // Written Z up (the writer turns it to glTF's Y up), read back Z up: no second swap.
         let glb = redes_core::gltf::glb_desde_vertices(&std::collections::BTreeMap::from([(
             "modelo".to_string(),
             vec![
@@ -344,7 +516,7 @@ mod tests {
                     color: [1.0, 0.0, 0.0],
                 },
                 Vertice {
-                    pos: [0.0, 2.0, 0.0],
+                    pos: [0.0, 0.0, 2.0],
                     normal: [0.0, 0.0, 1.0],
                     color: [1.0, 0.0, 0.0],
                 },
@@ -353,7 +525,6 @@ mod tests {
         .expect("fits in a .glb");
         let malla = malla_de_glb(&glb).expect("malla");
         assert_eq!(malla.len(), 3);
-        // La altura (2 en Y del glb) acaba en Z del mundo.
         let alto = malla.iter().map(|v| v.pos[2]).fold(f32::MIN, f32::max);
         assert!((alto - 2.0).abs() < 1e-3, "alto = {alto}");
     }

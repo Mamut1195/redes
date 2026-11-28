@@ -127,6 +127,7 @@ impl Geometry {
                 position: m.pos,
                 mesh: Arc::clone(&m.malla),
                 rotation_deg: m.giro,
+                replaces: Some(m.nodo),
             })
             .collect();
         self.scene = Arc::new(Scene::build(p, layers, &placed, pieces, self.budget));

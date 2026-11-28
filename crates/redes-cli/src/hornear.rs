@@ -149,12 +149,18 @@ pub fn from_project(
 
     let mut objects: Vec<(String, Result<String, Vec<String>>)> = Vec::new();
     let mut distinct: BTreeMap<String, ParamSet> = BTreeMap::new();
+    let mut unanchored: Vec<(String, bake::Unanchored)> = Vec::new();
     for n in p.nodes.iter().filter(|n| loaded.recipe.applies_to(n)) {
-        let outcome = loaded.recipe.params_for_node(n).map(|set| {
+        let outcome = loaded.recipe.params_for_node(p, n).map(|set| {
             let key = loaded.key(&set);
             distinct.insert(key.clone(), set);
             key
         });
+        if outcome.is_ok() && loaded.recipe.uses_connections() {
+            for u in bake::node_connections(p, n).unanchored {
+                unanchored.push((n.code.clone(), u));
+            }
+        }
         objects.push((n.code.clone(), outcome));
     }
 
@@ -172,7 +178,7 @@ pub fn from_project(
         return *env;
     }
 
-    let warnings: Vec<Diagnostic> = lacking
+    let mut warnings: Vec<Diagnostic> = lacking
         .iter()
         .map(|(code, missing)| {
             Diagnostic::new(
@@ -185,6 +191,18 @@ pub fn from_project(
             )
         })
         .collect();
+    warnings.extend(unanchored.iter().map(|(code, u)| {
+        let link = u
+            .link
+            .as_deref()
+            .map(|l| format!(" {l}"))
+            .unwrap_or_default();
+        Diagnostic::new(
+            "W_SIN_ANCLA",
+            Severity::Warning,
+            format!("{code}{link}: {}; la pieza no lleva ancla ahí", u.reason),
+        )
+    }));
     Envelope::ok(CMD)
         .with_data(json!({
             "receta": loaded.name,
@@ -195,6 +213,11 @@ pub fn from_project(
             "sin_hornear": lacking.iter().map(|(code, missing)| json!({
                 "codigo": code,
                 "faltan": missing,
+            })).collect::<Vec<_>>(),
+            "sin_ancla": unanchored.iter().map(|(code, u)| json!({
+                "codigo": code,
+                "tramo": u.link,
+                "motivo": u.reason,
             })).collect::<Vec<_>>(),
             "horneado": report.to_json(dry),
             "guardado": !dry,

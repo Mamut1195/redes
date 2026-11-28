@@ -804,9 +804,14 @@ fn biblioteca_importar(
     };
     let dims = info.bbox.dimensiones();
     let medidas = redes_core::biblioteca::cantidades_glb(&norm).ok();
-    let extras = redes_core::biblioteca::leer_glb(&norm)
+    // From the source: the normalised `.glb` is one mesh and keeps neither extras nor empties.
+    let extras = redes_core::biblioteca::leer_glb(&bytes)
         .map(|m| m.extras)
         .unwrap_or_default();
+    let anclas = redes_core::biblioteca::anclas_normalizadas(
+        redes_core::biblioteca::anclas_de_glb(&bytes).unwrap_or_default(),
+        &info,
+    );
     let entrada = redes_core::biblioteca::Entrada {
         id: id.clone(),
         familia: familia.to_string(),
@@ -821,7 +826,7 @@ fn biblioteca_importar(
         area_m2: medidas.as_ref().map(|c| round(c.area_m2, 3)),
         cerrada: medidas.as_ref().map(|c| c.cerrada()),
         extras,
-        anclas: redes_core::biblioteca::anclas_de_glb(&bytes).unwrap_or_default(),
+        anclas,
         licencia: licencia.map(|s| s.to_string()),
         autor: autor.map(|s| s.to_string()),
     };

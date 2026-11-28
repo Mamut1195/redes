@@ -482,7 +482,14 @@ redes biblioteca hornear --receta tools\blender\build_manhole.receta.json --para
 - Un objeto sin todos los datos de la receta **no se hornea ni se rellena**: sale en `sin_hornear`
   con `faltan`, avisa `W_PARAMETRO_FALTANTE` y se sigue viendo la pieza de respaldo.
 - La clave de la caché cambia si cambia la receta, el conductor `redes_bake.py` o un parámetro;
-  borrar `biblioteca/horneado/` obliga a rehornear. Los modelos se ven con `--gpu3d`.
+  borrar `biblioteca/horneado/` obliga a rehornear. La pieza horneada **sustituye** a la de respaldo,
+  con y sin `--gpu3d`, apoyada en la cota de solera menos la losa (docs/17 §12.4).
+- El pozo lleva un ancla por tubo (`entrada__<tramo>`, `salida__<tramo>`) a la cota de solera del
+  tramo en el pozo. Un tramo sin esa cota no tiene ancla: sale en `sin_ancla` (`codigo`, `tramo`,
+  `motivo`) y avisa `W_SIN_ANCLA`; el pozo se hornea igual. Con `--parametros`, cada juego trae
+  `connections` (una lista, vacía si no hay tubos) junto a los demás parámetros de dato.
+- El espesor de pared puede venir como atributo `espesor_pared` o como `Dato` `espesor_pared` en `m`
+  con su fuente (así lo declara `redes proyecto cadena`, con fuente de demostración).
 - Junto a cada `<clave>.glb` queda `<clave>.blend` para revisar la pieza en Blender (parámetros en
   la escena y entradas de Geometry Nodes editables); `--sin-blend` no lo guarda.
 

@@ -15,7 +15,7 @@ resume lo imprescindible y no la sustituye; si se contradicen, manda `CLAUDE.md`
 - Las piezas se dibujan con familias paramétricas de Blender (D14). Se hornean sin ventana con un
   script versionado en `tools/blender/`, no por un MCP (D15):
   `blender -b --factory-startup --python-exit-code 1 --python tools/blender/<script>.py -- <params.json>`.
-  En un proyecto: `redes biblioteca hornear --receta tools/blender/X.receta.json` (lote, caché por clave;
+  En un proyecto: `redes biblioteca hornear --receta tools/blender/X.receta.json` (pozo piloto versionado en `tools/blender/piloto/`: rehornéalo si tocas la receta; lote, caché por clave;
   un dato que falta no se rellena, D16).
 - Orden de fases y frentes transversales: `docs/18-backlog.md` §Orden de fases vigente. Estado y
   traspaso: `docs/23-estado-y-pendientes.md`. Decisiones: `docs/22-decisiones.md`.

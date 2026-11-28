@@ -432,10 +432,39 @@ pub fn build_opts(
     selected: Option<&str>,
     opts: &Opciones,
 ) -> Scene {
-    construir(p, terrain, cam, layers, selected, opts, true)
+    build_with_models(p, terrain, cam, layers, selected, opts, &ModelPieces::new())
+}
+
+/// A library model that replaces the parametric piece of an object (D14): it is drawn instead
+/// of it, with the same cut, tint and culling.
+#[derive(Clone, Debug)]
+pub struct ModelPiece {
+    /// The model's triangles in its own frame (Z up, base at z = 0), already shaded.
+    pub part: std::sync::Arc<crate::parts::Parte>,
+    /// Height of the model's z = 0 above the object's invert (negative when it sits below it,
+    /// as a baked manhole does by its base slab).
+    pub lift_m: f64,
+    pub rotation_deg: f32,
+}
+
+/// Model pieces by object.
+pub type ModelPieces = std::collections::HashMap<crate::model::ElementId, ModelPiece>;
+
+/// [`build_opts`] with library models replacing the pieces of the objects that have one.
+pub fn build_with_models(
+    p: &Project,
+    terrain: Option<&crate::terrain::Terrain>,
+    cam: &Camera,
+    layers: Layers,
+    selected: Option<&str>,
+    opts: &Opciones,
+    models: &ModelPieces,
+) -> Scene {
+    construir(p, terrain, cam, layers, selected, opts, true, models)
 }
 
 /// [`build_opts`] con el recorte por pantalla a elección: las pruebas comparan con y sin él.
+#[allow(clippy::too_many_arguments)]
 fn construir(
     p: &Project,
     terrain: Option<&crate::terrain::Terrain>,
@@ -444,6 +473,7 @@ fn construir(
     selected: Option<&str>,
     opts: &Opciones,
     recortar: bool,
+    models: &ModelPieces,
 ) -> Scene {
     let o = p.origin;
     let zr = cam.target[2];
@@ -814,7 +844,9 @@ fn construir(
             } else {
                 0.0
             };
-            if let Some((centro, radio)) = esfera_previa(n, dz_max, &to_local, k)
+            let model = models.get(&n.id);
+            if model.is_none()
+                && let Some((centro, radio)) = esfera_previa(n, dz_max, &to_local, k)
                 && !pantalla.ve_esfera(&pr, centro, radio)
             {
                 descartadas += 1;
@@ -827,11 +859,20 @@ fn construir(
             if tri_count > 90_000 {
                 lod = 1;
             }
-            let partes = pieza_partes(n, lod);
+            let parametric;
+            let partes: &[crate::parts::Parte] = match model {
+                Some(m) => std::slice::from_ref(m.part.as_ref()),
+                None => {
+                    parametric = pieza_partes(n, lod);
+                    &parametric
+                }
+            };
             if partes.is_empty() {
                 continue;
             }
-            if let Some((centro, radio)) = esfera_de_pieza(&partes, n, dz_max, &to_local, k)
+            let colocar = colocador(model);
+            if let Some((centro, radio)) =
+                esfera_de_pieza(partes, n, dz_max, &colocar, &to_local, k)
                 && !pantalla.ve_esfera(&pr, centro, radio)
             {
                 descartadas += 1;
@@ -848,23 +889,14 @@ fn construir(
                         let t = indice_parte as f32 / (n - 1.0);
                         dz = (t * opts.explosion * altura_pieza * 0.85) as f64;
                     }
-                    let tri_local = [
+                    let tri_local = tri.p.map(|v| {
+                        let q = colocar(v);
                         to_local(P3::new(
-                            tri.p[0][0] as f64 + n.pos.x,
-                            tri.p[0][1] as f64 + n.pos.y,
-                            tri.p[0][2] as f64 + n.z_invert + dz,
-                        )),
-                        to_local(P3::new(
-                            tri.p[1][0] as f64 + n.pos.x,
-                            tri.p[1][1] as f64 + n.pos.y,
-                            tri.p[1][2] as f64 + n.z_invert + dz,
-                        )),
-                        to_local(P3::new(
-                            tri.p[2][0] as f64 + n.pos.x,
-                            tri.p[2][1] as f64 + n.pos.y,
-                            tri.p[2][2] as f64 + n.z_invert + dz,
-                        )),
-                    ];
+                            q[0] + n.pos.x,
+                            q[1] + n.pos.y,
+                            q[2] + n.z_invert + dz,
+                        ))
+                    });
 
                     // Corte vertical: se recorta el triángulo y se marca la arista de corte.
                     let (trozos, corte) = match opts.corte_x {
@@ -1175,11 +1207,11 @@ fn dibujar_tramo(l: &crate::model::Link, cx: &Contexto, traza: &mut Vec<P3>, out
     let sin_dato = l.dibujo_sin_dato();
     let r0 =
         cx.p.node(l.from)
-            .map(|n| n.diametro() * 0.5 + 0.15)
+            .map(|n| n.drawing_diameter_m() * 0.5 + 0.15)
             .unwrap_or(0.4);
     let r1 =
         cx.p.node(l.to)
-            .map(|n| n.diametro() * 0.5 + 0.15)
+            .map(|n| n.drawing_diameter_m() * 0.5 + 0.15)
             .unwrap_or(0.4);
     recortar_extremos(traza, r0, r1);
 
@@ -1386,7 +1418,7 @@ fn nodo_en_pantalla(
     pr: &Proyector,
     to_local: &impl Fn(P3) -> [f64; 3],
 ) -> ([f64; 3], f32, Option<EnPantalla>) {
-    let r = n.diametro() * 0.5;
+    let r = n.drawing_diameter_m() * 0.5;
     let top = to_local(P3::new(n.pos.x, n.pos.y, n.z_rim));
     let edge = to_local(P3::new(n.pos.x + r, n.pos.y, n.z_rim));
     let top_px = pr.proyectar(top);
@@ -1691,8 +1723,8 @@ fn esfera_previa(
     k: f64,
 ) -> Option<([f64; 3], f64)> {
     let d = match n.family.as_str() {
-        "saneamiento.pozo" => n.diametro(),
-        "saneamiento.bombeo" => n.diametro().max(1.8),
+        "saneamiento.pozo" => n.drawing_diameter_m(),
+        "saneamiento.bombeo" => n.drawing_diameter_m().max(1.8),
         _ => return None,
     };
     let h = n.z_rim - n.z_invert;
@@ -1712,15 +1744,17 @@ fn esfera_de_pieza(
     partes: &[crate::parts::Parte],
     n: &crate::model::Node,
     dz_max: f64,
+    colocar: &impl Fn([f32; 3]) -> [f64; 3],
     to_local: &impl Fn(P3) -> [f64; 3],
     k: f64,
 ) -> Option<([f64; 3], f64)> {
-    let mut min = [f32::INFINITY; 3];
-    let mut max = [f32::NEG_INFINITY; 3];
+    let mut min = [f64::INFINITY; 3];
+    let mut max = [f64::NEG_INFINITY; 3];
     for v in partes
         .iter()
         .flat_map(|p| p.mesh.tris.iter().flat_map(|t| t.p))
     {
+        let v = colocar(v);
         for i in 0..3 {
             min[i] = min[i].min(v[i]);
             max[i] = max[i].max(v[i]);
@@ -1729,7 +1763,6 @@ fn esfera_de_pieza(
     if min[0] > max[0] {
         return None;
     }
-    let (min, max) = (min.map(|c| c as f64), max.map(|c| c as f64));
     // La explosión sube las partes hasta `dz_max`: la caja crece por arriba.
     let max = [max[0], max[1], max[2] + dz_max];
     let c = [
@@ -1746,6 +1779,17 @@ fn esfera_de_pieza(
     // Holgura relativa por el redondeo de los vértices en `f32`.
     let radio = (hx * hx + hy * hy + hz * hz).sqrt() * 1.001 + 0.01;
     Some((centro, radio))
+}
+
+/// Offset of a piece vertex from the object (plan position and invert): a parametric piece is
+/// already in that frame; a model turns by its rotation and rises by its lift.
+fn colocador(model: Option<&ModelPiece>) -> impl Fn([f32; 3]) -> [f64; 3] {
+    let (lift, rotation) = model.map_or((0.0, 0.0f32), |m| (m.lift_m, m.rotation_deg));
+    let (sin, cos) = (rotation as f64).to_radians().sin_cos();
+    move |v: [f32; 3]| {
+        let (x, y) = (v[0] as f64, v[1] as f64);
+        [x * cos - y * sin, x * sin + y * cos, v[2] as f64 + lift]
+    }
 }
 
 fn fog(depth: f32, distance: f32) -> f32 {
@@ -1888,7 +1932,7 @@ pub const COLOR_SIN_DATO: [f32; 3] = [0.56, 0.56, 0.58];
 fn simbolo_sin_dato(n: &crate::model::Node) -> crate::parts::Mesh {
     let [r, g, b] = COLOR_SIN_DATO;
     crate::parts::cilindro(
-        (n.diametro() * 0.5) as f32,
+        (n.drawing_diameter_m() * 0.5) as f32,
         0.05,
         20,
         crate::parts::Material::new(r, g, b),
@@ -1930,9 +1974,9 @@ fn pieza_partes(n: &crate::model::Node, lod: u8) -> Vec<crate::parts::Parte> {
             };
             pt::pozo_partes(pt::PozoParams {
                 diametro: if n.family == "saneamiento.bombeo" {
-                    n.diametro().max(1.8)
+                    n.drawing_diameter_m().max(1.8)
                 } else {
-                    n.diametro()
+                    n.drawing_diameter_m()
                 } as f32,
                 rim: (n.z_rim - n.z_invert) as f32,
                 invert: 0.0,
@@ -2003,7 +2047,7 @@ fn pieza_local(n: &crate::model::Node, lod: u8) -> crate::parts::Mesh {
                 0
             };
             pt::pozo(pt::PozoParams {
-                diametro: n.diametro() as f32,
+                diametro: n.drawing_diameter_m() as f32,
                 rim: (n.z_rim - n.z_invert) as f32,
                 invert: 0.0,
                 tipo,
@@ -2091,19 +2135,19 @@ fn pieza_local(n: &crate::model::Node, lod: u8) -> crate::parts::Mesh {
         "agua.medidor" => pt::medidor(dn),
         "saneamiento.descarga" => pt::descarga(dn.max(250)),
         "saneamiento.camara" => pt::camara(
-            n.diametro() as f32,
+            n.drawing_diameter_m() as f32,
             ((n.z_rim - n.z_invert) as f32).clamp(0.8, 4.0),
         ),
         "saneamiento.sumidero" => pt::sumidero(),
         "saneamiento.bombeo" => pt::pozo(pt::PozoParams {
-            diametro: n.diametro().max(1.8) as f32,
+            diametro: n.drawing_diameter_m().max(1.8) as f32,
             rim: (n.z_rim - n.z_invert) as f32,
             invert: 0.0,
             tipo: 4,
             lod,
         }),
         _ => pt::cilindro(
-            n.diametro() as f32 * 0.5,
+            n.drawing_diameter_m() as f32 * 0.5,
             ((n.z_rim - n.z_invert) as f32).max(0.5),
             10,
             pt::HIERRO,
@@ -2120,6 +2164,71 @@ mod tests {
         let mut c = Camera::default();
         c.fit(&p);
         c
+    }
+
+    #[test]
+    fn a_model_piece_is_drawn_instead_of_the_parametric_one() {
+        let p = crate::demo::project();
+        let n = p
+            .nodes
+            .iter()
+            .find(|n| n.family == "saneamiento.pozo")
+            .unwrap();
+        let cam = Camera {
+            target: [n.pos.x - p.origin.x, n.pos.y - p.origin.y, n.z_invert],
+            distance: 6.0,
+            z_scale: 1.0,
+            ..Camera::default()
+        };
+        let draw = |mesh: crate::parts::Mesh| {
+            let models = ModelPieces::from([(
+                n.id,
+                ModelPiece {
+                    part: std::sync::Arc::new(crate::parts::Parte {
+                        nombre: "modelo",
+                        mesh,
+                    }),
+                    lift_m: -0.2,
+                    rotation_deg: 30.0,
+                },
+            )]);
+            build_with_models(
+                &p,
+                None,
+                &cam,
+                Layers::default(),
+                None,
+                &Opciones::default(),
+                &models,
+            )
+            .tri_count
+        };
+        let parametric = build_opts(
+            &p,
+            None,
+            &cam,
+            Layers::default(),
+            None,
+            &Opciones::default(),
+        )
+        .tri_count;
+        let mut one = crate::parts::Mesh::default();
+        one.tri(
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            crate::parts::HORMIGON,
+        );
+        let empty = draw(crate::parts::Mesh::default());
+        assert!(
+            empty + 50 < parametric,
+            "the manhole piece is gone: {empty} vs {parametric}"
+        );
+        assert_eq!(
+            draw(one),
+            empty + 1,
+            "and the model triangle drawn in its place"
+        );
     }
 
     /// F12-10: de cerca, el tubo lleva las juntas de su material (hormigón más que PVC).
@@ -2858,8 +2967,27 @@ mod tests {
                 ),
             ] {
                 let t = p.terrain.as_ref();
-                let todo = construir(&p, t, &cam, Layers::default(), None, &opts, false);
-                let recortada = construir(&p, t, &cam, Layers::default(), None, &opts, true);
+                let sin_modelos = ModelPieces::new();
+                let todo = construir(
+                    &p,
+                    t,
+                    &cam,
+                    Layers::default(),
+                    None,
+                    &opts,
+                    false,
+                    &sin_modelos,
+                );
+                let recortada = construir(
+                    &p,
+                    t,
+                    &cam,
+                    Layers::default(),
+                    None,
+                    &opts,
+                    true,
+                    &sin_modelos,
+                );
                 // Sin recorte solo se descarta lo que queda entero detrás de la cámara.
                 assert!(recortada.descartadas >= todo.descartadas);
                 let mut i = 0;

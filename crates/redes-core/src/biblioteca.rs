@@ -88,6 +88,15 @@ fn leer_extras(
     }
 }
 
+fn nombre_o_indice(objeto: &Value, indice: usize) -> String {
+    objeto
+        .get("name")
+        .and_then(|n| n.as_str())
+        .filter(|n| !n.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| indice.to_string())
+}
+
 /// Medidas sacadas de la geometría (no declaradas): volumen, área y si la malla es cerrada.
 #[derive(Clone, Debug, Default)]
 pub struct Cantidades {
@@ -433,16 +442,18 @@ pub fn leer_glb(bytes: &[u8]) -> Result<Modelo, String> {
         }
         let mundo = multiplicar(padre, local);
 
+        // Keyed by node (and mesh) name: a cover and a body both declare `redes_material`, and
+        // with one shared prefix the last one read overwrote the other (docs/17 section 11.6).
         if let Some(extras) = nodo.get("extras") {
-            leer_extras(extras, "nodo", &mut modelo.extras);
+            let prefijo = format!("nodo.{}", nombre_o_indice(nodo, indice));
+            leer_extras(extras, &prefijo, &mut modelo.extras);
         }
         if let Some(malla_id) = nodo.get("mesh").and_then(|m| m.as_u64())
-            && let Some(extras) = doc
-                .get("meshes")
-                .and_then(|m| m.get(malla_id as usize))
-                .and_then(|m| m.get("extras"))
+            && let Some(malla) = doc.get("meshes").and_then(|m| m.get(malla_id as usize))
+            && let Some(extras) = malla.get("extras")
         {
-            leer_extras(extras, "malla", &mut modelo.extras);
+            let prefijo = format!("malla.{}", nombre_o_indice(malla, malla_id as usize));
+            leer_extras(extras, &prefijo, &mut modelo.extras);
         }
 
         if let Some(malla) = nodo.get("mesh").and_then(|m| m.as_u64()) {
@@ -924,6 +935,8 @@ pub fn triangulos_de_glb(bytes: &[u8]) -> Result<Vec<TrianguloLeido>, String> {
                     .and_then(|a| a.get("COLOR_0"))
                     .and_then(|v| v.as_u64())
                     .and_then(|i| leer_colores(&doc, bin, i as usize));
+                // Blender exports colour as the material's base colour, not per vertex.
+                let color_material = color_base_del_material(&doc, prim);
                 let indices = prim
                     .get("indices")
                     .and_then(|v| v.as_u64())
@@ -948,7 +961,8 @@ pub fn triangulos_de_glb(bytes: &[u8]) -> Result<Vec<TrianguloLeido>, String> {
                     }
                     let color = colores
                         .as_ref()
-                        .and_then(|cs| cs.get(a).or_else(|| cs.first()).copied());
+                        .and_then(|cs| cs.get(a).or_else(|| cs.first()).copied())
+                        .or(color_material);
                     out.push(TrianguloLeido {
                         pos: [mundo_pos[a], mundo_pos[b], mundo_pos[c]],
                         color,
@@ -967,6 +981,18 @@ pub fn triangulos_de_glb(bytes: &[u8]) -> Result<Vec<TrianguloLeido>, String> {
         return Err("E_GLB_SIN_MALLAS: el archivo no contiene triángulos".into());
     }
     Ok(out)
+}
+
+fn color_base_del_material(doc: &Value, prim: &Value) -> Option<[f32; 3]> {
+    let indice = prim.get("material")?.as_u64()? as usize;
+    let factor = doc
+        .get("materials")?
+        .get(indice)?
+        .get("pbrMetallicRoughness")?
+        .get("baseColorFactor")?
+        .as_array()?;
+    let canal = |i: usize| factor.get(i).and_then(|v| v.as_f64()).map(|v| v as f32);
+    Some([canal(0)?, canal(1)?, canal(2)?])
 }
 
 fn leer_colores(doc: &Value, bin: &[u8], indice: usize) -> Option<Vec<[f32; 3]>> {
@@ -1093,75 +1119,126 @@ fn normal_de_f32(tri: [[f32; 3]; 3]) -> [f32; 3] {
     [n[0] / l, n[1] / l, n[2] / l]
 }
 
-/// Abre un `.glb` y devuelve su JSON y su bloque binario.
-/// Puntos de conexión declarados como *empties* en el `.glb`.
+/// Points declared as *empties* in the `.glb`, by node name, in the mesh frame (Z up, the same
+/// frame [`triangulos_de_glb`] returns, with every parent transform applied).
 ///
-/// Se reconoce un nodo sin malla cuyo nombre contiene `entrada`, `salida`, `cielo`, `rebose` o
-/// `desague` (sin distinguir mayúsculas). Devuelve la posición en el mismo espacio que los
-/// vértices normalizados: centrada en planta y con la base en z = 0.
+/// A node without mesh counts when its name contains `entrada`, `salida`, `cielo`, `rebose`,
+/// `desague` or `solera` (case-insensitive). The key is the whole name, so a manhole with three
+/// inlets keeps three anchors (`entrada__TR-1`, `entrada__TR-2`…).
 pub fn anclas_de_glb(bytes: &[u8]) -> Result<std::collections::BTreeMap<String, [f32; 3]>, String> {
     let (doc, _) = abrir_glb(bytes)?;
-    let centro_base = centro_y_base(&doc, bytes);
-    Ok(anclas_desde_doc(&doc, centro_base))
+    Ok(anclas_desde_doc(&doc))
 }
 
-/// Nombres que cuentan como punto de conexión.
-const NOMBRES_ANCLA: &[&str] = &["entrada", "salida", "cielo", "rebose", "desague", "desagüe"];
+/// Names that count as a connection point, plus the invert reference of a baked piece.
+const NOMBRES_ANCLA: &[&str] = &[
+    "entrada",
+    "salida",
+    "cielo",
+    "rebose",
+    "desague",
+    "desagüe",
+    ANCLA_SOLERA,
+];
 
-fn anclas_desde_doc(
-    doc: &Value,
-    (centro, base): ([f64; 3], f64),
-) -> std::collections::BTreeMap<String, [f32; 3]> {
+/// Anchor at the invert of a piece (bottom of the channel). A piece that declares it sits with
+/// this point on the object's invert elevation; one that does not, with its base on the rim.
+pub const ANCLA_SOLERA: &str = "solera";
+
+fn anclas_desde_doc(doc: &Value) -> std::collections::BTreeMap<String, [f32; 3]> {
     let mut out = std::collections::BTreeMap::new();
     let Some(nodos) = doc.get("nodes").and_then(|n| n.as_array()) else {
         return out;
     };
-    for n in nodos {
-        if n.get("mesh").is_some() {
-            continue;
-        }
-        let nombre = n.get("name").and_then(|x| x.as_str()).unwrap_or("");
-        let clave = NOMBRES_ANCLA
+    let raices: Vec<usize> = match doc
+        .get("scenes")
+        .and_then(|s| s.as_array())
+        .and_then(|s| s.first())
+        .and_then(|s| s.get("nodes"))
+    {
+        Some(Value::Array(a)) => a
             .iter()
-            .find(|k| nombre.to_lowercase().contains(*k));
-        let Some(clave) = clave else { continue };
-        let tr = n
-            .get("translation")
-            .and_then(|v| v.as_array())
-            .map(|a| {
-                [
-                    a.first().and_then(|x| x.as_f64()).unwrap_or(0.0),
-                    a.get(1).and_then(|x| x.as_f64()).unwrap_or(0.0),
-                    a.get(2).and_then(|x| x.as_f64()).unwrap_or(0.0),
-                ]
-            })
-            .unwrap_or([0.0, 0.0, 0.0]);
-        // glTF es Y-arriba: (x, y, z) -> mundo (x, -z, y), y luego se resta centro y base.
-        out.insert(
-            (*clave).to_string(),
-            [
-                (tr[0] - centro[0]) as f32,
-                (-(tr[2] - base)) as f32,
-                (tr[1] - centro[1]) as f32,
-            ],
-        );
+            .filter_map(|v| v.as_u64())
+            .map(|v| v as usize)
+            .collect(),
+        _ => (0..nodos.len()).collect(),
+    };
+    let mut pendientes: Vec<(usize, [f64; 16])> =
+        raices.into_iter().map(|i| (i, identidad())).collect();
+    let mut visitados = 0;
+    while let Some((indice, padre)) = pendientes.pop() {
+        visitados += 1;
+        if visitados > 10_000 {
+            break;
+        }
+        let Some(n) = nodos.get(indice) else { continue };
+        let mundo = multiplicar(padre, matriz_del_nodo(n));
+        let nombre = n.get("name").and_then(|x| x.as_str()).unwrap_or("");
+        let minusculas = nombre.to_lowercase();
+        if n.get("mesh").is_none() && NOMBRES_ANCLA.iter().any(|k| minusculas.contains(k)) {
+            let p = de_y_arriba(transformar(&mundo, [0.0, 0.0, 0.0]));
+            out.insert(nombre.to_string(), [p[0] as f32, p[1] as f32, p[2] as f32]);
+        }
+        if let Some(hijos) = n.get("children").and_then(|c| c.as_array()) {
+            for h in hijos.iter().filter_map(|v| v.as_u64()) {
+                pendientes.push((h as usize, mundo));
+            }
+        }
     }
     out
 }
 
-/// Centro en planta y base en z del modelo, para normalizar las anclas igual que los vértices.
-fn centro_y_base(_doc: &Value, bytes: &[u8]) -> ([f64; 3], f64) {
-    if let Ok(tris) = triangulos_de_glb(bytes) {
-        let mut bb = Bbox3::vacia();
-        for t in &tris {
-            for p in t.pos {
-                bb.add(p);
-            }
-        }
-        let c = bb.centro();
-        return ([c[0], c[1], 0.0], bb.min[2]);
+/// Anchors moved like the vertices when a model is normalised (centred in plan, base at z = 0).
+pub fn anclas_normalizadas(
+    anclas: std::collections::BTreeMap<String, [f32; 3]>,
+    info: &Normalizacion,
+) -> std::collections::BTreeMap<String, [f32; 3]> {
+    let k = info.escala;
+    anclas
+        .into_iter()
+        .map(|(nombre, a)| {
+            let p = [
+                (a[0] as f64 - info.centro_previo[0]) * k,
+                (a[1] as f64 - info.centro_previo[1]) * k,
+                (a[2] as f64 - info.base_previa) * k,
+            ];
+            (nombre, [p[0] as f32, p[1] as f32, p[2] as f32])
+        })
+        .collect()
+}
+
+/// Elevation where z = 0 of a model goes for this object: its invert minus the height of the
+/// piece's invert anchor, or the rim for a piece that declares none (docs/17 section F17-03).
+pub fn cota_base_modelo(
+    n: &crate::model::Node,
+    anclas: &std::collections::BTreeMap<String, [f32; 3]>,
+) -> f64 {
+    match anclas.get(ANCLA_SOLERA) {
+        Some(solera) => n.z_invert - solera[2] as f64,
+        None => n.z_rim,
     }
-    ([0.0, 0.0, 0.0], 0.0)
+}
+
+/// The anchor of a kind (`entrada`, `salida`…): the one named after the link if the piece was
+/// baked for these pipes, else the first whose name contains the kind.
+fn ancla_de<'a>(
+    anclas: &'a std::collections::BTreeMap<String, [f32; 3]>,
+    tipo: &str,
+    tramo: &str,
+) -> Option<&'a [f32; 3]> {
+    anclas
+        .iter()
+        .find(|(nombre, _)| {
+            nombre
+                .rsplit_once("__")
+                .is_some_and(|(_, codigo)| codigo == tramo)
+        })
+        .or_else(|| {
+            anclas
+                .iter()
+                .find(|(nombre, _)| nombre.to_lowercase().contains(tipo))
+        })
+        .map(|(_, a)| a)
 }
 
 fn abrir_glb(bytes: &[u8]) -> Result<(Value, &[u8]), String> {
@@ -1604,6 +1681,7 @@ pub fn aplicar(
 #[cfg(test)]
 mod tests_aplicar {
     use super::*;
+    use std::collections::BTreeMap;
 
     fn biblioteca_de_prueba() -> Biblioteca {
         Biblioteca {
@@ -1667,28 +1745,54 @@ mod tests_aplicar {
     }
 
     #[test]
-    fn las_anclas_se_leen_de_los_empties_normalizadas() {
-        // glTF de juguete: un nodo con malla (el cuerpo) y dos empties de conexión.
+    fn anchors_are_read_by_name_in_the_mesh_frame_through_their_parents() {
+        // Toy glTF (Y up): a body, two connection empties under a moved parent and a stray node.
         let doc = serde_json::json!({
             "asset": {"version": "2.0"},
+            "scenes": [{"nodes": [0, 3, 4]}],
             "nodes": [
-                {"name": "cuerpo", "mesh": 0},
-                {"name": "entrada", "translation": [0.5, 1.0, 0.0]},
+                {"name": "raiz", "translation": [1.0, 0.0, 0.0], "children": [1, 2]},
+                {"name": "entrada__TR-1", "translation": [0.5, 1.0, 0.0]},
                 {"name": "SALIDA", "translation": [0.5, 2.0, 1.0]},
+                {"name": "cuerpo", "mesh": 0},
                 {"name": "otra_cosa", "translation": [9.0, 9.0, 9.0]}
             ]
         });
-        // Centro (0.5, 0.5) y base 0, como dejaría la normalización de un cubo de 1 m.
-        let anclas = anclas_desde_doc(&doc, ([0.5, 0.5, 0.0], 0.0));
-        assert_eq!(anclas.len(), 2, "solo los nombres conocidos: {anclas:?}");
-        let entrada = anclas.get("entrada").expect("entrada");
-        // glTF (x, y, z) -> mundo (x - cx, -(z - base), y - cy)
-        assert!((entrada[0] - 0.0).abs() < 1e-6, "{entrada:?}");
-        assert!((entrada[1] - 0.0).abs() < 1e-6, "{entrada:?}");
-        assert!((entrada[2] - 0.5).abs() < 1e-6, "{entrada:?}");
-        let salida = anclas.get("salida").expect("salida");
-        assert!((salida[1] + 1.0).abs() < 1e-6, "{salida:?}");
-        assert!((salida[2] - 1.5).abs() < 1e-6, "{salida:?}");
+        let anclas = anclas_desde_doc(&doc);
+        assert_eq!(anclas.len(), 2, "only the known names: {anclas:?}");
+        // glTF (x, y, z) -> Z up (x, -z, y), after the parent's translation.
+        assert_eq!(anclas["entrada__TR-1"], [1.5, 0.0, 1.0]);
+        assert_eq!(anclas["SALIDA"], [1.5, -1.0, 2.0]);
+    }
+
+    #[test]
+    fn normalising_moves_the_anchors_like_the_vertices() {
+        let info = Normalizacion {
+            escala: 2.0,
+            centro_previo: [1.0, -1.0, 0.0],
+            base_previa: 0.5,
+            ..Default::default()
+        };
+        let anclas = BTreeMap::from([("entrada".to_string(), [2.0f32, 0.0, 1.5])]);
+        assert_eq!(
+            anclas_normalizadas(anclas, &info)["entrada"],
+            [2.0, 2.0, 2.0]
+        );
+    }
+
+    #[test]
+    fn a_piece_with_an_invert_anchor_sits_on_the_invert() {
+        let mut n = crate::demo_catalog::catalogo().nodes[0].clone();
+        n.z_rim = 2502.0;
+        n.z_invert = 2500.0;
+        let sin = BTreeMap::new();
+        assert_eq!(
+            cota_base_modelo(&n, &sin),
+            2502.0,
+            "no anchor: base on the rim"
+        );
+        let con = BTreeMap::from([(ANCLA_SOLERA.to_string(), [0.0f32, 0.0, 0.2])]);
+        assert!((cota_base_modelo(&n, &con) - 2499.8).abs() < 1e-6);
     }
 
     #[test]
@@ -1740,9 +1844,11 @@ mod tests_aplicar {
 
 /// Mueve el extremo de cada arco que toca el objeto hasta el ancla del modelo (F6-08).
 ///
-/// `entrada` se usa para los arcos que salen del nodo y `salida` para los que llegan; si el modelo
-/// solo declara una, se usa esa. Nunca mueve un extremo que esté lejos del nodo (más de 5 m):
-/// eso sería teleportar geometría de otro tramo.
+/// A link takes the anchor named after it if the piece has one (`salida__TR-1`, baked for these
+/// pipes); else `entrada` is used for links leaving the node and `salida` for those arriving, and
+/// if the model declares only one, that one. The anchor is placed like the mesh
+/// ([`cota_base_modelo`]). Never moves an end that is far from the node (more than 5 m): that
+/// would teleport geometry of another link.
 pub fn anclar_conexiones(
     p: &mut crate::model::Project,
     codigo: &str,
@@ -1759,21 +1865,24 @@ pub fn anclar_conexiones(
     else {
         return 0;
     };
-    let punto = |clave: &str| -> Option<[f64; 3]> {
-        let a = anclas.get(clave)?;
-        Some([
+    let base = cota_base_modelo(&nodo, anclas);
+    let punto = |a: &[f32; 3]| -> [f64; 3] {
+        [
             nodo.pos.x + a[0] as f64,
             nodo.pos.y + a[1] as f64,
-            nodo.z_rim + a[2] as f64,
-        ])
+            base + a[2] as f64,
+        ]
     };
-    let entrada = punto("entrada").or_else(|| punto("salida"));
-    let salida = punto("salida").or_else(|| punto("entrada"));
+    let destino_de = |tramo: &str, primero: &str, segundo: &str| {
+        ancla_de(anclas, primero, tramo)
+            .or_else(|| ancla_de(anclas, segundo, tramo))
+            .map(punto)
+    };
 
     let mut movidos = 0usize;
     for l in p.links.iter_mut().filter(|l| !l.deleted) {
         if l.from == nodo.id
-            && let Some(destino) = entrada
+            && let Some(destino) = destino_de(&l.code, "entrada", "salida")
             && let Some(q) = l.path.first_mut()
             && q.p2().dist(nodo.pos) < 5.0
         {
@@ -1781,7 +1890,7 @@ pub fn anclar_conexiones(
             movidos += 1;
         }
         if l.to == nodo.id
-            && let Some(destino) = salida
+            && let Some(destino) = destino_de(&l.code, "salida", "entrada")
             && let Some(q) = l.path.last_mut()
             && q.p2().dist(nodo.pos) < 5.0
         {

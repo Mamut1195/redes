@@ -73,7 +73,7 @@ Lo que falta para un levantamiento real está en §4.1.
 | Dos motores de dibujo: pintor 2D (por defecto) y pase 3D con profundidad, instancias, 3 LOD y recorte | ✅ | `redes-app --gpu3d` (o `REDES_GPU3D=1`) | F14-02…05, [docs/16](16-fase-4-5-gltf-y-3d.md) |
 | Capas | 🟡 | chips Terreno, Alcantarillado, Agua potable, Edificios. La capa `nodos` existe en el núcleo (`view::Layers::nodos`) pero **no tiene chip** | [docs/11](11-modos-inspeccion.md) |
 | Selección por clic con rejilla espacial | ✅ | clic sin arrastrar | F14-07 |
-| Inspector de nodo | 🟡 | familia, subtipo, estado, E/N, cotas, altura, datos con fuente y atributos; **solo los 10 primeros atributos**; muestra «diámetro 1,20 m» aunque el objeto no traiga diámetro (§4.6) | D12 |
+| Inspector de nodo | 🟡 | familia, subtipo, estado, E/N, cotas, altura, datos con fuente y atributos; **solo los 10 primeros atributos**; sin `diametro_interior` muestra `—` (F17-03, MAM-1155) | D12 |
 | Inspector de tramo | 🟡 | DN, longitud **en planta**, cotas inicial y final, datos; sin atributos | D12 |
 | Inspector sin selección: proyecto, CRS, estado, objetos, procedencia (`fuentes`) | ✅ | — | — |
 | Solo lectura: no hay controles para editar el diseño | ✅ | prueba `el_inspector_no_edita_parametros_del_diseno` | D12 |
@@ -84,7 +84,7 @@ Lo que falta para un levantamiento real está en §4.1.
 | Explosión de la pieza enfocada | ✅ | botón Explosión; Shift + rueda la abre | [docs/11](11-modos-inspeccion.md) |
 | Perfil longitudinal en panel | ✅ | botón Perfil en el inspector de un tramo | F13-02 |
 | Leyenda por forma y color con conteos | ✅ | panel izquierdo | — |
-| Modelos `.glb` de biblioteca en su nodo; proxy decimado sin GPU | ✅ | `--gpu3d` para la malla real; sin él, silueta y aviso | F6-01…05 |
+| Modelos `.glb` de biblioteca en su nodo, **en lugar de** la pieza paramétrica | ✅ | con y sin `--gpu3d`; sin él, la malla entera hasta 20 000 triángulos y el proxy por encima (con aviso); una pieza con ancla `solera` se apoya en la solera del objeto menos su losa (docs/17 §12.4) | F6-01…05, F17-03 |
 | Exageración vertical | 🟡 | fija (×2,0; ×2,6 con contexto urbano; ×1 en foco); sin control en la UI | F18-04 |
 | Abrir proyecto | 🟡 | `redes-app --abrir x.redes` (o `-p`, una ruta `.redes` suelta, `REDES_PROJECT`); sin diálogo de abrir. Sin nada, abre el demo; si lo pedido falla, abre vacío y lo dice | — |
 | Capturas y árbol sin ventana | ✅ | `--snap out.png --scene <escena>`, `--tree arbol.json`, `--size`, `--scale` (Rune). 16 escenas: `iso`, `planta`, `perfil`, `detalle`, `ciudad`, `calle`, `catalogo`, `vitrina`, `pozos`, `pieza`, `foco`, `corte`, `explosion`, `ptap`, `ptar`, `validar` | [docs/00](00-investigacion-rune.md) |
@@ -271,9 +271,8 @@ revisión (F11-02, hoy cerrada por D2).
 
 ### 4.6 Contradicciones encontradas al verificar
 
-- (F18-12, MAM-1155) El inspector muestra «diámetro 1,20 m» cuando el nodo no trae `diametro_interior`
-  (`Node::diametro`, `model.rs`, `unwrap_or(1.20)`): es un dato inventado en pantalla, contra D4 y
-  F12-03. Debería mostrarse `—`.
+- ~~(F18-12, MAM-1155) El inspector mostraba «diámetro 1,20 m» sin `diametro_interior`~~: corregido en
+  F17-03 (`Node::inner_diameter_m`; el 1,20 m queda como constante de dibujo de la pieza de respaldo).
 - (F18-05) El aviso del foco dice «Flechas para girar», pero la app no atiende el teclado.
 - (F17-12) `skills/redes-ingesta/references/plan.md` dice que el TIN del plan «se etiqueta siempre como
   32717»; el código usa el EPSG del plan.

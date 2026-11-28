@@ -161,7 +161,9 @@ Checklist que debe cumplir un `.glb` para entrar sin retoques:
 | **≤ 60 000 triángulos** por pieza (≤ 300 000 una planta) | presupuesto del visor |
 | **Sin cámaras, luces ni planos de referencia** | solo peso |
 | **Triangulado** y sin modificadores sin aplicar | el lector no evalúa modificadores |
-| **Anclas como *empties*** con nombre y `DN` en propiedad personalizada | conectividad de la red |
+| **Anclas como *empties*** con nombre y `DN` en propiedad personalizada (`entrada__<tramo>`, `salida__<tramo>`: una por tubo) | conectividad de la red |
+| *Empty* **`solera`** en la solera de la pieza (si la tiene) | el visor apoya ese punto en la cota de solera del objeto; sin él, la base va a la cota de tapa (§12.4) |
+| **Colores en el material** (`baseColorFactor`) si no hay `COLOR_0` | el visor los toma tal cual |
 | **Licencia anotada** en el manifiesto | trazabilidad legal |
 
 Receta mínima en Blender (Scripting) para dejar un objeto listo:
@@ -314,7 +316,7 @@ Medido en Windows 11 con Blender 5.1.0, tres horneados por juego de parámetros:
   `extras` `nodo.redes_*`.
 - `redes biblioteca importar` + `lista`: se importa y se anota en el manifiesto sin errores.
 
-Huecos vistos (no se arreglan aquí; pasan a F17-02/F17-03):
+Huecos vistos (no se arreglan aquí; pasan a F17-02/F17-03; cerrados en F17-03, §12.5):
 
 - `cantidades` guarda los `extras` de **un** nodo (el cuerpo); los de la tapa se pierden.
 - `importar` deja `extras` vacío en el manifiesto (el `.glb` normalizado no los conserva).
@@ -466,7 +468,8 @@ Para el usuario:
    pozo (no declara espesor).
 2. Si una red grande justifica la vía C para la profundidad (§11.5).
 
-Para F17-03 (no hacen falta para este prototipo; los parámetros del horneado ya quedan en `horneado.*`):
+Para F17-03 (no hacen falta para este prototipo; los parámetros del horneado ya quedan en `horneado.*`).
+Los cuatro primeros quedaron resueltos en F17-03 (§12); la limpieza de la caché sigue abierta:
 
 - `biblioteca cantidades` guarda los `extras` de un solo nodo: el `nodo.redes_material` de la tapa
   pisa al del cuerpo (claves sin nombre de nodo).
@@ -477,3 +480,143 @@ Para F17-03 (no hacen falta para este prototipo; los parámetros del horneado ya
 - Las piezas que ya no usa nadie salen del manifiesto, pero sus `.glb` y `.blend` siguen en la caché
   (falta una limpieza). Con `.blend` la caché pesa ~16 veces más: decidir si el `.blend` va siempre o
   solo bajo petición en redes grandes.
+
+## 12. F17-03: pozo de inspección piloto, colocado en la red
+
+Hecho el 28/11/2026 con Blender 5.1.0. La receta `tools/blender/build_manhole.py` dibuja el pozo
+completo y la pieza sustituye a la de `parts.rs` en el visor, con y sin `--gpu3d`.
+
+### 12.1 Qué es dato y qué es forma (D17)
+
+| Parámetro de la receta | Desde | Valor |
+|---|---|---|
+| `inner_diameter_m` | atributo `diametro_interior` | dato |
+| `depth_m` | `tapa_menos_solera` | dato |
+| `wall_thickness_m` | atributo `espesor_pared` (o un `Dato` `espesor_pared` en m, con su fuente) | dato |
+| `body_material` | atributo `material` | dato |
+| `connections` | `conexiones`: los tramos que llegan al pozo | dato (ver §12.3) |
+| `base_thickness_m`, `base_overhang_m` | forma | losa de 0,20 m que sobresale 0,10 m |
+| `cone_type`, `cone_height_m`, `min_barrel_height_m` | forma | cono excéntrico de 0,60 m; fuste mínimo 0,30 m |
+| `opening_diameter_m` | forma | boca de 0,60 m |
+| `frame_height_m`, `frame_width_m`, `frame_seat_m` | forma | marco de 0,10 × 0,08 m con asiento de 0,03 m |
+| `cover_thickness_m`, `cover_clearance_m`, `cover_material` | forma | tapa de fundición de 0,05 m, holgura 5 mm |
+| `step_first_height_m`, `step_spacing_m`, `step_top_clearance_m` | forma | primer escalón a 0,40 m sobre la solera, cada 0,30 m, hasta 0,25 m bajo el marco |
+| `step_width_m`, `step_projection_m`, `step_embed_m`, `step_bar_m`, `step_material` | forma | escalón en U de 0,30 m, a 0,15 m de la pared, empotrado 0,05 m, barra de 25 mm, polipropileno |
+| `segments` | forma | 48 |
+
+Todos los espesores son entradas. La forma va en el contrato versionado y entra en la clave; nunca es
+`Dato` ni alimenta cantidades del proyecto.
+
+### 12.2 Partes y marco de la pieza
+
+- Marco: Z arriba, metros, origen en el centro de la **cara inferior de la losa**. La solera (fondo del
+  canal, cara superior de la losa) queda en `z = base_thickness_m` y la tapa en `z = base_thickness_m + depth_m`.
+- **Cuerpo** (`cuerpo`): losa, fuste y cono en un solo sólido de anillos apilados con vértices y caras
+  explícitos (`loft`). Excéntrico: la boca se desplaza hacia −X y esa pared sube vertical hasta el marco
+  (como la paramétrica). Si el pozo es tan somero que el cono no cabe sobre el fuste mínimo, el cono
+  cede altura; si le queda menos que el espesor de pared, se cierra con una **losa superior plana** del
+  espesor de pared. Es una regla de forma (para aprobar).
+- **Marco** (`marco`): anillo en L (collar más asiento de la tapa), explícito.
+- **Tapa** (`tapa`): modificador de Geometry Nodes (radio, espesor, elevación de la cara superior,
+  desplazamiento en X, segmentos): se edita en el `.blend` de revisión.
+- **Escalones** (`escalones`): en U (huella y dos patas empotradas), cajas explícitas, en la pared −X;
+  en un cono concéntrico siguen la pared inclinada.
+- **Banqueta** (`banqueta`): sobre la losa, partida por un canal recto en la dirección de la primera
+  salida con DN; el canal es tan ancho como ese DN y la banqueta sube medio DN (altura de media caña).
+  Sin salida con DN no hay canal que dibujar y no hay banqueta. Simplificación: el fondo del canal es
+  plano (no semicircular) y las entradas no tienen canal propio.
+- Cada parte es un sólido cerrado y lleva su material con color (`baseColorFactor`): `hormigon`,
+  `fundicion`, `polipropileno`. El lector toma ese color cuando el `.glb` no trae `COLOR_0`.
+
+### 12.3 Anclas por entrada y salida
+
+- `bake::node_connections` saca de cada tramo que toca el pozo: nombre `salida__<código>` (el tramo
+  empieza en el pozo) o `entrada__<código>` (termina en él), acimut desde el pozo hacia el siguiente
+  vértice del trazado (grados desde +X en sentido antihorario, menos el `giro` del pozo si lo declara),
+  la solera del tramo en ese extremo menos la solera del pozo, y el DN si es dato.
+- La solera del tramo es la declarada (`cota_solera_inicio`/`cota_solera_fin`) o la del trazado si es
+  dato. **Sin ella no hay ancla**: el sobre de `hornear` la lista en `sin_ancla` (`codigo`, `tramo`,
+  `motivo`) y avisa `W_SIN_ANCLA`; un pozo sin tramos sale con «sin tramos conectados». El pozo se
+  hornea igual: faltar un ancla no es faltar un dato del pozo.
+- En el `.glb`, cada ancla es un *empty* con ese nombre en la cara exterior del fuste, a la cota de la
+  solera del tramo, con `redes_tramo`, `redes_azimut_deg`, `redes_sobre_solera_m`, `redes_eje` y
+  `redes_dn_mm`. El *empty* `solera` marca la solera del pozo.
+- `biblioteca::anclas_de_glb` ahora lee las anclas por **nombre completo** (tres entradas dan tres
+  anclas, antes una), en el marco de la malla y aplicando las transformaciones de los padres (antes
+  restaba el centro en planta a la altura). `importar` las normaliza igual que los vértices
+  (`anclas_normalizadas`). `anclar_conexiones` usa primero el ancla con el código del tramo.
+
+### 12.4 Colocación en el visor
+
+- `biblioteca::cota_base_modelo`: una pieza con ancla `solera` se coloca con su `z = 0` en
+  **solera − altura del ancla** (la solera del objeto menos la losa); una sin ella, como antes, con la
+  base en la cota de tapa. Lo usan el pase 3D, el pintor, el foco y `anclar_conexiones`.
+- **Sustituye** a la paramétrica: en `--gpu3d`, `PlacedModel::replaces` quita la pieza de `parts.rs`
+  del objeto; sin `--gpu3d`, `view::build_with_models` dibuja el modelo en su lugar por el mismo camino
+  que las piezas (corte, tinte de selección, recorte y niebla). Antes el pintor dibujaba la paramétrica
+  y además el proxy encima. El pintor usa la malla entera hasta 20 000 triángulos y el proxy por encima
+  (aviso en la barra de estado). Sin modelo o sin `.glb`, se ve la paramétrica.
+- La resta del origen sigue en `f64` antes de bajar a `f32` (docs/15).
+- Corregido de paso: la app volvía a girar los ejes de una malla que el lector ya da en Z arriba, así
+  que toda pieza de Blender se habría visto tumbada; ahora cada triángulo lleva su normal (antes
+  `[0, 0, 1]`, sin sombreado en el pase 3D).
+
+### 12.5 Huecos de §11.6 cerrados
+
+- `biblioteca cantidades` (y el manifiesto) guardan los `extras` **por nodo**:
+  `nodo.<nombre del nodo>.<clave>` (y `malla.<nombre>.<clave>`). El material de la tapa ya no pisa al del
+  cuerpo.
+- `biblioteca importar` lee los `extras` y las anclas del `.glb` de origen (el normalizado es una sola
+  malla sin ellos).
+- `dn_mm` es nulo en las piezas de pozo: el pozo no tiene DN; su medida principal es
+  `horneado.inner_diameter_m` (y el DN de cada tubo va en su ancla).
+- Inspector (MAM-1155): sin `diametro_interior`, el diámetro se muestra `—`; la pieza de respaldo se
+  dibuja con la constante de dibujo `FALLBACK_DRAWING_DIAMETER_M` (1,20 m), que nunca se presenta como
+  dato (`Node::inner_diameter_m` frente a `Node::drawing_diameter_m`).
+
+### 12.6 Demo y pruebas
+
+- `redes proyecto cadena`: los 18 pozos declaran `espesor_pared` = 0,15 m como `Dato` con fuente
+  «demo: dato de ejemplo, no de un diseño» y `material` = `hormigon`, así que se hornean todos. Los
+  12 pozos de la zona de agua no tienen tramos (sin anclas, avisado); los 6 del colector llevan su
+  entrada y su salida.
+- Pieza piloto versionada: `tools/blender/piloto/piloto.json` (tres tramos: dos entradas DN 200 y 160 y
+  una salida DN 250) y su `<clave>.glb` (1 940 triángulos, 93 kB, cerrada, 1,7 × 1,7 × 2,6 m).
+  `crates/redes-core/tests/pozo_horneado.rs` comprueba **sin Blender** que el nombre es la clave de la
+  receta actual (si se toca la receta hay que rehornear el piloto; el mensaje dice cómo), las cinco
+  partes, malla cerrada con volumen positivo por material, `extras` por nodo, base en 0 y tapa en
+  losa + profundidad, y un ancla por tubo a su cota. Con Blender, `tests/hornear.rs` lo rehornea y exige
+  los mismos bytes; sin Blender se salta con aviso.
+- Capturas y `.blend` de revisión para aprobar: `out/f17-03/` (§12.7).
+
+### 12.7 Para aprobar y medido
+
+Capturas (`out/f17-03/`, carpeta ignorada; se rehacen con los mismos pasos):
+
+```powershell
+redes proyecto cadena --salida out\f17-03\cadena\cadena.redes
+redes -p out\f17-03\cadena\cadena.redes biblioteca hornear --receta tools\blender\build_manhole.receta.json
+$env:REDES_PROJECT = "out\f17-03\cadena\cadena.redes"
+redes-app --snap out\f17-03\iso.png --scene iso            # y --gpu3d
+redes-app --snap out\f17-03\foco.png --scene foco          # y --gpu3d
+redes-app --snap out\f17-03\corte.png --scene corte        # corte vertical (solo pintor)
+redes-app --snap out\f17-03\pozo-modelo.png --scene pozo-modelo   # y --gpu3d
+```
+
+- Las escenas `foco`, `corte` y `explosion` eligen ahora el primer pozo con modelo y al menos dos
+  tramos (PZ-302 en la cadena); la nueva `pozo-modelo` lo encuadra sin terreno ni selección, para ver
+  la pieza con sus materiales también en `--gpu3d` (con terreno, el pase 3D solo deja ver la tapa).
+- El corte vertical solo existe en el pintor: el pase 3D no corta (como antes de F17-03).
+- `.blend` de revisión de cuatro pozos distintos en `out/f17-03/revision/`: PZ-201 (sin tramos: sin
+  anclas ni banqueta), PZ-301 (solo salida), PZ-302 y PZ-306 (entrada y salida).
+
+Medido (Windows 11, Blender 5.1.0, CLI en release): la cadena tiene 18 pozos que dan **7 piezas
+distintas** (los 12 sin tramos comparten una; cada pozo con tubos es la suya, porque sus anclas
+son parte de la clave), horneadas en un proceso en **2,49 s** con `.blend`. Pieza con dos tubos:
+1 868 triángulos; sin tubos: 1 676; piloto con tres: 1 940 (≈ 93 kB). El proyecto entero con modelos:
+6 134 triángulos en el pintor en la escena `foco`.
+
+Para el usuario: aprobar la forma de §12.1 (sobre todo el cono excéntrico hacia −X, la losa superior
+plana de los pozos someros, la banqueta de medio DN con fondo plano y que la banqueta solo exista
+con una salida con DN) y las capturas.
+

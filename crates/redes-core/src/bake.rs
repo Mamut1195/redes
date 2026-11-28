@@ -14,7 +14,7 @@ use serde_json::Value as Json;
 
 use crate::biblioteca::{self, Entrada};
 use crate::families::Value;
-use crate::model::{COTA_SOLERA, COTA_TAPA, Node};
+use crate::model::{COTA_SOLERA, COTA_TAPA, Link, Node, Project};
 
 pub const RECIPE_SCHEMA: &str = "redes.receta/1";
 pub const RECIPE_SUFFIX: &str = ".receta.json";
@@ -46,6 +46,10 @@ pub enum ParamSource {
         #[serde(rename = "unidad", default)]
         unit: Option<String>,
     },
+    /// The pipes that reach the object: name, direction and invert of each one, from the links
+    /// that carry those data (docs/17, section F17-03). A pipe without them has no anchor.
+    #[serde(rename = "conexiones")]
+    Connections,
     /// A drawing detail fixed by the recipe (cone height, segments…). Never becomes a `Dato`.
     #[serde(rename = "forma")]
     Shape {
@@ -144,12 +148,22 @@ impl Recipe {
     }
 
     /// Parameters of an object, or the project data it lacks (D16: nothing is filled in).
-    pub fn params_for_node(&self, node: &Node) -> Result<ParamSet, Vec<String>> {
+    pub fn params_for_node(&self, p: &Project, node: &Node) -> Result<ParamSet, Vec<String>> {
         self.resolve(|source| match source {
-            ParamSource::Attribute { key, .. } => attribute(node, key).ok_or_else(|| key.clone()),
+            ParamSource::Attribute { key, unit } => {
+                attribute(node, key, unit.as_deref()).ok_or_else(|| key.clone())
+            }
             ParamSource::RimMinusInvert { .. } => rim_minus_invert(node),
+            ParamSource::Connections => Ok(node_connections(p, node).to_json()),
             ParamSource::Shape { .. } => unreachable!("shape values come from the recipe"),
         })
+    }
+
+    /// Whether the recipe draws anchors for the pipes, so a missing one is worth reporting.
+    pub fn uses_connections(&self) -> bool {
+        self.params
+            .values()
+            .any(|s| matches!(s, ParamSource::Connections))
     }
 
     /// Parameters given by hand, by recipe name; shape values still come from the recipe.
@@ -159,7 +173,11 @@ impl Recipe {
             .filter(|k| {
                 !matches!(
                     self.params.get(*k),
-                    Some(ParamSource::Attribute { .. } | ParamSource::RimMinusInvert { .. })
+                    Some(
+                        ParamSource::Attribute { .. }
+                            | ParamSource::RimMinusInvert { .. }
+                            | ParamSource::Connections
+                    )
                 )
             })
             .map(|k| format!("{k} (no es un parámetro de dato de la receta)"))
@@ -226,7 +244,7 @@ impl Recipe {
                     }
                 },
                 ParamSource::RimMinusInvert { unit } => (unit.as_deref().unwrap_or(""), "m"),
-                ParamSource::Shape { .. } => continue,
+                ParamSource::Connections | ParamSource::Shape { .. } => continue,
             };
             if declared != expected {
                 out.push(format!(
@@ -238,11 +256,20 @@ impl Recipe {
     }
 }
 
-fn attribute(node: &Node, key: &str) -> Option<Json> {
+/// An attribute of the object or, if it has none, a `Dato` with that key in the recipe's unit:
+/// a number that arrives with its source is as good as an imported attribute.
+fn attribute(node: &Node, key: &str, unit: Option<&str>) -> Option<Json> {
     if node.falta(key) {
         return None;
     }
-    match node.get(key)? {
+    let Some(value) = node.get(key) else {
+        return node
+            .datos
+            .get(key)
+            .filter(|d| d.valor.is_finite() && unit.is_none_or(|u| d.unidad == u))
+            .map(|d| Json::from(d.valor));
+    };
+    match value {
         Value::Num(v) if v.is_finite() => Some(Json::from(*v)),
         Value::Num(_) => None,
         Value::Int(v) => Some(Json::from(*v)),
@@ -259,6 +286,138 @@ fn rim_minus_invert(node: &Node) -> Result<Json, String> {
         (Some(rim), Some(invert)) => Ok(Json::from(round_to(rim - invert, 1e6))),
         (None, _) => Err(COTA_TAPA.to_string()),
         (Some(_), None) => Err(COTA_SOLERA.to_string()),
+    }
+}
+
+/// The pipes of an object as recipe data: the ones with the data for an anchor and the others,
+/// with why they have none.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Connections {
+    pub anchored: Vec<Connection>,
+    pub unanchored: Vec<Unanchored>,
+}
+
+/// One pipe end at the object, in the object's frame.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Connection {
+    /// `salida__<code>` for a pipe that starts at the object, `entrada__<code>` for one that ends
+    /// there. It names the empty in the `.glb`.
+    pub name: String,
+    /// Direction from the object to the pipe, counter-clockwise from +X (east), in degrees, minus
+    /// the object's `giro` if it declares one.
+    pub azimuth_deg: f64,
+    /// Pipe invert at the object minus the object's invert (m).
+    pub invert_rise_m: f64,
+    pub dn_mm: Option<u32>,
+}
+
+/// A pipe that reaches the object without the data to place its anchor.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Unanchored {
+    pub link: Option<String>,
+    pub reason: String,
+}
+
+impl Connections {
+    /// Canonical JSON: sorted by name, rounded like the derived depth so float noise never
+    /// changes the key.
+    pub fn to_json(&self) -> Json {
+        let mut sorted = self.anchored.clone();
+        sorted.sort_by(|a, b| a.name.cmp(&b.name));
+        Json::Array(
+            sorted
+                .iter()
+                .map(|c| {
+                    serde_json::json!({
+                        "name": c.name,
+                        "azimuth_deg": round_to(c.azimuth_deg, 1e6),
+                        "invert_rise_m": round_to(c.invert_rise_m, 1e6),
+                        "dn_mm": c.dn_mm,
+                    })
+                })
+                .collect(),
+        )
+    }
+}
+
+/// Pipes that reach a node and, for each one, its anchor data or why it has none. Nothing is
+/// guessed: the invert must be the link's declared one (or its datum path), the direction comes
+/// from the drawn path, and the node's own invert must be a datum.
+pub fn node_connections(p: &Project, node: &Node) -> Connections {
+    let mut out = Connections::default();
+    let links: Vec<&Link> = p.tramos_de(node.id).collect();
+    if links.is_empty() {
+        out.unanchored.push(Unanchored {
+            link: None,
+            reason: "sin tramos conectados".into(),
+        });
+        return out;
+    }
+    let Some(invert) = node.cota_solera() else {
+        for l in links {
+            out.unanchored.push(Unanchored {
+                link: Some(l.code.clone()),
+                reason: "el pozo no trae cota de solera".into(),
+            });
+        }
+        return out;
+    };
+    let giro = node.num("giro").filter(|g| g.is_finite()).unwrap_or(0.0);
+    for l in links {
+        match connection_of(l, node, invert, giro) {
+            Ok(c) => out.anchored.push(c),
+            Err(reason) => out.unanchored.push(Unanchored {
+                link: Some(l.code.clone()),
+                reason,
+            }),
+        }
+    }
+    out
+}
+
+fn connection_of(l: &Link, node: &Node, invert: f64, giro: f64) -> Result<Connection, String> {
+    let starts_here = l.from == node.id;
+    let declared = if starts_here {
+        l.cota_solera_inicio
+    } else {
+        l.cota_solera_fin
+    };
+    let pipe_invert = declared
+        .or_else(|| {
+            l.cotas_trazado()
+                .map(|(a, b)| if starts_here { a } else { b })
+        })
+        .filter(|z| z.is_finite())
+        .ok_or_else(|| "el tramo no trae cota de solera en este extremo".to_string())?;
+    let neighbour = if starts_here {
+        l.path.iter().skip(1).find(|q| q.p2().dist(node.pos) > 1e-6)
+    } else {
+        l.path
+            .iter()
+            .rev()
+            .skip(1)
+            .find(|q| q.p2().dist(node.pos) > 1e-6)
+    }
+    .ok_or_else(|| "el trazado del tramo no sale del pozo".to_string())?;
+    let azimuth = (neighbour.y - node.pos.y)
+        .atan2(neighbour.x - node.pos.x)
+        .to_degrees()
+        - giro;
+    let kind = if starts_here { "salida" } else { "entrada" };
+    Ok(Connection {
+        name: format!("{kind}__{}", l.code),
+        azimuth_deg: normalise_degrees(azimuth),
+        invert_rise_m: pipe_invert - invert,
+        dn_mm: l.dn(),
+    })
+}
+
+fn normalise_degrees(a: f64) -> f64 {
+    let wrapped = a.rem_euclid(360.0);
+    if wrapped > 180.0 {
+        wrapped - 360.0
+    } else {
+        wrapped
     }
 }
 
@@ -367,8 +526,12 @@ mod tests {
         LoadedRecipe::load(&contract).expect("the manhole recipe loads")
     }
 
+    fn demo() -> Project {
+        crate::demo::project()
+    }
+
     fn manhole() -> Node {
-        let mut n = crate::demo::project()
+        let mut n = demo()
             .nodes
             .iter()
             .find(|n| n.family == "saneamiento.pozo" && n.ty == "inspeccion")
@@ -386,7 +549,10 @@ mod tests {
     fn manhole_params_come_from_the_object_and_the_recipe() {
         let r = repo_recipe();
         let n = manhole();
-        let set = r.recipe.params_for_node(&n).expect("complete manhole");
+        let set = r
+            .recipe
+            .params_for_node(&demo(), &n)
+            .expect("complete manhole");
         assert_eq!(set["inner_diameter_m"], Json::from(1.2));
         assert_eq!(
             set["depth_m"],
@@ -403,7 +569,7 @@ mod tests {
         let mut n = manhole();
         n.z_rim = 2491.63;
         n.z_invert = 2490.0;
-        let set = r.recipe.params_for_node(&n).unwrap();
+        let set = r.recipe.params_for_node(&demo(), &n).unwrap();
         assert_eq!(set["depth_m"], Json::from(1.63));
     }
 
@@ -415,7 +581,7 @@ mod tests {
         n.sin_dato.push(COTA_TAPA.into());
         let missing = r
             .recipe
-            .params_for_node(&n)
+            .params_for_node(&demo(), &n)
             .expect_err("incomplete manhole");
         assert_eq!(
             missing,
@@ -431,7 +597,7 @@ mod tests {
     #[test]
     fn the_key_follows_params_and_recipe_but_not_key_order_or_line_endings() {
         let r = repo_recipe();
-        let set = r.recipe.params_for_node(&manhole()).unwrap();
+        let set = r.recipe.params_for_node(&demo(), &manhole()).unwrap();
         let key = r.key(&set);
         assert_eq!(key.len(), KEY_HEX_LEN);
         assert_eq!(key, r.key(&set.clone()), "deterministic");
@@ -461,7 +627,7 @@ mod tests {
     #[test]
     fn given_params_must_be_data_params_and_complete() {
         let r = repo_recipe();
-        let full = r.recipe.params_for_node(&manhole()).unwrap();
+        let full = r.recipe.params_for_node(&demo(), &manhole()).unwrap();
         let data: ParamSet = full
             .iter()
             .filter(|(k, _)| !matches!(r.recipe.params[*k], ParamSource::Shape { .. }))
@@ -479,6 +645,83 @@ mod tests {
             r.recipe.params_from_given(&short).unwrap_err(),
             vec!["depth_m".to_string()]
         );
+    }
+
+    #[test]
+    fn every_manhole_of_the_chain_demo_has_the_data_to_bake() {
+        let r = repo_recipe();
+        let p = crate::demo_cadena::cadena();
+        let manholes: Vec<&Node> = p.nodes.iter().filter(|n| r.recipe.applies_to(n)).collect();
+        assert!(manholes.len() >= 10, "{}", manholes.len());
+        for n in manholes {
+            let set = r.recipe.params_for_node(&p, n).unwrap_or_else(|m| {
+                panic!("{}: missing {m:?}", n.code);
+            });
+            assert_eq!(set["wall_thickness_m"], Json::from(0.15), "{}", n.code);
+            assert_eq!(
+                n.datos["espesor_pared"].fuente,
+                crate::demo_cadena::DEMO_SOURCE,
+                "the thickness says it is demo data"
+            );
+        }
+    }
+
+    #[test]
+    fn a_datum_in_another_unit_is_not_taken_as_the_attribute() {
+        let r = repo_recipe();
+        let mut n = manhole();
+        n.attrs.remove("espesor_pared");
+        n.datos.insert(
+            "espesor_pared".into(),
+            crate::model::Dato {
+                valor: 150.0,
+                unidad: "mm".into(),
+                fuente: "Civil 3D".into(),
+            },
+        );
+        assert_eq!(
+            r.recipe.params_for_node(&demo(), &n).unwrap_err(),
+            vec!["espesor_pared".to_string()]
+        );
+    }
+
+    #[test]
+    fn pipes_become_anchors_with_their_invert_and_direction() {
+        let p = crate::demo_cadena::cadena();
+        let middle = p.node_by_code("PZ-302").expect("sewer manhole");
+        let c = node_connections(&p, middle);
+        assert!(c.unanchored.is_empty(), "{:?}", c.unanchored);
+        let names: Vec<&str> = c.anchored.iter().map(|a| a.name.as_str()).collect();
+        assert_eq!(names, vec!["entrada__CL-302", "salida__CL-303"]);
+        for a in &c.anchored {
+            // The demo pipes reach the manholes 1.5 m under the ground; the inverts are 1.75 m.
+            assert!((a.invert_rise_m - 0.25).abs() < 1e-6, "{a:?}");
+            assert_eq!(a.dn_mm, Some(200));
+        }
+        let outlet = &c.anchored[1];
+        // The next manhole is 22 m east and 4 m south.
+        let expected = (-4.0f64).atan2(22.0).to_degrees();
+        assert!((outlet.azimuth_deg - expected).abs() < 1e-6, "{outlet:?}");
+        let inlet = &c.anchored[0];
+        assert!(
+            (inlet.azimuth_deg - (expected + 180.0)).abs() < 1e-6,
+            "{inlet:?}"
+        );
+    }
+
+    #[test]
+    fn a_pipe_without_invert_has_no_anchor_and_says_why() {
+        let mut p = crate::demo_cadena::cadena();
+        let id = p.node_by_code("PZ-302").unwrap().id;
+        for l in p.links.iter_mut().filter(|l| l.to == id) {
+            l.sin_dato.push(COTA_SOLERA.into());
+        }
+        let c = node_connections(&p, p.node_by_code("PZ-302").unwrap());
+        assert_eq!(c.anchored.len(), 1);
+        assert_eq!(c.unanchored[0].link.as_deref(), Some("CL-302"));
+        let lonely = node_connections(&p, p.node_by_code("PZ-201").unwrap());
+        assert!(lonely.anchored.is_empty());
+        assert_eq!(lonely.unanchored[0].reason, "sin tramos conectados");
     }
 
     #[test]

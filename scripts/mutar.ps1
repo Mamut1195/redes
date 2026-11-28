@@ -366,6 +366,48 @@ $mutaciones = @(
         Reemplazo = 'for part in [lf_only(driver), canonical]'
         Prueba = "the_key_follows_params_and_recipe_but_not_key_order_or_line_endings"
         Que = "una clave de horneado que no cambia al editar la receta: la cache serviria piezas viejas (F17-02)"
+    },
+    @{
+        Nombre = "modelo-en-la-tapa"
+        Archivo = "crates/redes-app/src/modelos.rs"
+        Patron = 'cota_base_modelo\(m\.nodo, &m\.pieza\.anclas\) as f32,'
+        Reemplazo = 'm.nodo.z_rim as f32,'
+        Paquete = "redes-app"
+        Prueba = "a_piece_with_an_invert_anchor_sits_on_the_invert_minus_its_slab"
+        Que = "apoyar el pozo horneado en la cota de tapa en vez de en la solera menos la losa (F17-03)"
+    },
+    @{
+        Nombre = "pieza-doble-gpu"
+        Archivo = "crates/redes-core/src/scene3d.rs"
+        Patron = '!n\.deleted && !replaced\.contains\(&n\.id\)'
+        Reemplazo = '!n.deleted'
+        Prueba = "a_model_replaces_the_piece_of_its_object"
+        Que = "dibujar en el pase 3D el modelo y ademas la pieza parametrica (F17-03)"
+    },
+    @{
+        Nombre = "pieza-doble-pintor"
+        Archivo = "crates/redes-core/src/view.rs"
+        Patron = 'let model = models\.get\(&n\.id\);'
+        Reemplazo = 'let model = None::<&ModelPiece>; let _ = models;'
+        Prueba = "a_model_piece_is_drawn_instead_of_the_parametric_one"
+        Que = "dibujar sin pase 3D la pieza parametrica en vez del modelo horneado (F17-03)"
+    },
+    @{
+        Nombre = "extras-un-nodo"
+        Archivo = "crates/redes-core/src/biblioteca.rs"
+        Patron = 'let prefijo = format!\("nodo\.\{\}", nombre_o_indice\(nodo, indice\)\);'
+        Reemplazo = 'let prefijo = "nodo".to_string();'
+        Destino = "pozo_horneado"
+        Prueba = "the_pilot_is_one_closed_solid_per_part_with_its_own_material"
+        Que = "guardar los extras de un solo nodo: la tapa pisa el material del cuerpo (F17-03)"
+    },
+    @{
+        Nombre = "ancla-inventada"
+        Archivo = "crates/redes-core/src/bake.rs"
+        Patron = '\.ok_or_else\(\|\| "el tramo no trae cota de solera en este extremo"\.to_string\(\)\)\?;'
+        Reemplazo = '.unwrap_or(invert);'
+        Prueba = "a_pipe_without_invert_has_no_anchor_and_says_why"
+        Que = "inventar la cota de un tramo sin dato para ponerle ancla (F17-03)"
     }
 )
 

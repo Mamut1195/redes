@@ -74,7 +74,8 @@ impl Mesh {
         self.tris.len()
     }
 
-    fn tri(&mut self, a: [f32; 3], b: [f32; 3], c: [f32; 3], m: Material) {
+    /// Appends a triangle shaded with the light of every piece.
+    pub fn tri(&mut self, a: [f32; 3], b: [f32; 3], c: [f32; 3], m: Material) {
         let n = normal(a, b, c);
         let lambert = (n[0] * LUZ[0] + n[1] * LUZ[1] + n[2] * LUZ[2]).max(0.0);
         let ambiente = 0.50;

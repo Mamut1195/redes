@@ -59,6 +59,8 @@ pub struct PlacedModel {
     pub mesh: Arc<Vec<Vertice>>,
     /// Rotation about Z, in degrees.
     pub rotation_deg: f32,
+    /// The object whose parametric piece this model replaces (D14): that piece is not drawn.
+    pub replaces: Option<crate::model::ElementId>,
 }
 
 /// A contiguous slice of the index buffer and the vertices it addresses.
@@ -232,7 +234,9 @@ impl Scene {
         budget: u64,
     ) -> Scene {
         let mut b = Builder::default();
-        b.add_pieces(p, layers, pieces);
+        let replaced: std::collections::HashSet<_> =
+            models.iter().filter_map(|m| m.replaces).collect();
+        b.add_pieces(p, layers, pieces, &replaced);
         b.add_models(models);
         let fixed = crate::gltf::static_triangles(p, layers.terreno);
         let visible: Vec<bool> = fixed
@@ -351,10 +355,20 @@ struct Builder {
 }
 
 impl Builder {
-    fn add_pieces(&mut self, p: &Project, layers: Layers, pieces: &mut CachePiezas) {
+    fn add_pieces(
+        &mut self,
+        p: &Project,
+        layers: Layers,
+        pieces: &mut CachePiezas,
+        replaced: &std::collections::HashSet<crate::model::ElementId>,
+    ) {
         pieces.iniciar_pasada();
         let mut split_meshes: HashMap<usize, Arc<Vec<Part>>> = HashMap::new();
-        for n in p.nodes.iter().filter(|n| !n.deleted) {
+        for n in p
+            .nodes
+            .iter()
+            .filter(|n| !n.deleted && !replaced.contains(&n.id))
+        {
             if !family_visible(&n.family, layers) {
                 continue;
             }
@@ -934,6 +948,46 @@ mod tests {
             new <= 3,
             "{new} new prototypes for the same manhole 1.7 m deeper"
         );
+    }
+
+    #[test]
+    fn a_model_replaces_the_piece_of_its_object() {
+        let p = crate::demo::project();
+        let manhole = p
+            .nodes
+            .iter()
+            .find(|n| n.family == "saneamiento.pozo")
+            .unwrap();
+        let corner = |x: f32, y: f32| Vertice {
+            pos: [x, y, 0.0],
+            normal: [0.0, 0.0, 1.0],
+            color: [0.5, 0.5, 0.5],
+        };
+        let mesh = Arc::new(vec![corner(0.0, 0.0), corner(1.0, 0.0), corner(0.0, 1.0)]);
+        let objects = |replaces| {
+            let model = PlacedModel {
+                position: [0.0; 3],
+                mesh: Arc::clone(&mesh),
+                rotation_deg: 0.0,
+                replaces,
+            };
+            Scene::build(
+                &p,
+                Layers::default(),
+                &[model],
+                &mut CachePiezas::default(),
+                GPU_BUDGET,
+            )
+            .objects
+            .len()
+        };
+        let plain = build(&p, GPU_BUDGET).objects.len();
+        assert_eq!(
+            objects(None),
+            plain + 1,
+            "a model on its own adds an object"
+        );
+        assert_eq!(objects(Some(manhole.id)), plain, "no double drawing");
     }
 
     /// With every object at full detail, the instanced scene draws the same triangles as the
