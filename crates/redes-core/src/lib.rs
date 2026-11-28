@@ -43,6 +43,7 @@ pub mod scene3d;
 pub mod seleccion;
 pub mod terrain;
 pub mod topology;
+pub mod undo;
 pub mod validar;
 pub mod view;
 

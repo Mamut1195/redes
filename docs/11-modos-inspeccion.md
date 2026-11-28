@@ -93,8 +93,18 @@ observación y se corrige en la aplicación de origen. Prueba:
 
 ## 7. Deshacer
 
-`Deshacer` recupera el proyecto anterior de una pila de **20 pasos**. Cubre la revisión hecha
-en el inspector (observaciones) y el modelo de biblioteca elegido.
+`Deshacer` recupera el proyecto anterior de una pila de **20 pasos** y `Rehacer` vuelve a aplicar
+lo deshecho (un cambio nuevo vacía lo que se podía rehacer). Cubre la revisión hecha en el
+inspector (observar, cerrar una observación, aprobar) y el modelo de biblioteca elegido, con los
+extremos de tramo que ancla.
+
+Cada paso guarda **solo lo que cambió** (`redes_core::undo`, F14-08): los nodos, tramos y entradas
+del journal distintos, antes y después, y la revisión y el estado del proyecto. Deshacer deja el
+proyecto idéntico al anterior (misma serialización; el journal pierde la entrada, como antes) y
+rehace los índices si el paso cambió altas, códigos o extremos. Con 20k tramos, 20 pasos ocupan
+~15 kB en lugar de ~270 MB (`docs/21` §4.5).
+
+![Barra con Deshacer y Rehacer](img/barra-deshacer-rehacer.png)
 
 ## 8. Verificación
 

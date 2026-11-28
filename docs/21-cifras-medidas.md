@@ -156,30 +156,47 @@ El `.glb` de 20k tiene 20 201 nodos y 2 mallas (241 710 triángulos guardados, 1
 Banco (`tests/banco.rs`, release, fase «malla 3D»): la escena de 20k tramos se arma en ~85 ms
 (umbral CI 1 000 ms) y pide 22,9 MB, 1 188 bytes por objeto (tope 4 000; antes ~55 kB por pozo).
 
+### 4.5 Deshacer por diferencias (F14-08)
+
+Red en peine de `tests/comun` con 20k tramos (20 200 pozos, 20 099 tramos), 20 observaciones
+seguidas en pozos distintos (`tests/undo.rs`,
+`twenty_steps_on_20k_links_weigh_a_tiny_fraction_of_copies`, 27/11/2026). La memoria se estima
+con el tamaño en JSON de lo que guarda la pila: el proyecto entero antes, solo los objetos y
+entradas del journal que cambiaron ahora. La RAM real de una copia es mayor que su JSON (cadenas y
+mapas en el montón), así que la cifra de antes se queda corta.
+
+| Pila de 20 pasos | Antes (20 copias del `Project`) | Después (diferencias) |
+|---|---:|---:|
+| Red de 20k tramos | **270,1 MB** | **14,9 kB** (~750 B por paso: el pozo antes y después y la entrada del journal) |
+
+El paso guarda lo que cambió, no el tamaño de la red: el umbral de la prueba es < 1 % de las
+copias y < 4 kB por paso.
+
 ## 5. Pruebas
 
 | Suite | Pruebas |
 |---|---:|
-| Núcleo (`redes-core`, unitarias) | **157** |
+| Núcleo (`redes-core`, unitarias) | **155** |
 | Validación geométrica (`redes-core/tests/validar.rs`) | **13** |
 | Acta de revisión (`redes-core/tests/acta.rs`) | **5** |
 | Reimportar (`redes-core/tests/reimportar.rs`) | **8** |
-| Ingesta con fixtures (`tests/ingesta.rs`) | **32** |
+| Ingesta con fixtures (`tests/ingesta.rs`) | **33** |
 | Cotas de tramo (`tests/cotas_tramo.rs`) | **3** |
 | Presupuesto de frame (`tests/rendimiento.rs`) | **2** |
 | Índices del proyecto (`tests/indices.rs`) | **3** |
 | Banco 20k (`tests/banco.rs`, + 1 de 50k ignorado) | **1** |
 | Escena y selección (`tests/escena.rs`, + 1 banco ignorado) | **2** |
-| Interfaz (`redes-app`) | **25** |
+| Deshacer por diferencias (`tests/undo.rs`) | **6** |
+| Interfaz (`redes-app`) | **26** |
 | Contrato del CLI (`tests/contrato.rs`) | **19** |
 | Perfil del CLI (`tests/perfil.rs`) | **3** |
 | Validar del CLI (`tests/validar.rs`) | **4** |
 | Acta del CLI (`tests/acta.rs`) | **2** |
 | Reimportar del CLI (`tests/reimportar.rs`) | **2** |
 | Doctest | **1** |
-| **Total** | **282** |
+| **Total** | **288** |
 
-Más el arnés de mutación: `powershell -File scripts/mutar.ps1` rompe treinta y seis comportamientos (cinco
+Más el arnés de mutación: `powershell -File scripts/mutar.ps1` rompe cuarenta comportamientos (cinco
 de vista, tres de `redes validar`, el estado derivado de las observaciones y dos del acta: escapar el
 HTML y no sacar columnas de autor sin registrarlo, D2; y tres de reimportar: reiniciar el aprobado
 cuyo diseño cambió, conservar las observaciones y no dar de baja en silencio; y abrir un `.redes` de otra versión sin
@@ -187,7 +204,9 @@ migrar, F15-01, D10; y olvidar el nodo final en el índice de tramos por nodo, F
 al mover la cámara, F14-02, y volver a subirla en cada frame, F14-03; una escena cuadrática en el banco, F14-10;
 dos de la caché de piezas y proxies, F14-06; y siete de la escena y la selección, F14-04/07: recortar de más,
 no recortar, esfera de pozo corta, orden de negativos, bloques de hilos desordenados, rejilla de una celda y
-rejilla que pierde tramos; y cinco de la escena 3D instanciada, F14-05: no compartir prototipos, olvidar la escala en Z, LOD fijo, sin recorte y sin tope; y dos del `.glb`: una malla por nodo y el largo truncado a `u32`) y exige que la suite falle.
+rejilla que pierde tramos; y cinco de la escena 3D instanciada, F14-05: no compartir prototipos, olvidar la escala en Z, LOD fijo, sin recorte y sin tope; y dos del `.glb`: una malla por nodo y el largo truncado a `u32`; y cuatro del deshacer, F14-08: guardar cada objeto
+en cada paso, no devolver la revisión, no rehacer los índices tras un alta y no registrar la
+revisión de la app) y exige que la suite falle.
 
 ## 6. Qué cifras de los informes anteriores son falsas
 

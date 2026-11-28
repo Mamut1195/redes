@@ -121,8 +121,8 @@ struct State {
     drag_last: [f32; 2],
     /// Modos de detalle: corte, explosión y foco.
     opts: Opciones,
-    /// Pila de deshacer de la revisión y del modelo elegido (máx. 20).
-    historial: Vec<Project>,
+    /// Undo/redo of the review and of the assigned model: 20 steps, by differences (F14-08).
+    historial: redes_core::undo::History,
     /// Aviso breve en la barra de estado.
     aviso: Option<String>,
     /// Pase 3D con profundidad activo (fase 5).
@@ -215,7 +215,7 @@ impl State {
             dirty: false,
             drag_last: [0.0, 0.0],
             opts: Opciones::default(),
-            historial: Vec::new(),
+            historial: Default::default(),
             gpu3d: gpu3d::activo(),
             aviso: error_carga,
             geom: Arc::new(Mutex::new(gpu3d::Geometry::default())),
@@ -349,12 +349,11 @@ impl State {
         }
     }
 
-    /// Empuja una copia del proyecto a la pila de deshacer.
-    fn recordar(&mut self) {
-        self.historial.push((*self.project).clone());
-        if self.historial.len() > 20 {
-            self.historial.remove(0);
-        }
+    /// Replaces the project with an edited copy and records the difference for undo.
+    fn commit_edit(&mut self, edited: Project) {
+        self.historial.record(&self.project, &edited);
+        self.project = Arc::new(edited);
+        self.dirty = true;
     }
 
     /// Enfoca el objeto seleccionado: cámara encuadrada y modo foco.
@@ -537,9 +536,7 @@ impl State {
         // Los arcos que tocan el objeto entran por el puerto del modelo, si lo declara.
         let anclados = redes_core::biblioteca::anclar_conexiones(&mut nuevo, &code, &pieza.anclas);
         nuevo.commit("ui.modelo");
-        self.recordar();
-        self.project = std::sync::Arc::new(nuevo);
-        self.dirty = true;
+        self.commit_edit(nuevo);
         self.aviso = Some(if conservados.is_empty() {
             if anclados > 0 {
                 format!("Modelo {modelo} aplicado a {code}; {anclados} extremos anclados")
@@ -584,14 +581,27 @@ impl State {
     }
 
     fn deshacer(&mut self) {
-        if let Some(prev) = self.historial.pop() {
-            self.project = Arc::new(prev);
-            self.dirty = true;
-            self.aviso = Some("Deshecho".into());
-            self.rebuild();
+        // In place: the step restores only what changed, and its commit moves `revision`, so
+        // `ClaveMalla` still sees the change.
+        if self.historial.undo(Arc::make_mut(&mut self.project)) {
+            self.after_history_step("Deshecho");
         } else {
             self.aviso = Some("Nada que deshacer".into());
         }
+    }
+
+    fn rehacer(&mut self) {
+        if self.historial.redo(Arc::make_mut(&mut self.project)) {
+            self.after_history_step("Rehecho");
+        } else {
+            self.aviso = Some("Nada que rehacer".into());
+        }
+    }
+
+    fn after_history_step(&mut self, notice: &str) {
+        self.dirty = true;
+        self.aviso = Some(notice.into());
+        self.rebuild();
     }
 
     fn fit(&mut self) {
@@ -1217,6 +1227,11 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
             button("Deshacer")
                 .key("btn-deshacer")
                 .on_press(|s: &mut State| s.deshacer()),
+        )
+        .child(
+            button("Rehacer")
+                .key("btn-rehacer")
+                .on_press(|s: &mut State| s.rehacer()),
         );
 
     // --- barra de estado ---

@@ -158,8 +158,9 @@ capacidades, no por nombres.
 - Índices (F14-01, `redes_core::indice`): `node`/`link`/`node_by_code`/`link_by_code` en O(1) y
   `tramos_de(nodo)` en O(grado). Guardan posiciones en `nodes`/`links`, **borrados incluidos**
   (una baja no los toca: se filtra al leer). No se serializan: `project_io::load` y la reimportación
-  llaman a `reindexar()`; las altas (`add_node`/`add_link`) los mantienen y un clon (deshacer) los
-  copia válidos. Si `nodes`/`links` se cambian a mano, el índice se sabe desfasado (cuenta y último
+  llaman a `reindexar()`; las altas (`add_node`/`add_link`) los mantienen, un clon los copia
+  válidos y el deshacer por diferencias (`redes_core::undo`, F14-08) los rehace si el paso cambió
+  altas, códigos o extremos. Si `nodes`/`links` se cambian a mano, el índice se sabe desfasado (cuenta y último
   id) y las búsquedas vuelven al recorrido lineal hasta la siguiente alta, baja o `reindexar()`.
   Reescribir en su sitio el id, el código o los extremos de un objeto exige `reindexar()` (F15-02
   cerrará los campos).

@@ -86,7 +86,7 @@ impl EstadoProyecto {
 }
 
 /// Un número que vino de otra aplicación. Se muestra tal cual, con su unidad y su fuente.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Dato {
     pub valor: f64,
     pub unidad: String,
@@ -104,7 +104,7 @@ pub struct Fuente {
 }
 
 /// Un nodo del grafo (pozo, cámara, tanque, descarga, captación, válvula, hidrante).
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Node {
     pub id: ElementId,
     /// Clave de familia, `dominio.familia`.
@@ -217,7 +217,7 @@ impl Node {
 }
 
 /// Un arco del grafo (tubería, canal, acometida, sifón).
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Link {
     pub id: ElementId,
     pub family: String,
@@ -327,7 +327,7 @@ impl Link {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct JournalEntry {
     pub revision: u64,
     pub command: String,

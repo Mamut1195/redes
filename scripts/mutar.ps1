@@ -322,6 +322,42 @@ $mutaciones = @(
         Reemplazo = '> r'
         Prueba = "la_rejilla_elige_lo_mismo_que_el_recorrido_lineal"
         Que = "olvidar tramos en las celdas que rozan (F14-07)"
+    },
+    @{
+        Nombre = "deshacer-copia-todo"
+        Archivo = "crates/redes-core/src/undo.rs"
+        Patron = 'if before != after \{'
+        Reemplazo = 'if true {'
+        Destino = "undo"
+        Prueba = "twenty_steps_on_20k_links_weigh_a_tiny_fraction_of_copies"
+        Que = "guardar cada objeto en cada paso, como las copias de antes (F14-08)"
+    },
+    @{
+        Nombre = "deshacer-contadores"
+        Archivo = "crates/redes-core/src/undo.rs"
+        Patron = 'Side::Before => self\.before\.write\(p\),'
+        Reemplazo = 'Side::Before => self.after.write(p),'
+        Destino = "undo"
+        Prueba = "undo_and_redo_restore_every_kind_of_edit_exactly"
+        Que = "deshacer sin devolver la revision del proyecto (F14-08)"
+    },
+    @{
+        Nombre = "deshacer-sin-reindexar"
+        Archivo = "crates/redes-core/src/undo.rs"
+        Patron = 'if self\.reindex \{'
+        Reemplazo = 'if false {'
+        Destino = "undo"
+        Prueba = "undoing_an_added_node_keeps_the_indices_current"
+        Que = "deshacer un alta sin rehacer los indices (F14-08)"
+    },
+    @{
+        Nombre = "deshacer-sin-registrar"
+        Archivo = "crates/redes-app/src/main.rs"
+        Patron = 'self\.historial\.record\(&self\.project, &edited\);'
+        Reemplazo = ''
+        Paquete = "redes-app"
+        Prueba = "undo_and_redo_buttons_restore_each_review_step"
+        Que = "no llevar la revision de la app a la pila de deshacer (F14-08)"
     }
 )
 

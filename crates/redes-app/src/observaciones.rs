@@ -4,8 +4,6 @@
 //! aquí solo se dibuja y se llama al dominio. Cada acción va al historial de deshacer y marca el
 //! documento como sucio.
 
-use std::sync::Arc;
-
 use redes_core::revision::{ErrorRevision, Observacion};
 use rune::tok::type_;
 use rune::{El, TextEdit, col, row, text, text_input};
@@ -25,9 +23,7 @@ impl State {
         let mut p = (*self.project).clone();
         match op(&mut p) {
             Ok(()) => {
-                self.recordar();
-                self.project = Arc::new(p);
-                self.dirty = true;
+                self.commit_edit(p);
                 self.aviso = None;
                 self.rebuild();
             }
@@ -196,5 +192,50 @@ mod tests {
         let n = rt.state.project.node_by_code("PZ-001").unwrap();
         assert_eq!(n.estado, EstadoObjeto::Aprobado);
         assert!(rt.state.dirty);
+    }
+
+    fn serialized(rt: &Runtime<State>) -> String {
+        serde_json::to_string(&*rt.state.project).unwrap()
+    }
+
+    /// Undo and Redo walk back and forth through observe, close and approve, leaving the project
+    /// exactly as it was at each step (F14-08).
+    #[test]
+    fn undo_and_redo_buttons_restore_each_review_step() {
+        let mut st = State::new();
+        st.sel = Some("PZ-001".to_string());
+        st.rebuild();
+        let mut rt = Runtime::new(
+            st,
+            crate::view,
+            (1280.0, 800.0),
+            Env {
+                system_dark: true,
+                scale: 1.0,
+            },
+        );
+        rt.frame(0.0);
+        let mut states = vec![serialized(&rt)];
+        for button in ["btn-anadir-obs", "btn-cerrar-obs-1", "btn-aprobar"] {
+            pulsa(&mut rt, button);
+            states.push(serialized(&rt));
+        }
+        assert_ne!(states[2], states[3], "approve changed the project");
+
+        for expected in states[..3].iter().rev() {
+            pulsa(&mut rt, "btn-deshacer");
+            assert_eq!(&serialized(&rt), expected);
+        }
+        pulsa(&mut rt, "btn-deshacer");
+        assert_eq!(rt.state.aviso.as_deref(), Some("Nada que deshacer"));
+
+        for expected in &states[1..] {
+            pulsa(&mut rt, "btn-rehacer");
+            assert_eq!(&serialized(&rt), expected);
+        }
+        pulsa(&mut rt, "btn-rehacer");
+        assert_eq!(rt.state.aviso.as_deref(), Some("Nada que rehacer"));
+        let n = rt.state.project.node_by_code("PZ-001").unwrap();
+        assert_eq!(n.estado, EstadoObjeto::Aprobado);
     }
 }

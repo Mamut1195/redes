@@ -51,7 +51,10 @@ fn ms(t0: Instant) -> f64 {
 
 /// Proyecto con la red sintética de `tramos` tramos ya importada.
 pub fn proyecto(tramos: usize) -> Project {
-    let ruta = temporal(&format!("plan-p-{tramos}.json"));
+    // Tests of one binary run in parallel: each call needs its own file.
+    static CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let call = CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let ruta = temporal(&format!("plan-p-{tramos}-{call}.json"));
     std::fs::write(&ruta, plan_sintetico(tramos)).unwrap();
     let mut p = Project::new("Sintetica", "EPSG:32717");
     redes_core::ingest::import_plan(&mut p, &ruta).expect("importa");

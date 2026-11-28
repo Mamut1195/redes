@@ -54,7 +54,7 @@ simple / completo). Decisiones y comparación de motores en
 | **Corte** | plano vertical por el centro: recorta la geometría y marca la arista en amarillo |
 | **Explosión** | separa solera, cono y tapa en bandas |
 | **Salir** | vuelve al encuadre general |
-| **Deshacer** | revierte el último cambio de revisión o de modelo asignado |
+| **Deshacer / Rehacer** | revierte (o vuelve a aplicar) el último cambio de revisión o de modelo asignado; 20 pasos que guardan solo lo que cambió |
 
 Además: **etiquetas** con código y subtipo sobre cada pieza visible, **leyenda** por forma y
 texto (no solo color) e inspector de **solo lectura**: la app no edita el diseño (D12).
