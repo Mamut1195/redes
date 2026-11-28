@@ -245,6 +245,51 @@ edita el diseño). Cualquier ítem que pida editar parámetros desde la app qued
 
 ---
 
+## Orden de fases vigente (27/11/2026)
+
+Un solo frente abierto a la vez; no se abre una fase sin cerrar la anterior.
+
+1. ~~F14 — Rendimiento~~ (cerrada).
+2. **F17 — Familias paramétricas en Blender** (D14). Va **antes** de F15: los IDs de F15/F16 se conservan porque ya están en Linear.
+3. **F15 — Arquitectura y mantenibilidad**, ampliada con la fachada única y el canal de comandos (ver F15-13…F15-15).
+4. **F16 — Release v1.**
+
+Frentes transversales, revisados al cerrar cada ticket:
+
+| Frente | Qué se exige |
+|---|---|
+| Ordenar el código | sin código muerto; código que se explica solo y en inglés (D13) |
+| Rendimiento | el banco del CI no empeora; cifras nuevas en docs/21 |
+| Codegraph y Archify | `codegraph sync .` tras cada commit; diagrama de arquitectura y análisis de acoplamiento rehechos al cerrar cada fase (`out/auditoria/`) |
+| Guía de agentes | `CLAUDE.md` y `AGENTS.md` al día con cada cambio de reglas o comandos |
+| Flujos deterministas | cada flujo (ingesta, revisión, exportación, cierre de ticket, integración de subagentes) son pasos fijos y verificables (comandos, scripts, CI), no criterio del agente |
+| Inventario de features | docs/02 y este backlog dicen qué está listo, parcial o planeado; en la app faltan buscar por código, filtrar por estado/familia y la capa `nodos` |
+
+---
+
+## F17 — Familias paramétricas en Blender (D14) — **siguiente**
+
+Blender es la **única fuente visual** de las piezas; la geometría de `parts.rs`/`parts_cadena.rs`
+queda como respaldo cuando falta modelo. Los datos (DN, cotas, estado) siguen saliendo del modelo de
+datos (docs/17 §7). Cada familia es **paramétrica en todo** lo que la define (diámetros, alturas,
+espesores, material, longitudes, ángulos, juntas, tapas), no un catálogo de variantes fijas. Las
+modelan agentes con Blender 5.1 sin ventana; el usuario aprueba cada pieza por capturas.
+
+| ID | P | Ticket | Alcance | Aceptación | Días |
+|---|---|---|---|---|---|
+| F17-01 | P0 | **Evaluar MCP de Blender frente a `bpy` sin ventana** | fiabilidad con Geometry Nodes, uso sin intervención por subagentes, reproducible en CI | informe con recomendación en docs/17 y decisión en docs/22 | 0,5 |
+| F17-02 | P0 | **Cómo llegan los parámetros a la geometría** | hornear bajo demanda (CLI → Blender → caché `.glb` por parámetros) o exportar la receta de la familia y reconstruirla en el núcleo; la app no depende de Blender en ejecución salvo decisión explícita | decisión D# con prototipo medido | 1,5 |
+| F17-03 | P0 | **Pieza piloto: pozo de inspección paramétrico** | cuerpo, cono, escalones, tapa, base y espesores como entradas; anclas por entrada/salida; manifiesto | capturas iso, corte y foco aprobadas por el usuario; prueba de contrato del `.glb` | 2 |
+| F17-04 | P1 | **Tubería con campana y espiga, y juntas** | DN, espesor, material y longitud | ídem | 1,5 |
+| F17-05 | P1 | **Accesorios**: codos, tees, reducciones, válvulas, hidrantes | ángulos, DN de cada boca, material | ídem | 3 |
+| F17-06 | P1 | **Captación**: bocatoma, desarenador, conducción | dimensiones de obra como entradas | ídem | 3 |
+| F17-07 | P1 | **Planta de tratamiento**: unidades de la cadena (docs/20) | por unidad, dimensiones y espesores de muro | ídem | 4 |
+| F17-08 | P0 | **Demo de la cadena completa solo con piezas de Blender** | `redes proyecto cadena` dibujado con la biblioteca; recorrido de capturas (iso, cortes verticales, perfil, foco en la planta) | el usuario aprueba el recorrido; banco sin regresión | 2 |
+
+**Total F17: 17,5 días.**
+
+---
+
 ## F15 — Arquitectura y mantenibilidad (P1/P2)
 
 | ID | P | Ticket | Alcance | Aceptación | Días |
@@ -262,7 +307,11 @@ edita el diseño). Cualquier ítem que pida editar parámetros desde la app qued
 | F15-11 · [MAM-1125](https://linear.app/mamutsystems/issue/MAM-1125) | P1 | **Documentos desactualizados** | `docs/01` §4.2 «17 familias» (son 46); `redes-core/Cargo.toml` dice «hidráulica y movimiento de tierras» (contra D4); `docs/03` dice que SWMM/EPANET no traen planta; `docs/18` y `docs/23` desfasados sobre F6-05; decidir si el peso por densidad (`cantidades.rs:24`) cabe en D4 | docs coherentes entre sí y con el código | 0,5 |
 | F15-12 · [MAM-1126](https://linear.app/mamutsystems/issue/MAM-1126) | P2 | **Aislar Rune** | capa fina `ui_port`; `gpu3d.rs` acoplado a internos; registrar el commit de origen en `docs/00` | actualizar Rune toca un solo módulo | 2 |
 
-**Total F15: 24 días.**
+| F15-13 | P1 | **Fachada única `redes_core::api`** (auditoría del 27/11/2026) | hoy CLI y app entran a 21 módulos por ~80 rutas y el `prelude` no se usa. Reexportar desde `api`, migrar CLI y app, cerrar el resto a `pub(crate)` | prueba en CI que falla si algo fuera de core importa `redes_core::` sin pasar por `api` | 2 |
+| F15-14 | P1 | **Un solo canal de cambios: `Comando` → `aplicar` → `Evento`** | toda mutación del proyecto pasa por `api::aplicar(&mut Project, Command)`; las lecturas por `api::consultar`; el journal guarda el comando completo; la CLI deriva el Envelope del resultado | `Project` no se muta fuera de `servicios`; deshacer y journal salen del comando | 4 |
+| F15-15 | P1 | **Capas sin ciclos** | ciclos `model` ↔ `revision`/`validar`/`project_io`/`indice` y `families` ↔ `families_extra`: sacar `SCHEMA_VERSION`, `ReglasValidacion` y `Observacion` a una capa `base` | Codegraph y Archify sin ciclos entre capas | 2 |
+
+**Total F15: 32 días.**
 
 ---
 

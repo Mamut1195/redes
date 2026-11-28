@@ -43,6 +43,7 @@
   - doc actualizado en el mismo commit;
   - captura `--snap` si toca la UI.
 - Decisiones en `docs/22-decisiones.md` (D# decididas, A# abiertas): se editan en el mismo commit que el código.
+- Orden de fases y frentes transversales (ordenar código, rendimiento, Codegraph/Archify, guía de agentes, flujos deterministas, inventario de features): `docs/18-backlog.md` §Orden de fases vigente. Revísalo al cerrar cada ticket. `AGENTS.md` resume esta guía para otros agentes: mantenlos coherentes.
 - Estado y traspaso en `docs/23-estado-y-pendientes.md`; backlog por fase en `docs/18-backlog.md`; cifras vigentes en `docs/21-cifras-medidas.md`. Actualízalos al cerrar trabajo.
 - Idioma del código: **inglés** para el código nuevo (identificadores, comentarios, nombres de pruebas), porque el repo es MIT y público. La interfaz, los mensajes, los comandos de la CLI, los códigos `E_*` y los docs siguen en español (contrato con el usuario). Migración gradual: al tocar un módulo, renombra en inglés lo que toques; no hagas renombrados masivos fuera de F15.
 - Código que se explica solo: nombres que cuenten la historia (funciones cortas con verbo, tipos con el concepto del dominio) en vez de comentarios que repiten lo que hace el código. Un comentario solo dice el *porqué* que el código no puede decir (una decisión D#, un bug ya corregido, un límite externo). Si necesitas comentar un bloque, extráelo a una función con ese nombre. Al tocar un archivo, borra los comentarios que sobran.

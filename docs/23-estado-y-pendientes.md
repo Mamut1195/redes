@@ -35,7 +35,8 @@ y en Linear (MAM-1085…MAM-1139). Se trabaja **por fases en orden**; no se abre
 | F12 — Corrección de dominio | **cerrada** (F12-01…F12-15). Ingesta por skill guiada (D5) |
 | F13 — Herramientas del revisor | **cerrada** (F13-01…F13-06): `redes validar`, perfil longitudinal, observaciones con historial, `redes acta`, `proyecto diff` y `importar reimportar` |
 | F14 — Rendimiento con redes reales | **cerrada** (F14-01…F14-10). F14-04 aceptada por el usuario con ×2,7 a 20k (×3,7 a 50k, ×4,3 contando el perfil) en lugar del ×3 estricto; F14-08 (deshacer por diferencias) cerró la fase |
-| F15 — Arquitectura | **siguiente**; **F15-01 hecha por adelantado** (solo la versión vigente del `.redes`, D10, MAM-1115). Falta agregado, catálogo como datos y errores tipados |
+| F17 — Familias paramétricas en Blender | **siguiente** (D14): Blender es la única fuente visual; familias paramétricas en todo; pieza piloto = pozo de inspección; termina con el demo de la cadena completa dibujado solo con piezas de Blender. Va antes de F15 (orden en docs/18 §Orden de fases vigente) |
+| F15 — Arquitectura | después de F17, ampliada con la fachada `api`, el canal único de comandos y las capas sin ciclos (F15-13…15); **F15-01 hecha por adelantado** (solo la versión vigente del `.redes`, D10, MAM-1115). Falta agregado, catálogo como datos y errores tipados |
 | F16 — Release v1 | pendiente (F16-01 ya cerrada por F12-09) |
 
 Decisiones abiertas del usuario: A1 (vertedero), A2 (pozo profundo), sumideros de la topología
@@ -49,7 +50,7 @@ Pendientes menores conocidos de F13 (no bloquean F14):
 - Cada reimportación añade una entrada a `fuentes` aunque la entrega sea idéntica.
 - La escena `--snap` no permite seleccionar un tramo (no se puede capturar el inspector con un objeto elegido).
 
-Pendientes conocidos de F14 (fase cerrada; no bloquean F15):
+Pendientes conocidos de F14 (fase cerrada; no bloquean F17):
 
 - En la cadena completa (`redes proyecto cadena`), el último tramo de alcantarillado hacia la descarga
   queda fuera de la superficie del terreno. Sin revisar si es el dato del demo o el dibujo.
