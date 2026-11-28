@@ -320,6 +320,10 @@ fabricantes); y qué cambia en la receta de Blender.
 
 | ID | P | Ticket | Alcance | Aceptación | Días |
 |---|---|---|---|---|---|
+| F20-00a | P0 | **Contrato `redes.catalogo/1`** (D22) | fabricante, línea, norma, material; por DN y clase: diámetros exterior e interior, espesor, SDR/PN, longitud, junta, deflexión admisible por junta, radio mínimo de curvatura; accesorios disponibles con sus ángulos, bocas y cotas de inserción; `redes importar catalogo` valida sin inventar y el proyecto guarda qué catálogo usa cada red | catálogo de ejemplo PVC y PEAD validado; uno incompleto falla diciendo qué falta | 2 |
+| F20-00b | P0 | **Skill `redes-catalogo`: leer especificaciones del fabricante** | cómo leer fichas técnicas (PDF, tablas, web), qué columnas buscar, unidades y trampas (DN frente a DE, clases, series), qué preguntar al ingeniero; ejemplos con un catálogo de PVC y uno de PEAD | un agente traduce una ficha real y la CLI la valida | 1,5 |
+| F20-00c | P0 | **Recetas que leen el catálogo** | los parámetros de tubo y accesorios salen de la entrada del catálogo con su fuente (catálogo, página/tabla); las tablas de forma de F17-04/05 quedan solo como «sin especificación de fabricante», rotuladas así en el inspector y el `.blend` | el mismo tubo con dos catálogos da dos piezas con sus medidas; sin catálogo sale el rótulo | 2 |
+| F20-00d | P1 | **Trazado flexible o rígido** | sistema flexible (PEAD): el tubo se curva con el radio del catálogo y no lleva codo; rígido (PVC, hierro dúctil, hormigón): accesorio del catálogo o deflexión de la junta; `validar` informa un cambio de dirección que el catálogo no cubre (D6, umbrales del usuario) | fixture PEAD con curva sin codos; fixture PVC con giro de 30° sin accesorio → hallazgo | 2,5 |
 | F20-01 | P1 | **Método y plantilla de la ficha** | plantilla, criterios para elegir y citar fuentes, cómo se enlaza la ficha con el registro de familias (`families*.rs`), la skill de ingesta y la receta | plantilla aprobada por el usuario con una ficha de ejemplo (pozo de inspección) | 1 |
 | F20-02 | P1 | **Alcantarillado** | pozos de inspección y de caída, cámaras, sumideros, conexiones domiciliarias, descargas | fichas aprobadas; recetas mejoradas con capturas aprobadas | 3 |
 | F20-03 | P1 | **Tuberías y juntas por material** | PVC, PEAD, hormigón, hierro dúctil, acero, PRFV: campana y espiga, unión mecánica, termofusión, bridas; longitudes comerciales | ídem | 2 |
@@ -333,7 +337,7 @@ fabricantes); y qué cambia en la receta de Blender.
 La misma tabla de parámetros se ve en el `.blend` de revisión (propiedades agrupadas en «dato», «se
 adapta al sitio» y «forma») y en el inspector, para que cualquiera sepa qué puede cambiar y qué no.
 
-**Total F20: 21,5 días.** Cada ficha la aprueba el usuario antes de cambiar la receta.
+**Total F20: 29,5 días.** Empieza por F20-00a…d (catálogo del fabricante, D22): el resto de fichas se apoya en él. Cada ficha la aprueba el usuario antes de cambiar la receta.
 
 ---
 
