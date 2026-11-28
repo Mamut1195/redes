@@ -114,6 +114,7 @@ pub fn catalogo() -> Project {
             cota_solera_fin: None,
             deleted: false,
             sin_dato: Vec::new(),
+            modelo: None,
         })
         .ok();
     }
@@ -353,6 +354,7 @@ pub fn catalogo() -> Project {
             cota_solera_fin: None,
             deleted: false,
             sin_dato: Vec::new(),
+            modelo: None,
         })
         .ok();
     }
@@ -520,6 +522,7 @@ pub fn catalogo_completo() -> Project {
                 cota_solera_fin: None,
                 deleted: false,
                 sin_dato: Vec::new(),
+                modelo: None,
             };
             let _ = p.add_link(arco);
         }

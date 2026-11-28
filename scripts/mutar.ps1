@@ -459,6 +459,30 @@ $mutaciones = @(
         Reemplazo = 'let _ = &self.module_bytes;'
         Prueba = "a_module_the_recipe_imports_is_part_of_the_key"
         Que = "dejar plant_units.py fuera de la clave: tocarlo no rehornearia las unidades (F17-07)"
+    },
+    @{
+        Nombre = "tubo-sin-recorte-en-ancla"
+        Archivo = "crates/redes-core/src/pipe_layout.rs"
+        Patron = '\.is_some_and\(\|\(_, code\)\| code == link\.code\)'
+        Reemplazo = '.is_some_and(|_| false)'
+        Prueba = "the_axis_stops_at_the_anchor_of_a_baked_node"
+        Que = "dibujar el tubo hasta el borde de la pieza de respaldo y no hasta el ancla del pozo horneado (F17-04)"
+    },
+    @{
+        Nombre = "tubo-campana-en-el-pozo"
+        Archivo = "crates/redes-core/src/pipe_layout.rs"
+        Patron = 'out\.push\(if k \+ 1 == count \{'
+        Reemplazo = 'out.push(if false {'
+        Prueba = "whole_segments_then_one_cut_barrel"
+        Que = "terminar el tramo con una campana entera dentro del pozo en vez del corte (F17-04)"
+    },
+    @{
+        Nombre = "tubo-sin-inclinar"
+        Archivo = "crates/redes-core/src/scene3d.rs"
+        Patron = 'let \(x, z\) = \(x \* cp - z \* sp, x \* sp \+ z \* cp\);'
+        Reemplazo = 'let (x, z) = (x, z); let _ = (cp, sp);'
+        Prueba = "baked_pipe_segments_are_instanced_on_their_sloped_axis"
+        Que = "colocar los tramos de tubo horneados horizontales en un tramo con pendiente (F17-04)"
     }
 )
 

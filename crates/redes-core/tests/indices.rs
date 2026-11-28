@@ -73,6 +73,7 @@ fn colector(codigo: &str, from: ElementId, to: ElementId) -> Link {
         cota_solera_fin: None,
         deleted: false,
         sin_dato: Vec::new(),
+        modelo: None,
     }
 }
 

@@ -34,6 +34,7 @@ struct In {
     @location(3) offset: vec3<f32>,
     @location(4) scale: vec3<f32>,
     @location(5) rotation: vec2<f32>,
+    @location(6) pitch: vec2<f32>,
 };
 
 struct Out {
@@ -45,11 +46,15 @@ fn rotate_z(v: vec3<f32>, r: vec2<f32>) -> vec3<f32> {
     return vec3<f32>(v.x * r.x - v.y * r.y, v.x * r.y + v.y * r.x, v.z);
 }
 
+fn tilt_y(v: vec3<f32>, p: vec2<f32>) -> vec3<f32> {
+    return vec3<f32>(v.x * p.x - v.z * p.y, v.y, v.x * p.y + v.z * p.x);
+}
+
 @vertex
 fn vs(i: In) -> Out {
     var o: Out;
-    let world = rotate_z(i.pos * i.scale, i.rotation) + i.offset;
-    let normal = rotate_z(i.nrm / i.scale, i.rotation);
+    let world = rotate_z(tilt_y(i.pos * i.scale, i.pitch), i.rotation) + i.offset;
+    let normal = rotate_z(tilt_y(i.nrm / i.scale, i.pitch), i.rotation);
     o.clip = u.vp * vec4<f32>(world, 1.0);
     let l = abs(dot(normalize(normal), normalize(u.light.xyz)));
     o.col = i.col * (0.78 + 0.30 * l);
@@ -97,7 +102,7 @@ impl Default for Geometry {
 impl Geometry {
     #[cfg(test)]
     pub fn load(&mut self, p: &redes_core::model::Project, layers: redes_core::view::Layers) {
-        self.load_with_models(p, layers, &[], &mut Default::default());
+        self.load_with_models(p, layers, &[], &Default::default(), &mut Default::default());
     }
 
     /// Solo la cámara: matriz con la exageración vertical alrededor de la cota del objetivo y el
@@ -119,6 +124,7 @@ impl Geometry {
         p: &redes_core::model::Project,
         layers: redes_core::view::Layers,
         models: &[crate::modelos::Instancia],
+        pipes: &redes_core::pipe_layout::PipePieces,
         pieces: &mut redes_core::mallas::CachePiezas,
     ) {
         let placed: Vec<scene3d::PlacedModel> = models
@@ -130,7 +136,14 @@ impl Geometry {
                 replaces: Some(m.nodo),
             })
             .collect();
-        self.scene = Arc::new(Scene::build(p, layers, &placed, pieces, self.budget));
+        self.scene = Arc::new(Scene::build_with_pipes(
+            p,
+            layers,
+            &placed,
+            pipes,
+            pieces,
+            self.budget,
+        ));
         // Nunca vuelve a 0: el compositor usa 0 para «búfer vacío, hay que subir».
         self.generation = self.generation.wrapping_add(1).max(1);
         self.replan();
@@ -204,8 +217,12 @@ pub fn device_budget(limit: u64) -> u64 {
 fn vertex_layouts() -> [wgpu::VertexBufferLayout<'static>; 2] {
     const VERTEX: [wgpu::VertexAttribute; 3] =
         wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x3];
-    const INSTANCE: [wgpu::VertexAttribute; 3] =
-        wgpu::vertex_attr_array![3 => Float32x3, 4 => Float32x3, 5 => Float32x2];
+    const INSTANCE: [wgpu::VertexAttribute; 4] = wgpu::vertex_attr_array![
+        3 => Float32x3,
+        4 => Float32x3,
+        5 => Float32x2,
+        6 => Float32x2
+    ];
     [
         wgpu::VertexBufferLayout {
             array_stride: VERTEX_BYTES as u64,
@@ -618,15 +635,15 @@ mod tests {
         let p = redes_core::demo_city::ciudad();
         let mut pieces = redes_core::mallas::CachePiezas::default();
         let mut g = Geometry::default();
-        g.load_with_models(&p, Layers::default(), &[], &mut pieces);
+        g.load_with_models(&p, Layers::default(), &[], &Default::default(), &mut pieces);
         let first = pieces.generadas();
         assert!(first > 0, "the first rebuild generates the pieces");
         let layers = Layers {
             edificios: false,
             ..Default::default()
         };
-        g.load_with_models(&p, layers, &[], &mut pieces);
-        g.load_with_models(&p, Layers::default(), &[], &mut pieces);
+        g.load_with_models(&p, layers, &[], &Default::default(), &mut pieces);
+        g.load_with_models(&p, Layers::default(), &[], &Default::default(), &mut pieces);
         assert_eq!(pieces.generadas(), first, "0 new meshes");
         assert!(!g.scene.is_empty());
     }

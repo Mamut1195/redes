@@ -876,6 +876,33 @@ pub struct Normalizacion {
 
 /// Extrae los triángulos de un `.glb` aplicando la transformación de los nodos.
 pub fn triangulos_de_glb(bytes: &[u8]) -> Result<Vec<TrianguloLeido>, String> {
+    let mut out = Vec::new();
+    visit_glb_triangles(bytes, |_, t| out.push(t))?;
+    Ok(out)
+}
+
+/// The triangles of a `.glb` grouped by part: the `redes_parte` extra of their node (what the
+/// recipes write), or the node name. A baked pipe is drawn by parts (docs/familias/F17-04).
+pub fn triangles_by_part(
+    bytes: &[u8],
+) -> Result<std::collections::BTreeMap<String, Vec<TrianguloLeido>>, String> {
+    let mut out: std::collections::BTreeMap<String, Vec<TrianguloLeido>> = Default::default();
+    visit_glb_triangles(bytes, |node, t| {
+        let part = node
+            .get("extras")
+            .and_then(|e| e.get("redes_parte"))
+            .or_else(|| node.get("name"))
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
+        out.entry(part.to_string()).or_default().push(t);
+    })?;
+    Ok(out)
+}
+
+fn visit_glb_triangles(
+    bytes: &[u8],
+    mut visit: impl FnMut(&Value, TrianguloLeido),
+) -> Result<(), String> {
     let (doc, bin) = abrir_glb(bytes)?;
     let materiales = doc
         .get("materials")
@@ -884,7 +911,7 @@ pub fn triangulos_de_glb(bytes: &[u8]) -> Result<Vec<TrianguloLeido>, String> {
         .unwrap_or(0);
     let _ = materiales;
 
-    let mut out = Vec::new();
+    let mut any = false;
     let raices: Vec<usize> = match doc
         .get("scenes")
         .and_then(|s| s.as_array())
@@ -963,10 +990,14 @@ pub fn triangulos_de_glb(bytes: &[u8]) -> Result<Vec<TrianguloLeido>, String> {
                         .as_ref()
                         .and_then(|cs| cs.get(a).or_else(|| cs.first()).copied())
                         .or(color_material);
-                    out.push(TrianguloLeido {
-                        pos: [mundo_pos[a], mundo_pos[b], mundo_pos[c]],
-                        color,
-                    });
+                    any = true;
+                    visit(
+                        nodo,
+                        TrianguloLeido {
+                            pos: [mundo_pos[a], mundo_pos[b], mundo_pos[c]],
+                            color,
+                        },
+                    );
                 }
                 mundo_pos.clear();
             }
@@ -977,10 +1008,10 @@ pub fn triangulos_de_glb(bytes: &[u8]) -> Result<Vec<TrianguloLeido>, String> {
             }
         }
     }
-    if out.is_empty() {
+    if !any {
         return Err("E_GLB_SIN_MALLAS: el archivo no contiene triángulos".into());
     }
-    Ok(out)
+    Ok(())
 }
 
 fn color_base_del_material(doc: &Value, prim: &Value) -> Option<[f32; 3]> {

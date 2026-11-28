@@ -88,19 +88,39 @@ fn tuberia(
             ("diametro_nominal".to_string(), Value::Num(dn as f64)),
             ("material".to_string(), Value::Text(material.to_string())),
         ]),
-        datos: BTreeMap::new(),
+        datos: BTreeMap::from([(
+            "espesor_pared".to_string(),
+            crate::model::Dato {
+                valor: demo_pipe_wall_m(material, dn),
+                unidad: "m".into(),
+                fuente: DEMO_SOURCE.into(),
+            },
+        )]),
         estado: EstadoObjeto::Pendiente,
         observaciones: Vec::new(),
         cota_solera_inicio: None,
         cota_solera_fin: None,
         deleted: false,
         sin_dato: Vec::new(),
+        modelo: None,
     })
     .unwrap_or_else(|e| panic!("{code}: {e}"))
 }
 
 /// Source of the demo numbers that a real project would bring from its design (F17-03).
 pub const DEMO_SOURCE: &str = "demo: dato de ejemplo, no de un diseño";
+
+/// Wall thickness of a demo pipe, so the pipe recipe can bake it (F17-04: a design datum). PVC
+/// near SDR 41 on the DN, concrete about a twelfth of the DN plus 2 cm, to the tenth of a mm.
+fn demo_pipe_wall_m(material: &str, dn: u32) -> f64 {
+    let dn_m = dn as f64 / 1000.0;
+    let wall = if material == "hormigon" {
+        dn_m / 12.0 + 0.02
+    } else {
+        dn_m / 41.0
+    };
+    (wall * 1e4).round() / 1e4
+}
 
 /// Wall thickness and material of a demo manhole, so the manhole recipe can bake it (D17: they
 /// are design data). The thickness is a `Dato` that says it is demo data.

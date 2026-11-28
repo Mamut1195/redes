@@ -244,6 +244,91 @@ fn given_sets_without_every_datum_are_refused() {
     );
 }
 
+fn pipe_recipe_path() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tools/blender/build_pipe.receta.json")
+}
+
+fn chain_project(dir: &Path) -> PathBuf {
+    let project = dir.join("cadena.redes");
+    let (code, v) = run(
+        &["proyecto", "cadena", "--salida", project.to_str().unwrap()],
+        dir,
+    );
+    assert_eq!(code, 0, "{v}");
+    project
+}
+
+/// One segment per DN, wall, material and system, not one per link (F17-04).
+#[test]
+fn the_pipe_recipe_bakes_one_segment_per_pipe_kind_not_per_link() {
+    let dir = tempdir("tubos-dry");
+    let project = chain_project(&dir);
+    let recipe = pipe_recipe_path();
+    let (code, v) = run(
+        &[
+            "--dry-run",
+            "-p",
+            project.to_str().unwrap(),
+            "biblioteca",
+            "hornear",
+            "--receta",
+            recipe.to_str().unwrap(),
+            "--blender",
+            NO_BLENDER,
+        ],
+        &dir,
+    );
+    assert_eq!(code, 0, "{v}");
+    let p = redes_core::project_io::load(&project).unwrap();
+    let links = p.links.iter().filter(|l| !l.deleted).count();
+    assert_eq!(v["data"]["objetos"], links, "{v}");
+    assert_eq!(
+        v["data"]["con_pieza"], links,
+        "every demo pipe has its data"
+    );
+    let kinds: std::collections::BTreeSet<(u32, String)> =
+        p.links.iter().map(|l| (l.d_mm, l.family.clone())).collect();
+    assert_eq!(v["data"]["piezas_distintas"], kinds.len(), "{v}");
+    assert!(
+        kinds.len() < links / 4,
+        "{} kinds for {links} links",
+        kinds.len()
+    );
+}
+
+#[test]
+fn a_pipe_without_wall_thickness_is_reported_and_keeps_the_fallback() {
+    let dir = tempdir("tubos-sin-espesor");
+    let project = chain_project(&dir);
+    let mut p = redes_core::project_io::load(&project).unwrap();
+    let link = p.links.iter_mut().find(|l| l.code == "CL-303").unwrap();
+    link.datos.remove("espesor_pared");
+    redes_core::project_io::save(&p, &project).unwrap();
+    let recipe = pipe_recipe_path();
+    let (code, v) = run(
+        &[
+            "--dry-run",
+            "-p",
+            project.to_str().unwrap(),
+            "biblioteca",
+            "hornear",
+            "--receta",
+            recipe.to_str().unwrap(),
+        ],
+        &dir,
+    );
+    assert_eq!(code, 0, "{v}");
+    let missing = &v["data"]["sin_hornear"];
+    assert_eq!(missing[0]["codigo"], "CL-303", "{v}");
+    assert_eq!(missing[0]["faltan"][0], "espesor_pared");
+    let warned = v["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|d| d["code"] == "W_PARAMETRO_FALTANTE");
+    assert!(warned, "{v}");
+}
+
 fn installed_blender() -> Option<PathBuf> {
     let candidates = std::env::var_os("REDES_BLENDER")
         .map(PathBuf::from)
@@ -345,4 +430,69 @@ fn blender_rebakes_the_versioned_pilot_byte_for_byte() {
     let versioned = std::fs::read(pilot.join(format!("{key}.glb")))
         .expect("the versioned pilot is named after the current key");
     assert!(fresh == versioned, "the pilot .glb must be today's bake");
+}
+
+#[test]
+fn blender_rebakes_the_pipe_pilot_and_points_every_link_at_its_segment() {
+    let Some(blender) = installed_blender() else {
+        eprintln!("skipped: Blender 5.1 is not installed (set REDES_BLENDER to run it)");
+        return;
+    };
+    let dir = tempdir("tubo-piloto");
+    let pilot = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tools/blender/piloto/pipe");
+    let recipe = pipe_recipe_path();
+    let given = pilot.join("piloto.json");
+    let (code, v) = run(
+        &[
+            "biblioteca",
+            "hornear",
+            "--receta",
+            recipe.to_str().unwrap(),
+            "--parametros",
+            given.to_str().unwrap(),
+            "--blender",
+            blender.to_str().unwrap(),
+            "--sin-blend",
+        ],
+        &dir,
+    );
+    assert_eq!(code, 0, "{v}");
+    let key = v["data"]["juegos"][0]["clave"].as_str().unwrap();
+    let fresh = std::fs::read(bake::cached_glb(&dir, key)).unwrap();
+    let versioned = std::fs::read(pilot.join(format!("{key}.glb")))
+        .expect("the versioned pipe pilot is named after the current key");
+    assert!(
+        fresh == versioned,
+        "the pipe pilot .glb must be today's bake"
+    );
+
+    let project = chain_project(&dir);
+    let (code, v) = run(
+        &[
+            "-p",
+            project.to_str().unwrap(),
+            "biblioteca",
+            "hornear",
+            "--receta",
+            recipe.to_str().unwrap(),
+            "--blender",
+            blender.to_str().unwrap(),
+            "--sin-blend",
+        ],
+        &dir,
+    );
+    assert_eq!(code, 0, "{v}");
+    let p = redes_core::project_io::load(&project).unwrap();
+    let manifest =
+        redes_core::biblioteca::Biblioteca::cargar(&dir.join("biblioteca.json")).unwrap();
+    for l in p.links.iter().filter(|l| !l.deleted) {
+        let id = l
+            .modelo
+            .as_deref()
+            .unwrap_or_else(|| panic!("{} has no piece", l.code));
+        let piece = manifest.piezas.iter().find(|e| e.id == id).unwrap();
+        assert_eq!(piece.dn_mm, Some(l.d_mm), "{}", l.code);
+        let glb = std::fs::read(dir.join(&piece.archivo)).unwrap();
+        redes_core::pipe_layout::PipeSegment::from_glb(&glb).expect("a segment the viewer lays");
+    }
 }

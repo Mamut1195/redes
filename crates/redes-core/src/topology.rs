@@ -234,6 +234,7 @@ mod tests {
                 cota_solera_fin: None,
                 deleted: false,
                 sin_dato: Vec::new(),
+                modelo: None,
             })
             .unwrap();
         }

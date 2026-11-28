@@ -147,21 +147,34 @@ pub fn from_project(
         .unwrap_or_else(|| PathBuf::from("."));
     let library = args.carpeta.clone().unwrap_or_else(|| project_dir.clone());
 
-    let mut objects: Vec<(String, Result<String, Vec<String>>)> = Vec::new();
+    let mut objects: Vec<Baked> = Vec::new();
     let mut distinct: BTreeMap<String, ParamSet> = BTreeMap::new();
     let mut unanchored: Vec<(String, bake::Unanchored)> = Vec::new();
+    let mut keyed = |set: ParamSet| {
+        let key = loaded.key(&set);
+        distinct.insert(key.clone(), set);
+        key
+    };
     for n in p.nodes.iter().filter(|n| loaded.recipe.applies_to(n)) {
-        let outcome = loaded.recipe.params_for_node(p, n).map(|set| {
-            let key = loaded.key(&set);
-            distinct.insert(key.clone(), set);
-            key
-        });
+        let outcome = loaded.recipe.params_for_node(p, n).map(&mut keyed);
         if outcome.is_ok() && loaded.recipe.uses_connections() {
             for u in bake::node_connections(p, n).unanchored {
                 unanchored.push((n.code.clone(), u));
             }
         }
-        objects.push((n.code.clone(), outcome));
+        objects.push(Baked {
+            target: Target::Node,
+            code: n.code.clone(),
+            outcome,
+        });
+    }
+    // A pipe recipe bakes one segment per DN, wall and material, not one per link (F17-04).
+    for l in p.links.iter().filter(|l| loaded.recipe.applies_to_link(l)) {
+        objects.push(Baked {
+            target: Target::Link,
+            code: l.code.clone(),
+            outcome: loaded.recipe.params_for_link(l).map(&mut keyed),
+        });
     }
 
     let report = match bake_missing(&loaded, &library, &distinct, args, dry) {
@@ -170,7 +183,12 @@ pub fn from_project(
     };
     let lacking: Vec<_> = objects
         .iter()
-        .filter_map(|(code, o)| o.as_ref().err().map(|m| (code.clone(), m.clone())))
+        .filter_map(|b| {
+            b.outcome
+                .as_ref()
+                .err()
+                .map(|m| (b.code.clone(), m.clone()))
+        })
         .collect();
 
     if !dry && let Err(env) = record_pieces(p, project_path, &library, &loaded, &objects, &distinct)
@@ -225,32 +243,56 @@ pub fn from_project(
         .with_diagnostics(warnings)
 }
 
+/// Whether a baked object is a node or a link: both point at their piece with `modelo`.
+#[derive(Clone, Copy, PartialEq)]
+enum Target {
+    Node,
+    Link,
+}
+
+/// One object the recipe draws: the key of its piece, or the data it lacks.
+struct Baked {
+    target: Target,
+    code: String,
+    outcome: Result<String, Vec<String>>,
+}
+
 fn record_pieces(
     p: &mut Project,
     project_path: &Path,
     library: &Path,
     loaded: &LoadedRecipe,
-    objects: &[(String, Result<String, Vec<String>>)],
+    objects: &[Baked],
     distinct: &BTreeMap<String, ParamSet>,
 ) -> Result<(), Box<Envelope>> {
     let io = |e: String| Box::new(from_core_error(&e));
     let stale_prefix = format!("{}-", loaded.id_prefix());
-    for (code, outcome) in objects {
-        let Some(n) = p.node_by_code_mut(code) else {
-            continue;
-        };
-        n.modelo = match outcome {
+    let piece_for = |outcome: &Result<String, Vec<String>>, current: &Option<String>| {
+        match outcome {
             Ok(key) => Some(loaded.piece_id(key)),
             // A piece baked from older data would show a shape the data no longer supports.
             Err(_)
-                if n.modelo
+                if current
                     .as_deref()
                     .is_some_and(|m| m.starts_with(&stale_prefix)) =>
             {
                 None
             }
-            Err(_) => n.modelo.clone(),
+            Err(_) => current.clone(),
+        }
+    };
+    for b in objects {
+        let modelo = match b.target {
+            Target::Node => p.node_by_code_mut(&b.code).map(|n| &mut n.modelo),
+            Target::Link => p
+                .links
+                .iter_mut()
+                .find(|l| !l.deleted && l.code == b.code)
+                .map(|l| &mut l.modelo),
         };
+        if let Some(modelo) = modelo {
+            *modelo = piece_for(&b.outcome, modelo);
+        }
     }
 
     let manifest_path = library.join("biblioteca.json");
@@ -260,7 +302,12 @@ fn record_pieces(
             .map_err(|e| io(format!("E_IO_NOT_FOUND: {e}")))?;
         manifest.insertar(bake::baked_entry(loaded, key, set, &glb).map_err(io)?);
     }
-    let in_use: BTreeSet<&str> = p.nodes.iter().filter_map(|n| n.modelo.as_deref()).collect();
+    let in_use: BTreeSet<&str> = p
+        .nodes
+        .iter()
+        .filter_map(|n| n.modelo.as_deref())
+        .chain(p.links.iter().filter_map(|l| l.modelo.as_deref()))
+        .collect();
     manifest
         .piezas
         .retain(|e| !e.id.starts_with(&stale_prefix) || in_use.contains(e.id.as_str()));

@@ -89,16 +89,47 @@ pub fn triangulos_con_cache(
         }
     }
     cache.podar();
-    push_static_triangles(p, con_terreno, &mut out, &mut families);
+    let pipes = StaticPipes {
+        drawn_elsewhere: &Default::default(),
+        anchors: &Default::default(),
+    };
+    push_static_triangles(p, con_terreno, &mut out, &mut families, &pipes);
     out
 }
 
 /// Everything but the node pieces: pipes, urban context and terrain. The GPU scene draws these
 /// as culled batches and the pieces as instances (F14-05).
 pub fn static_triangles(p: &Project, with_terrain: bool) -> Malla {
+    static_triangles_around(p, with_terrain, &Default::default(), &Default::default())
+}
+
+/// [`static_triangles`] without the links drawn elsewhere (baked pipes, F17-04); the others
+/// stop at the anchors of the nodes drawn by a baked piece.
+pub fn static_triangles_around(
+    p: &Project,
+    with_terrain: bool,
+    drawn_elsewhere: &std::collections::HashSet<crate::model::ElementId>,
+    anchors: &crate::pipe_layout::NodeAnchors,
+) -> Malla {
     let mut out = Malla::default();
-    push_static_triangles(p, with_terrain, &mut out, &mut FamilyTable::default());
+    let pipes = StaticPipes {
+        drawn_elsewhere,
+        anchors,
+    };
+    push_static_triangles(
+        p,
+        with_terrain,
+        &mut out,
+        &mut FamilyTable::default(),
+        &pipes,
+    );
     out
+}
+
+/// Which links the static geometry draws and where they stop.
+struct StaticPipes<'a> {
+    drawn_elsewhere: &'a std::collections::HashSet<crate::model::ElementId>,
+    anchors: &'a crate::pipe_layout::NodeAnchors,
 }
 
 #[derive(Default)]
@@ -132,10 +163,12 @@ fn push_static_triangles(
     con_terreno: bool,
     out: &mut Malla,
     families: &mut FamilyTable,
+    pipes: &StaticPipes,
 ) {
     let a_local = |q: P3| to_local(p, q);
+    let mut axis = Vec::new();
     for l in p.links.iter().filter(|l| !l.deleted) {
-        if l.path.len() < 2 {
+        if l.path.len() < 2 || pipes.drawn_elsewhere.contains(&l.id) {
             continue;
         }
         let es_agua = l.family.starts_with("agua");
@@ -148,7 +181,9 @@ fn push_static_triangles(
         let d_ext = l.diametro_exterior_m() as f32;
         let material = l.get("material").and_then(|v| v.as_str()).unwrap_or("");
         let family = families.id(out, &l.family);
-        for w in l.eje().windows(2) {
+        // Stops at the node walls, as the painter draws it, instead of crossing the manhole.
+        crate::pipe_layout::drawn_axis(p, l, pipes.anchors, &mut axis);
+        for w in axis.windows(2) {
             // En local: construir tubos con coordendas UTM en f32 los colapsa.
             let wa = P3::new(w[0].x - p.origin.x, w[0].y - p.origin.y, w[0].z);
             let wb = P3::new(w[1].x - p.origin.x, w[1].y - p.origin.y, w[1].z);

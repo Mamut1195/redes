@@ -939,6 +939,7 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
                 cota_solera_fin: *cota_solera_fin,
                 deleted: false,
                 sin_dato,
+                modelo: None,
             };
             match p.add_link(link) {
                 Ok(_) => rep.arcos += 1,
@@ -1263,6 +1264,7 @@ fn importar_de_capa_info(
             cota_solera_fin: sf,
             deleted: false,
             sin_dato,
+            modelo: None,
         };
         match p.add_link(link) {
             Ok(_) => arcos_creados += 1,

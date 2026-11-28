@@ -12,6 +12,7 @@ use redes_core::biblioteca::{Biblioteca, Entrada, cota_base_modelo};
 use redes_core::gltf::Vertice;
 use redes_core::model::{ElementId, Node, Project};
 use redes_core::parts::{Material, Mesh, Parte};
+use redes_core::pipe_layout::{PipePieces, PipeSegment};
 use redes_core::view::{ModelPiece, ModelPieces};
 
 /// Malla de una pieza, ya en el espacio del proyecto (Z arriba, metros).
@@ -28,9 +29,22 @@ pub struct Cache {
     proxies_calculados: usize,
     /// Shaded pieces for the painter, by piece id (and proxy step, 0 for the full mesh).
     partes: HashMap<(String, u32), Arc<Parte>>,
+    /// Baked pipe segments by piece id; `None` if the `.glb` is missing or is not a segment.
+    segments: HashMap<String, Option<Arc<PipeSegment>>>,
 }
 
 impl Cache {
+    /// The pipe segment of a piece, read once (F17-04).
+    pub fn segment(&mut self, carpeta: &Path, pieza: &Entrada) -> Option<Arc<PipeSegment>> {
+        self.segments
+            .entry(pieza.id.clone())
+            .or_insert_with(|| {
+                let bytes = std::fs::read(carpeta.join(&pieza.archivo)).ok()?;
+                PipeSegment::from_glb(&bytes).ok().map(Arc::new)
+            })
+            .clone()
+    }
+
     /// Proxy de la malla de una pieza (ver [`proxy`]), calculado una sola vez por pieza y paso.
     pub fn proxy(&mut self, carpeta: &Path, pieza: &Entrada, paso: f32) -> Option<Malla> {
         let clave = (pieza.id.clone(), paso.to_bits());
@@ -273,6 +287,30 @@ pub fn piezas_pintor(
         );
     }
     (out, simplificados)
+}
+
+/// The links drawn with a baked segment and the anchors of the nodes drawn with a model, where
+/// every pipe starts and ends (F17-04). A missing or broken `.glb` keeps the parametric pipe.
+pub fn tuberias(p: &Project, carpeta: &Path, bib: &Biblioteca, cache: &mut Cache) -> PipePieces {
+    let mut out = PipePieces::default();
+    for m in modelados(p, carpeta, bib, cache) {
+        if !m.pieza.anclas.is_empty() {
+            out.node_anchors.insert(m.nodo.id, m.pieza.anclas.clone());
+        }
+    }
+    for l in p.links.iter().filter(|l| !l.deleted) {
+        let Some(pieza) = l
+            .modelo
+            .as_ref()
+            .and_then(|id| bib.piezas.iter().find(|x| &x.id == id))
+        else {
+            continue;
+        };
+        if let Some(segment) = cache.segment(carpeta, pieza) {
+            out.by_link.insert(l.id, segment);
+        }
+    }
+    out
 }
 
 /// A mesh as one shaded piece for the painter.

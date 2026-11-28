@@ -37,6 +37,7 @@ pub mod model;
 pub mod parts;
 pub mod parts_cadena;
 pub mod perfil;
+pub mod pipe_layout;
 pub mod project_io;
 pub mod reimportar;
 pub mod revision;

@@ -1,0 +1,7 @@
+{
+  "dn_mm": 200,
+  "inner_diameter_m": 0.2,
+  "wall_thickness_m": 0.0049,
+  "pipe_material": "PVC",
+  "system": "saneamiento"
+}

@@ -14,7 +14,7 @@ use serde_json::Value as Json;
 
 use crate::biblioteca::{self, Entrada};
 use crate::families::Value;
-use crate::model::{COTA_SOLERA, COTA_TAPA, Link, Node, Project};
+use crate::model::{COTA_SOLERA, COTA_TAPA, DIAMETRO_NOMINAL, Dato, Link, Node, Project};
 
 pub const RECIPE_SCHEMA: &str = "redes.receta/1";
 pub const RECIPE_SUFFIX: &str = ".receta.json";
@@ -27,6 +27,8 @@ const KEY_HEX_LEN: usize = 32;
 
 /// Prefix of the `extras` the manifest keeps for a baked piece.
 pub const EXTRAS_PREFIX: &str = "horneado.";
+/// Recipe parameter that carries the DN of a pipe piece, recorded in its manifest entry.
+pub const PIPE_DN_PARAM: &str = "dn_mm";
 
 /// Where a recipe parameter comes from.
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -61,6 +63,22 @@ pub enum ParamSource {
     /// that carry those data (docs/17, section F17-03). A pipe without them has no anchor.
     #[serde(rename = "conexiones")]
     Connections,
+    /// The nominal diameter of a link (mm), when the source brought it.
+    #[serde(rename = "dn")]
+    NominalDiameter {
+        #[serde(rename = "unidad", default)]
+        unit: Option<String>,
+    },
+    /// The bore a link is drawn with (m): its declared inner diameter or, without one, its DN,
+    /// the same rule as [`Link::diametro_interior_m`], so the baked pipe and its axis agree.
+    #[serde(rename = "diametro_interior_o_dn")]
+    DrawingBore {
+        #[serde(rename = "unidad", default)]
+        unit: Option<String>,
+    },
+    /// `agua` or `saneamiento`, from the object's family.
+    #[serde(rename = "sistema")]
+    System,
     /// A drawing detail fixed by the recipe (cone height, segments…). Never becomes a `Dato`.
     #[serde(rename = "forma")]
     Shape {
@@ -78,6 +96,9 @@ pub struct Recipe {
     pub family: String,
     #[serde(rename = "subtipo", default)]
     pub subtype: Option<String>,
+    /// More families the recipe draws: one pipe recipe serves water and sewer links.
+    #[serde(rename = "otras_familias", default)]
+    pub other_families: Vec<String>,
     #[serde(rename = "parametros")]
     pub params: BTreeMap<String, ParamSource>,
     /// Python modules next to the script that it imports (`plant_units.py`…). They shape the
@@ -166,22 +187,61 @@ impl LoadedRecipe {
 impl Recipe {
     /// Whether the recipe draws this object.
     pub fn applies_to(&self, node: &Node) -> bool {
-        !node.deleted
-            && node.family == self.family
-            && self.subtype.as_deref().is_none_or(|s| node.ty == s)
+        !node.deleted && self.draws(&node.family, &node.ty)
+    }
+
+    /// Whether the recipe draws this link.
+    pub fn applies_to_link(&self, link: &Link) -> bool {
+        !link.deleted && self.draws(&link.family, &link.ty)
+    }
+
+    fn draws(&self, family: &str, ty: &str) -> bool {
+        (family == self.family || self.other_families.iter().any(|f| f == family))
+            && self.subtype.as_deref().is_none_or(|s| ty == s)
     }
 
     /// Parameters of an object, or the project data it lacks (D16: nothing is filled in).
     pub fn params_for_node(&self, p: &Project, node: &Node) -> Result<ParamSet, Vec<String>> {
         self.resolve(|source| match source {
-            ParamSource::Attribute { key, unit } => {
-                attribute(node, key, unit.as_deref()).ok_or_else(|| key.clone())
-            }
+            ParamSource::Attribute { key, unit } => attribute(
+                node.falta(key),
+                node.get(key),
+                node.datos.get(key),
+                unit.as_deref(),
+            )
+            .ok_or_else(|| key.clone()),
             ParamSource::RimMinusInvert { .. } => rim_minus_invert(node),
             ParamSource::AttributeMinusInvert { key, unit } => {
                 attribute_minus_invert(node, key, unit.as_deref())
             }
             ParamSource::Connections => Ok(node_connections(p, node).to_json()),
+            ParamSource::NominalDiameter { .. } | ParamSource::DrawingBore { .. } => {
+                Err(DIAMETRO_NOMINAL.to_string())
+            }
+            ParamSource::System => Ok(Json::from(system_of(&node.family))),
+            ParamSource::Shape { .. } => unreachable!("shape values come from the recipe"),
+        })
+    }
+
+    /// Parameters of a link, or the data it lacks (D16: nothing is filled in).
+    pub fn params_for_link(&self, link: &Link) -> Result<ParamSet, Vec<String>> {
+        self.resolve(|source| match source {
+            ParamSource::Attribute { key, unit } => attribute(
+                link.falta(key),
+                link.get(key),
+                link.datos.get(key),
+                unit.as_deref(),
+            )
+            .ok_or_else(|| key.clone()),
+            ParamSource::NominalDiameter { .. } => link
+                .dn()
+                .map(Json::from)
+                .ok_or_else(|| DIAMETRO_NOMINAL.to_string()),
+            ParamSource::DrawingBore { .. } => drawing_bore(link),
+            ParamSource::System => Ok(Json::from(system_of(&link.family))),
+            ParamSource::RimMinusInvert { .. } => Err(COTA_TAPA.to_string()),
+            ParamSource::AttributeMinusInvert { .. } => Err(COTA_SOLERA.to_string()),
+            ParamSource::Connections => Ok(Connections::default().to_json()),
             ParamSource::Shape { .. } => unreachable!("shape values come from the recipe"),
         })
     }
@@ -198,15 +258,9 @@ impl Recipe {
         let mut unknown: Vec<String> = given
             .keys()
             .filter(|k| {
-                !matches!(
-                    self.params.get(*k),
-                    Some(
-                        ParamSource::Attribute { .. }
-                            | ParamSource::RimMinusInvert { .. }
-                            | ParamSource::AttributeMinusInvert { .. }
-                            | ParamSource::Connections
-                    )
-                )
+                self.params
+                    .get(*k)
+                    .is_none_or(|s| matches!(s, ParamSource::Shape { .. }))
             })
             .map(|k| format!("{k} (no es un parámetro de dato de la receta)"))
             .collect();
@@ -258,27 +312,37 @@ impl Recipe {
 
     /// Recipe units that disagree with the family registry (`unidad` vs the attribute's unit).
     pub fn unit_mismatches(&self) -> Vec<String> {
-        let Some(def) = crate::families::family(&self.family) else {
-            return vec![format!("familia desconocida: {}", self.family)];
-        };
         let mut out = Vec::new();
-        for (name, source) in &self.params {
-            let (declared, expected) = match source {
-                ParamSource::Attribute { key, unit }
-                | ParamSource::AttributeMinusInvert { key, unit } => match def.attr(key) {
-                    Some(a) => (unit.as_deref().unwrap_or(""), a.unit.symbol()),
-                    None => {
-                        out.push(format!("{name}: la familia no tiene el atributo {key}"));
+        for family in std::iter::once(&self.family).chain(&self.other_families) {
+            let Some(def) = crate::families::family(family) else {
+                out.push(format!("familia desconocida: {family}"));
+                continue;
+            };
+            for (name, source) in &self.params {
+                let (declared, expected) = match source {
+                    ParamSource::Attribute { key, unit }
+                    | ParamSource::AttributeMinusInvert { key, unit } => match def.attr(key) {
+                        Some(a) => (unit.as_deref().unwrap_or(""), a.unit.symbol()),
+                        None => {
+                            out.push(format!(
+                                "{name}: la familia {family} no tiene el atributo {key}"
+                            ));
+                            continue;
+                        }
+                    },
+                    ParamSource::RimMinusInvert { unit } | ParamSource::DrawingBore { unit } => {
+                        (unit.as_deref().unwrap_or(""), "m")
+                    }
+                    ParamSource::NominalDiameter { unit } => (unit.as_deref().unwrap_or(""), "mm"),
+                    ParamSource::Connections | ParamSource::System | ParamSource::Shape { .. } => {
                         continue;
                     }
-                },
-                ParamSource::RimMinusInvert { unit } => (unit.as_deref().unwrap_or(""), "m"),
-                ParamSource::Connections | ParamSource::Shape { .. } => continue,
-            };
-            if declared != expected {
-                out.push(format!(
-                    "{name}: unidad «{declared}», la familia usa «{expected}»"
-                ));
+                };
+                if declared != expected {
+                    out.push(format!(
+                        "{name}: unidad «{declared}», la familia {family} usa «{expected}»"
+                    ));
+                }
             }
         }
         out
@@ -287,14 +351,17 @@ impl Recipe {
 
 /// An attribute of the object or, if it has none, a `Dato` with that key in the recipe's unit:
 /// a number that arrives with its source is as good as an imported attribute.
-fn attribute(node: &Node, key: &str, unit: Option<&str>) -> Option<Json> {
-    if node.falta(key) {
+fn attribute(
+    missing: bool,
+    value: Option<&Value>,
+    datum: Option<&Dato>,
+    unit: Option<&str>,
+) -> Option<Json> {
+    if missing {
         return None;
     }
-    let Some(value) = node.get(key) else {
-        return node
-            .datos
-            .get(key)
+    let Some(value) = value else {
+        return datum
             .filter(|d| d.valor.is_finite() && unit.is_none_or(|u| d.unidad == u))
             .map(|d| Json::from(d.valor));
     };
@@ -308,6 +375,23 @@ fn attribute(node: &Node, key: &str, unit: Option<&str>) -> Option<Json> {
     }
 }
 
+fn drawing_bore(link: &Link) -> Result<Json, String> {
+    let declared = link
+        .num("diametro_interior")
+        .filter(|d| d.is_finite() && *d > 0.0 && !link.falta("diametro_interior"));
+    match (declared, link.dn()) {
+        // Declared in mm (family registry); rounded like the depth so the key carries no noise.
+        (Some(mm), _) => Ok(Json::from(round_to(mm / 1000.0, 1e6))),
+        (None, Some(dn)) => Ok(Json::from(round_to(dn as f64 / 1000.0, 1e6))),
+        (None, None) => Err(DIAMETRO_NOMINAL.to_string()),
+    }
+}
+
+/// `agua` or `saneamiento`: the first part of the family key.
+fn system_of(family: &str) -> &str {
+    family.split('.').next().unwrap_or(family)
+}
+
 fn rim_minus_invert(node: &Node) -> Result<Json, String> {
     match (node.cota_tapa(), node.cota_solera()) {
         // Rounded to the micrometre: 2491.63 - 2490.0 is 1.6300000000001091 in f64, and that
@@ -319,7 +403,7 @@ fn rim_minus_invert(node: &Node) -> Result<Json, String> {
 }
 
 fn attribute_minus_invert(node: &Node, key: &str, unit: Option<&str>) -> Result<Json, String> {
-    let level = attribute(node, key, unit)
+    let level = attribute(node.falta(key), node.get(key), node.datos.get(key), unit)
         .and_then(|v| v.as_f64())
         .ok_or_else(|| key.to_string())?;
     let invert = node.cota_solera().ok_or_else(|| COTA_SOLERA.to_string())?;
@@ -541,7 +625,11 @@ pub fn baked_entry(
         id: loaded.piece_id(key),
         familia: loaded.recipe.family.clone(),
         subtipo: loaded.recipe.subtype.clone(),
-        dn_mm: None,
+        // A pipe piece is one DN; a manhole has none (each pipe's DN goes in its anchor).
+        dn_mm: params
+            .get(PIPE_DN_PARAM)
+            .and_then(Json::as_u64)
+            .map(|d| d as u32),
         archivo: cached_glb_relative(key),
         escala: 1.0,
         triangulos: model.triangulos,
@@ -769,6 +857,85 @@ mod tests {
         let lonely = node_connections(&p, p.node_by_code("PZ-201").unwrap());
         assert!(lonely.anchored.is_empty());
         assert_eq!(lonely.unanchored[0].reason, "sin tramos conectados");
+    }
+
+    fn pipe_recipe() -> LoadedRecipe {
+        let contract = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tools/blender/build_pipe.receta.json");
+        LoadedRecipe::load(&contract).expect("the pipe recipe loads")
+    }
+
+    #[test]
+    fn pipe_params_come_from_the_link_and_serve_water_and_sewer() {
+        let r = pipe_recipe();
+        assert_eq!(r.recipe.unit_mismatches(), Vec::<String>::new());
+        let p = crate::demo_cadena::cadena();
+        let sewer = p.link_by_code("CL-303").unwrap();
+        assert!(r.recipe.applies_to_link(sewer));
+        let set = r.recipe.params_for_link(sewer).expect("complete demo pipe");
+        assert_eq!(set["dn_mm"], Json::from(200));
+        assert_eq!(set["inner_diameter_m"], Json::from(0.2));
+        assert_eq!(set["pipe_material"], Json::from("hormigon"));
+        assert_eq!(set["system"], Json::from("saneamiento"));
+        assert_eq!(
+            set["wall_thickness_m"],
+            Json::from(sewer.datos["espesor_pared"].valor)
+        );
+        let water = p.link_by_code("TB-003").unwrap();
+        assert!(r.recipe.applies_to_link(water), "otras_familias");
+        let water_set = r.recipe.params_for_link(water).unwrap();
+        assert_eq!(water_set["system"], Json::from("agua"));
+        assert_ne!(r.key(&set), r.key(&water_set));
+        assert!(!r.recipe.applies_to(p.node_by_code("PZ-302").unwrap()));
+    }
+
+    #[test]
+    fn a_pipe_is_baked_with_its_declared_bore_and_never_without_its_data() {
+        let r = pipe_recipe();
+        let p = crate::demo_cadena::cadena();
+        let mut l = p.link_by_code("CL-303").unwrap().clone();
+        l.attrs
+            .insert("diametro_interior".into(), Value::Num(196.4));
+        let set = r.recipe.params_for_link(&l).unwrap();
+        assert_eq!(
+            set["inner_diameter_m"],
+            Json::from(0.1964),
+            "declared, in mm"
+        );
+
+        l.datos.remove("espesor_pared");
+        l.sin_dato.push(DIAMETRO_NOMINAL.into());
+        l.d_mm = 0;
+        l.attrs.remove("diametro_interior");
+        assert_eq!(
+            r.recipe.params_for_link(&l).unwrap_err(),
+            vec![DIAMETRO_NOMINAL.to_string(), "espesor_pared".to_string()]
+        );
+    }
+
+    #[test]
+    fn a_baked_pipe_piece_records_its_dn() {
+        let r = pipe_recipe();
+        let p = crate::demo_cadena::cadena();
+        let set = r
+            .recipe
+            .params_for_link(p.link_by_code("CL-303").unwrap())
+            .unwrap();
+        let glb = crate::gltf::glb_desde_vertices(&BTreeMap::from([(
+            "modelo".to_string(),
+            [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]
+                .map(|pos| crate::gltf::Vertice {
+                    pos,
+                    normal: [0.0, 0.0, 1.0],
+                    color: [0.5, 0.5, 0.5],
+                })
+                .into_iter()
+                .collect(),
+        )]))
+        .unwrap();
+        let entry = baked_entry(&r, &r.key(&set), &set, &glb).unwrap();
+        assert_eq!(entry.dn_mm, Some(200));
+        assert_eq!(entry.familia, "saneamiento.tuberia");
     }
 
     #[test]

@@ -74,6 +74,7 @@ fn tramo(
         cota_solera_inicio: Some(za),
         cota_solera_fin: Some(zb),
         sin_dato: Vec::new(),
+        modelo: None,
     })
     .unwrap();
 }

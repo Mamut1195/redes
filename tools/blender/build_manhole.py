@@ -112,7 +112,8 @@ def layout(p):
         "cone_top": cone_top,
         "cone_start": cone_top - cone_height,
         "flat_top": flat_top,
-        # The opening sits towards -X, where the wall stays vertical and the rungs go.
+        # The opening sits towards -X, where the wall stays vertical and the rungs go; build()
+        # then turns these parts so that side faces the outlet (opening_turn).
         "opening_x": -offset,
     }
 
@@ -258,6 +259,19 @@ def outlet(p):
     """First outlet with a known DN: it sets the direction and width of the channel."""
     outlets = [c for c in p["connections"] if c["name"].startswith("salida") and c.get("dn_mm")]
     return outlets[0] if outlets else None
+
+
+def opening_turn(p):
+    """Turn about Z (radians) that takes the opening from -X to the first outlet.
+
+    The body, frame, cover and rungs are built with the opening towards -X; turning them puts
+    the vertical wall and the rungs over the outlet. Without an outlet they stay at -X.
+    """
+    outlets = sorted((c for c in p["connections"] if c["name"].startswith("salida")),
+                     key=lambda c: c["name"])
+    if not outlets:
+        return 0.0
+    return math.radians(outlets[0]["azimuth_deg"]) - math.pi
 
 
 def bench_shells(p, g):
@@ -440,8 +454,12 @@ def build(p):
     )
     scene = bpy.context.scene
     scene.collection.objects.link(root)
+    turn = opening_turn(p)
     for part, obj, mat_name in parts:
         tag(obj, p, part, mat_name)
+        # The bench and the anchors are already laid along the pipes' own azimuths.
+        if part != "banqueta":
+            obj.rotation_euler = (0.0, 0.0, turn)
         obj.parent = root
         scene.collection.objects.link(obj)
     invert = anchor(INVERT_ANCHOR, (0.0, 0.0, g["invert"]), {"redes_parte": "solera"})

@@ -163,6 +163,7 @@ pub fn project() -> Project {
             cota_solera_fin: None,
             deleted: false,
             sin_dato: Vec::new(),
+            modelo: None,
         })
         .ok();
         let _ = (ac, bc);
@@ -216,6 +217,7 @@ pub fn project() -> Project {
             cota_solera_fin: None,
             deleted: false,
             sin_dato: Vec::new(),
+            modelo: None,
         })
         .ok();
     }
@@ -270,6 +272,7 @@ pub fn project() -> Project {
         cota_solera_fin: None,
         deleted: false,
         sin_dato: Vec::new(),
+        modelo: None,
     })
     .ok();
 
@@ -360,6 +363,7 @@ pub fn project() -> Project {
             cota_solera_fin: None,
             deleted: false,
             sin_dato: Vec::new(),
+            modelo: None,
         })
         .ok();
         prev = id;
@@ -544,6 +548,7 @@ pub fn plantilla() -> Project {
             cota_solera_fin: None,
             deleted: false,
             sin_dato: Vec::new(),
+            modelo: None,
         })
         .expect("colector de plantilla");
     }

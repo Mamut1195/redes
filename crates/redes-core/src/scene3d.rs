@@ -27,14 +27,15 @@ use crate::gltf::{Triangulo, Vertice};
 use crate::mallas::CachePiezas;
 use crate::model::Project;
 use crate::parts::{Mesh, Tri};
+use crate::pipe_layout::PipePieces;
 use crate::view::{Camera, Layers};
 
 /// Position, normal and colour (3 × 3 `f32`).
 pub const VERTEX_BYTES: usize = 36;
 /// One `u32`.
 pub const INDEX_BYTES: usize = 4;
-/// Offset (3), scale (3) and rotation cosine/sine (2), as `f32`.
-pub const INSTANCE_BYTES: usize = 32;
+/// Offset (3), scale (3), turn about Z (2) and tilt (2) as cosine and sine, as `f32`.
+pub const INSTANCE_BYTES: usize = 40;
 /// GPU memory budget for the whole scene (vertices + indices + instances).
 pub const GPU_BUDGET: u64 = 512 * 1024 * 1024;
 
@@ -135,6 +136,9 @@ pub struct Instance {
     pub scale: [f32; 3],
     /// Cosine and sine of the rotation about Z.
     pub rotation: [f32; 2],
+    /// Cosine and sine of the tilt about Y, applied before the turn: a sloped pipe segment
+    /// (F17-04). Level pieces keep `[1, 0]`.
+    pub pitch: [f32; 2],
 }
 
 impl Instance {
@@ -143,6 +147,7 @@ impl Instance {
         offset: [0.0; 3],
         scale: [1.0; 3],
         rotation: [1.0, 0.0],
+        pitch: [1.0, 0.0],
     };
 
     pub fn apply(&self, p: [f32; 3]) -> [f32; 3] {
@@ -151,6 +156,8 @@ impl Instance {
             p[1] * self.scale[1],
             p[2] * self.scale[2],
         ];
+        let [cp, sp] = self.pitch;
+        let (x, z) = (x * cp - z * sp, x * sp + z * cp);
         let [c, s] = self.rotation;
         [
             x * c - y * s + self.offset[0],
@@ -160,7 +167,12 @@ impl Instance {
     }
 
     fn write_bytes(&self, out: &mut Vec<u8>) {
-        let floats = self.offset.iter().chain(&self.scale).chain(&self.rotation);
+        let floats = self
+            .offset
+            .iter()
+            .chain(&self.scale)
+            .chain(&self.rotation)
+            .chain(&self.pitch);
         for v in floats {
             out.extend_from_slice(&v.to_le_bytes());
         }
@@ -179,6 +191,9 @@ pub struct Object {
     pub bounds: Aabb,
     /// Ranges in [`Scene::instances`], indexed by [`Lod`].
     pub lods: [Range<u32>; 3],
+    /// Radius that picks the level of detail instead of the box's: a stretch of pipe is long,
+    /// but its bells only show once its diameter does.
+    pub detail_radius: Option<f32>,
 }
 
 /// A cell of static geometry (no instances), culled by its box.
@@ -233,12 +248,27 @@ impl Scene {
         pieces: &mut CachePiezas,
         budget: u64,
     ) -> Scene {
+        Scene::build_with_pipes(p, layers, models, &PipePieces::default(), pieces, budget)
+    }
+
+    /// [`Scene::build`] with baked pipes laid along the links that have one (F17-04); the other
+    /// links stay in the static batches, all of them trimmed at the node walls.
+    pub fn build_with_pipes(
+        p: &Project,
+        layers: Layers,
+        models: &[PlacedModel],
+        pipes: &PipePieces,
+        pieces: &mut CachePiezas,
+        budget: u64,
+    ) -> Scene {
         let mut b = Builder::default();
         let replaced: std::collections::HashSet<_> =
             models.iter().filter_map(|m| m.replaces).collect();
         b.add_pieces(p, layers, pieces, &replaced);
         b.add_models(models);
-        let fixed = crate::gltf::static_triangles(p, layers.terreno);
+        let laid = b.add_pipes(p, layers, pipes);
+        let fixed =
+            crate::gltf::static_triangles_around(p, layers.terreno, &laid, &pipes.node_anchors);
         let visible: Vec<bool> = fixed
             .familias
             .iter()
@@ -310,6 +340,37 @@ pub fn family_visible(name: &str, layers: Layers) -> bool {
         return layers.alcantarillado;
     }
     name == "terreno" || layers.edificios
+}
+
+/// Pipe segments grouped in one culled object: few enough that the culling box hugs the pipe.
+const PIPE_SEGMENTS_PER_OBJECT: usize = 4;
+/// A pipe shows its bells once three bell radii reach the full-detail size on screen, so a
+/// DN 200 bell is about 5 points across when it appears.
+const PIPE_DETAIL_PER_RADIUS: f64 = 3.0;
+
+fn pipe_instance(piece: &crate::pipe_layout::LaidPiece, prototype: u32) -> Instance {
+    Instance {
+        prototype,
+        // Already local: the origin was subtracted in f64 (docs/15).
+        offset: piece.start.map(|v| v as f32),
+        scale: [piece.scale_x as f32, 1.0, 1.0],
+        rotation: piece.yaw().map(|v| v as f32),
+        pitch: piece.pitch().map(|v| v as f32),
+    }
+}
+
+/// The box of a laid segment: its span along the axis, widened by the bell radius.
+fn include_piece(
+    bounds: &mut Aabb,
+    piece: &crate::pipe_layout::LaidPiece,
+    seg: &crate::pipe_layout::PipeSegment,
+) {
+    let r = seg.radius_m;
+    for x in [seg.span_m.0, seg.span_m.1] {
+        let c = piece.place([x as f32, 0.0, 0.0]);
+        bounds.include([0, 1, 2].map(|k| (c[k] - r) as f32));
+        bounds.include([0, 1, 2].map(|k| (c[k] + r) as f32));
+    }
 }
 
 /// Offset of a part: the node base in `f64` plus the part corner, and only then `f32`.
@@ -389,7 +450,11 @@ impl Builder {
                 lods[lod] = self.place_parts(&parts, base, &mut bounds);
             }
             lods[LOD_BOX] = self.place_box(average_colour(&simple), bounds);
-            self.objects.push(Object { bounds, lods });
+            self.objects.push(Object {
+                bounds,
+                lods,
+                detail_radius: None,
+            });
         }
         pieces.podar();
     }
@@ -403,6 +468,7 @@ impl Builder {
                 offset,
                 scale: [1.0, 1.0, part.scale_z],
                 rotation: [1.0, 0.0],
+                pitch: [1.0, 0.0],
             });
             bounds.include(offset);
             bounds.include([
@@ -422,6 +488,7 @@ impl Builder {
             offset: bounds.min,
             scale: bounds.size().map(|s| s.max(1e-3)),
             rotation: [1.0, 0.0],
+            pitch: [1.0, 0.0],
         });
         start..start + 1
     }
@@ -439,6 +506,7 @@ impl Builder {
                 offset: m.position,
                 scale: [1.0; 3],
                 rotation: [cos, sin],
+                pitch: [1.0, 0.0],
             };
             let mut bounds = Aabb::EMPTY;
             for v in m.mesh.iter() {
@@ -452,8 +520,69 @@ impl Builder {
             self.objects.push(Object {
                 bounds,
                 lods: [i..i + 1, i..i + 1, i..i + 1],
+                detail_radius: None,
             });
         }
+    }
+
+    /// Lays the baked segment of every visible link that has one: an object per few segments,
+    /// with the whole segments at full detail and one stretched barrel per straight run below.
+    /// Returns the links it drew, which the static batches leave out.
+    fn add_pipes(
+        &mut self,
+        p: &Project,
+        layers: Layers,
+        pipes: &PipePieces,
+    ) -> std::collections::HashSet<crate::model::ElementId> {
+        let mut laid = std::collections::HashSet::new();
+        let mut by_mesh: HashMap<usize, u32> = HashMap::new();
+        for l in p
+            .links
+            .iter()
+            .filter(|l| !l.deleted && !l.dibujo_sin_dato())
+        {
+            let Some(seg) = pipes.by_link.get(&l.id) else {
+                continue;
+            };
+            if !family_visible(&l.family, layers) {
+                continue;
+            }
+            let axis = crate::pipe_layout::drawn_axis_local(p, l, &pipes.node_anchors);
+            let pieces = crate::pipe_layout::lay_segments(&axis, seg);
+            if pieces.is_empty() {
+                continue;
+            }
+            let mut prototype = |mesh: &Arc<Vec<Vertice>>| {
+                *by_mesh
+                    .entry(Arc::as_ptr(mesh) as usize)
+                    .or_insert_with(|| self.model_prototype(mesh))
+            };
+            let (full, barrel) = (prototype(&seg.full), prototype(&seg.barrel));
+            for chunk in pieces.chunks(PIPE_SEGMENTS_PER_OBJECT) {
+                let mut bounds = Aabb::EMPTY;
+                let start = self.instances.len() as u32;
+                for piece in chunk {
+                    let proto = match piece.kind {
+                        crate::pipe_layout::PieceKind::Full => full,
+                        crate::pipe_layout::PieceKind::Barrel => barrel,
+                    };
+                    self.instances.push(pipe_instance(piece, proto));
+                    include_piece(&mut bounds, piece, seg);
+                }
+                let plain = self.instances.len() as u32;
+                for run in crate::pipe_layout::plain_runs(chunk, seg) {
+                    self.instances.push(pipe_instance(&run, barrel));
+                }
+                let end = self.instances.len() as u32;
+                self.objects.push(Object {
+                    bounds,
+                    lods: [plain..end, plain..end, start..plain],
+                    detail_radius: Some((seg.radius_m * PIPE_DETAIL_PER_RADIUS) as f32),
+                });
+            }
+            laid.insert(l.id);
+        }
+        laid
     }
 
     fn push_vertex(&mut self, pos: [f32; 3], normal: [f32; 3], colour: [f32; 3]) {
@@ -749,7 +878,7 @@ pub struct DrawCall {
 /// What one camera draws: visible instances at their level of detail, grouped by prototype.
 #[derive(Clone, Debug, Default)]
 pub struct DrawPlan {
-    /// Instance buffer (32 bytes each); instance 0 is the identity, for the batches.
+    /// Instance buffer (`INSTANCE_BYTES` each); instance 0 is the identity, for the batches.
     pub instances: Arc<[u8]>,
     pub draws: Vec<DrawCall>,
     /// Triangles the GPU draws with this plan.
@@ -790,6 +919,17 @@ pub fn px_per_metre(cam: &Camera) -> f32 {
 pub fn level_of_detail(view_proj: &[f32; 16], px_per_metre: f32, b: &Aabb) -> Lod {
     let [sx, sy, sz] = b.size();
     let radius = 0.5 * (sx * sx + sy * sy + sz * sz).sqrt();
+    detail_at(view_proj, px_per_metre, b, radius)
+}
+
+fn object_detail(view_proj: &[f32; 16], px_per_metre: f32, o: &Object) -> Lod {
+    match o.detail_radius {
+        Some(radius) => detail_at(view_proj, px_per_metre, &o.bounds, radius),
+        None => level_of_detail(view_proj, px_per_metre, &o.bounds),
+    }
+}
+
+fn detail_at(view_proj: &[f32; 16], px_per_metre: f32, b: &Aabb, radius: f32) -> Lod {
     let w = to_clip(view_proj, b.centre())[3];
     if w <= radius.max(1e-3) {
         return LOD_FULL;
@@ -855,7 +995,7 @@ fn visible_instances(
             plan.culled += 1;
             continue;
         }
-        let lod = level_of_detail(view_proj, px_per_metre, &o.bounds);
+        let lod = object_detail(view_proj, px_per_metre, o);
         plan.objects_per_lod[lod] += 1;
         chosen.extend(o.lods[lod].clone());
     }
@@ -988,6 +1128,70 @@ mod tests {
             "a model on its own adds an object"
         );
         assert_eq!(objects(Some(manhole.id)), plain, "no double drawing");
+    }
+
+    /// A baked pipe on a sloped link: each instance lands where the painter places the segment,
+    /// tilted onto the axis, and the link leaves the static batches (F17-04).
+    #[test]
+    fn baked_pipe_segments_are_instanced_on_their_sloped_axis() {
+        use crate::pipe_layout::{PipePieces, PipeSegment, lay_segments};
+        let p = crate::demo_cadena::cadena();
+        let link = p.link_by_code("CL-303").unwrap();
+        let vertex = |pos: [f32; 3]| Vertice {
+            pos,
+            normal: [0.0, 0.0, 1.0],
+            color: [0.5, 0.5, 0.5],
+        };
+        let tri = |x: f32| {
+            vec![
+                vertex([0.0, 0.0, 0.1]),
+                vertex([x, 0.0, 0.1]),
+                vertex([x, 0.1, 0.0]),
+            ]
+        };
+        let seg = Arc::new(PipeSegment {
+            full: Arc::new(tri(2.5)),
+            barrel: Arc::new(tri(2.3)),
+            laying_length_m: 2.5,
+            barrel_end_m: 2.3,
+            radius_m: 0.15,
+            span_m: (0.0, 2.6),
+        });
+        let pipes = PipePieces {
+            by_link: [(link.id, seg.clone())].into(),
+            node_anchors: Default::default(),
+        };
+        let build = |pipes: &PipePieces| {
+            Scene::build_with_pipes(
+                &p,
+                Layers::default(),
+                &[],
+                pipes,
+                &mut CachePiezas::default(),
+                GPU_BUDGET,
+            )
+        };
+        let (plain, baked) = (build(&PipePieces::default()), build(&pipes));
+        let axis = crate::pipe_layout::drawn_axis_local(&p, link, &Default::default());
+        let pieces = lay_segments(&axis, &seg);
+        assert!(pieces.len() > 4, "{}", pieces.len());
+        let drawn = baked.world_triangles(LOD_FULL);
+        for piece in &pieces {
+            let mesh = match piece.kind {
+                crate::pipe_layout::PieceKind::Full => &seg.full,
+                crate::pipe_layout::PieceKind::Barrel => &seg.barrel,
+            };
+            let want = mesh.iter().map(|v| piece.place(v.pos)).collect::<Vec<_>>();
+            let found = drawn.iter().any(|t| {
+                (0..3).all(|k| (0..3).all(|i| (t[k][i] as f64 - want[k][i]).abs() < 1e-3))
+            });
+            assert!(found, "no instance at {:?}", want);
+        }
+        let static_tris = |s: &Scene| s.batches.iter().map(|b| b.mesh.index_count).sum::<u32>();
+        assert!(
+            static_tris(&baked) < static_tris(&plain),
+            "the baked link is not drawn twice"
+        );
     }
 
     /// With every object at full detail, the instanced scene draws the same triangles as the

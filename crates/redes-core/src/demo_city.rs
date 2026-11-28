@@ -310,6 +310,7 @@ pub fn ciudad() -> Project {
             cota_solera_fin: None,
             deleted: false,
             sin_dato: Vec::new(),
+            modelo: None,
         })
         .ok();
     }
@@ -536,6 +537,7 @@ fn conectar(
         cota_solera_fin: None,
         deleted: false,
         sin_dato: Vec::new(),
+        modelo: None,
     })
     .ok();
 }

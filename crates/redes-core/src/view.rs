@@ -460,7 +460,25 @@ pub fn build_with_models(
     opts: &Opciones,
     models: &ModelPieces,
 ) -> Scene {
-    construir(p, terrain, cam, layers, selected, opts, true, models)
+    let no_pipes = crate::pipe_layout::PipePieces::default();
+    construir(
+        p, terrain, cam, layers, selected, opts, true, models, &no_pipes,
+    )
+}
+
+/// [`build_with_models`] with baked pipes laid along the links that have one (F17-04).
+#[allow(clippy::too_many_arguments)]
+pub fn build_with_library(
+    p: &Project,
+    terrain: Option<&crate::terrain::Terrain>,
+    cam: &Camera,
+    layers: Layers,
+    selected: Option<&str>,
+    opts: &Opciones,
+    models: &ModelPieces,
+    pipes: &crate::pipe_layout::PipePieces,
+) -> Scene {
+    construir(p, terrain, cam, layers, selected, opts, true, models, pipes)
 }
 
 /// [`build_opts`] con el recorte por pantalla a elección: las pruebas comparan con y sin él.
@@ -474,6 +492,7 @@ fn construir(
     opts: &Opciones,
     recortar: bool,
     models: &ModelPieces,
+    pipes: &crate::pipe_layout::PipePieces,
 ) -> Scene {
     let o = p.origin;
     let zr = cam.target[2];
@@ -799,6 +818,7 @@ fn construir(
         zr,
         k,
         distancia: cam.distance as f32,
+        pipes,
     };
     for b in en_bloques(&p.links, |bloque| dibujar_tramos(bloque, &cx)) {
         net.extend(b.prims);
@@ -1032,6 +1052,7 @@ struct Contexto<'a> {
     zr: f64,
     k: f64,
     distancia: f32,
+    pipes: &'a crate::pipe_layout::PipePieces,
 }
 
 impl Contexto<'_> {
@@ -1197,23 +1218,18 @@ fn dibujar_tramo(l: &crate::model::Link, cx: &Contexto, traza: &mut Vec<P3>, out
         crate::parts::Material::new(0.78, 0.62, 0.44)
     };
     // El tubo se dibuja por su eje (solera + DI/2) con el diámetro exterior; no atraviesa
-    // el pozo: se recorta en su pared.
-    // Lo mismo que `l.eje()` y `l.diametro_exterior_m()`, con el diámetro interior leído una vez.
-    let di = l.diametro_interior_m();
-    let d_ext = di + 2.0 * l.espesor_pared_m();
-    traza.clear();
-    traza.extend(l.path.iter().map(|q| P3::new(q.x, q.y, q.z + di * 0.5)));
+    // el pozo: se recorta en su pared (en el ancla de la pieza horneada, si la tiene).
+    let d_ext = l.diametro_exterior_m();
+    crate::pipe_layout::drawn_axis(cx.p, l, &cx.pipes.node_anchors, traza);
     // Sin DN o sin cota (F12-03): línea gris fina, nunca un tubo de diámetro inventado.
     let sin_dato = l.dibujo_sin_dato();
-    let r0 =
-        cx.p.node(l.from)
-            .map(|n| n.drawing_diameter_m() * 0.5 + 0.15)
-            .unwrap_or(0.4);
-    let r1 =
-        cx.p.node(l.to)
-            .map(|n| n.drawing_diameter_m() * 0.5 + 0.15)
-            .unwrap_or(0.4);
-    recortar_extremos(traza, r0, r1);
+    if !sin_dato
+        && let Some(seg) = cx.pipes.by_link.get(&l.id)
+        && seen_as_tube(traza, d_ext, cx)
+    {
+        draw_baked_pipe(seg, traza, d_ext, sel, [lr, lg, lb], cx, out);
+        return;
+    }
 
     // Los tubos se construyen en coordenadas LOCALES: con UTM en f32 el paso es ~1 m y la
     // sección colapsaría (los tubos se verían como cintas).
@@ -1227,9 +1243,9 @@ fn dibujar_tramo(l: &crate::model::Link, cx: &Contexto, traza: &mut Vec<P3>, out
             continue;
         };
         let depth = ((da + db) * 0.5) as f32;
-        let r_px = (d_ext * 0.5 * cx.pr.focal() / depth.max(1.0) as f64) as f32;
+        let r_px = pipe_px(d_ext, depth, cx);
 
-        if r_px < 2.2 || sin_dato {
+        if r_px < PIPE_LINE_PX || sin_dato {
             // A lo lejos, la tubería es una línea: mismo color, mucho menos coste.
             let width = if sel {
                 4.5
@@ -1296,54 +1312,165 @@ fn dibujar_tramo(l: &crate::model::Link, cx: &Contexto, traza: &mut Vec<P3>, out
                 Some(xc) => cortar_tri(verts, xc),
                 None => (Trozos::uno(verts), None),
             };
-            if let Some((ca, cb)) = arista
-                && let (Some((sa, da)), Some((sb, db))) = (cx.pr.proyectar(ca), cx.pr.proyectar(cb))
-            {
-                if cx.pantalla.ve_linea(sa, sb, 1.4) {
-                    out.prims.push(Prim::Line {
-                        a: sa,
-                        b: sb,
-                        w: 1.4,
-                        color: [0.98, 0.86, 0.42, 1.0],
-                        depth: ((da + db) * 0.5) as f32,
-                    });
-                    out.lineas += 1;
-                } else {
-                    out.descartadas += 1;
-                }
+            push_cut_edge(arista, cx, out);
+            push_pipe_pieces(
+                &trozos,
+                [tri.color[0], tri.color[1], tri.color[2]],
+                sel,
+                cx,
+                out,
+            );
+        }
+    }
+}
+
+/// Selected pipes are drawn in this colour, parametric or baked.
+const SELECTED_PIPE: [f32; 3] = [0.36, 0.95, 0.56];
+/// Below this on-screen radius (points) a pipe is a line.
+const PIPE_LINE_PX: f32 = 2.2;
+/// From this on-screen radius (points) a baked pipe shows its bells; below, its plain barrel.
+const PIPE_BELLS_PX: f32 = 6.0;
+
+/// The pieces of a cut pipe triangle, projected, fogged and tinted if selected.
+fn push_pipe_pieces(trozos: &Trozos, color: [f32; 3], sel: bool, cx: &Contexto, out: &mut Salida) {
+    for trozo in trozos.iter() {
+        let (Some((s0, d0)), Some((s1, d1)), Some((s2, d2))) = (
+            cx.pr.proyectar(trozo[0]),
+            cx.pr.proyectar(trozo[1]),
+            cx.pr.proyectar(trozo[2]),
+        ) else {
+            continue;
+        };
+        let pts = expand([s0, s1, s2], 0.35);
+        if !cx.pantalla.ve(&pts) {
+            out.descartadas += 1;
+            continue;
+        }
+        let depth_t = ((d0 + d1 + d2) / 3.0) as f32;
+        let f = fog(depth_t, cx.distancia);
+        let c = if sel { SELECTED_PIPE } else { color };
+        out.prims.push(Prim::Poly {
+            pts: pts.to_vec(),
+            fill: [
+                c[0] * f + 0.050 * (1.0 - f),
+                c[1] * f + 0.055 * (1.0 - f),
+                c[2] * f + 0.066 * (1.0 - f),
+                1.0,
+            ],
+            depth: depth_t,
+        });
+        out.lineas += 1;
+    }
+}
+
+/// The yellow edge a vertical cut leaves on a pipe triangle.
+fn push_cut_edge(edge: Option<([f64; 3], [f64; 3])>, cx: &Contexto, out: &mut Salida) {
+    let Some((ca, cb)) = edge else { return };
+    let (Some((sa, da)), Some((sb, db))) = (cx.pr.proyectar(ca), cx.pr.proyectar(cb)) else {
+        return;
+    };
+    if cx.pantalla.ve_linea(sa, sb, 1.4) {
+        out.prims.push(Prim::Line {
+            a: sa,
+            b: sb,
+            w: 1.4,
+            color: [0.98, 0.86, 0.42, 1.0],
+            depth: ((da + db) * 0.5) as f32,
+        });
+        out.lineas += 1;
+    } else {
+        out.descartadas += 1;
+    }
+}
+
+/// Whether any run of the drawn axis is big enough on screen to be a tube, not a line.
+fn seen_as_tube(axis: &[P3], d_ext: f64, cx: &Contexto) -> bool {
+    axis.windows(2).any(|w| {
+        let (a, b) = (cx.local(w[0]), cx.local(w[1]));
+        let (da, db) = (cx.pr.depth(a), cx.pr.depth(b));
+        cx.pr.segmento(a, b, da, db).is_some()
+            && pipe_px(d_ext, ((da + db) * 0.5) as f32, cx) >= PIPE_LINE_PX
+    })
+}
+
+fn pipe_px(d_ext: f64, depth: f32, cx: &Contexto) -> f32 {
+    (d_ext * 0.5 * cx.pr.focal() / depth.max(1.0) as f64) as f32
+}
+
+/// A link drawn with its baked segment (F17-04): whole segments with their bells up close, the
+/// plain barrel a little farther and a line from afar, segment by segment.
+fn draw_baked_pipe(
+    seg: &crate::pipe_layout::PipeSegment,
+    axis: &[P3],
+    d_ext: f64,
+    sel: bool,
+    line_colour: [f32; 3],
+    cx: &Contexto,
+    out: &mut Salida,
+) {
+    use crate::pipe_layout::{PieceKind, lay_segments};
+    let o = cx.p.origin;
+    let local: Vec<[f64; 3]> = axis.iter().map(|q| [q.x - o.x, q.y - o.y, q.z]).collect();
+    let exaggerate = |q: [f64; 3]| [q[0], q[1], (q[2] - cx.zr) * cx.k + cx.zr];
+    let mut shading = crate::parts::Mesh::default();
+    for piece in lay_segments(&local, seg) {
+        let (a, b) = (exaggerate(piece.start), exaggerate(piece.end()));
+        let (da, db) = (cx.pr.depth(a), cx.pr.depth(b));
+        let Some((sa, sb)) = cx.pr.segmento(a, b, da, db) else {
+            continue;
+        };
+        let depth = ((da + db) * 0.5) as f32;
+        let r_px = pipe_px(d_ext, depth, cx);
+        if r_px < PIPE_LINE_PX {
+            let width = if sel {
+                4.5
+            } else {
+                (r_px * 2.0).clamp(1.2, 6.0)
+            };
+            if !cx.pantalla.ve_linea(sa, sb, width) {
+                out.descartadas += 1;
+                continue;
             }
-            for trozo in trozos.iter() {
-                let (Some((s0, d0)), Some((s1, d1)), Some((s2, d2))) = (
-                    cx.pr.proyectar(trozo[0]),
-                    cx.pr.proyectar(trozo[1]),
-                    cx.pr.proyectar(trozo[2]),
-                ) else {
-                    continue;
-                };
-                let pts = expand([s0, s1, s2], 0.35);
-                if !cx.pantalla.ve(&pts) {
-                    out.descartadas += 1;
-                    continue;
-                }
-                let depth_t = ((d0 + d1 + d2) / 3.0) as f32;
-                let f = fog(depth_t, cx.distancia);
-                let c = if sel {
-                    [0.36, 0.95, 0.56, 1.0]
-                } else {
-                    [tri.color[0], tri.color[1], tri.color[2], 1.0]
-                };
-                out.prims.push(Prim::Poly {
-                    pts: pts.to_vec(),
-                    fill: [
-                        c[0] * f + 0.050 * (1.0 - f),
-                        c[1] * f + 0.055 * (1.0 - f),
-                        c[2] * f + 0.066 * (1.0 - f),
-                        1.0,
-                    ],
-                    depth: depth_t,
-                });
-                out.lineas += 1;
-            }
+            let [cr, cg, cb] = line_colour;
+            out.prims.push(Prim::Line {
+                a: sa,
+                b: sb,
+                w: width,
+                color: [cr, cg, cb, fog(depth, cx.distancia)],
+                depth,
+            });
+            out.lineas += 1;
+            continue;
+        }
+        let radio = seg.radius_m * 2.2 * cx.k.max(1.0);
+        if !cx.pantalla.ve_tubo(&cx.pr, (sa, da), (sb, db), radio) {
+            out.descartadas += 1;
+            continue;
+        }
+        let (piece, mesh) = match (piece.kind, r_px >= PIPE_BELLS_PX) {
+            (PieceKind::Full, true) => (piece, &seg.full),
+            _ => (piece.as_barrel(seg), &seg.barrel),
+        };
+        for tri in mesh.chunks_exact(3) {
+            let placed = [0, 1, 2].map(|k| piece.place(tri[k].pos));
+            // Lit in the world frame (a pipe going north is lit unlike one going east), from
+            // edges relative to the first corner: f32 at a 2500 m elevation would blur the normal.
+            let edge = |k: usize| [0, 1, 2].map(|i| (placed[k][i] - placed[0][i]) as f32);
+            shading.tris.clear();
+            shading.tri(
+                [0.0; 3],
+                edge(1),
+                edge(2),
+                crate::parts::Material::new(tri[0].color[0], tri[0].color[1], tri[0].color[2]),
+            );
+            let lit = shading.tris[0].color;
+            let verts = placed.map(exaggerate);
+            let (trozos, arista) = match cx.corte_x {
+                Some(xc) => cortar_tri(verts, xc),
+                None => (Trozos::uno(verts), None),
+            };
+            push_cut_edge(arista, cx, out);
+            push_pipe_pieces(&trozos, [lit[0], lit[1], lit[2]], sel, cx, out);
         }
     }
 }
@@ -1795,29 +1922,6 @@ fn colocador(model: Option<&ModelPiece>) -> impl Fn([f32; 3]) -> [f64; 3] {
 fn fog(depth: f32, distance: f32) -> f32 {
     let t = (depth / (distance * 2.2).max(1.0)).clamp(0.0, 0.55);
     1.0 - t
-}
-
-/// Acerca el primer y el último vértice de una polilínea hacia el interior, para que la tubería
-/// nazca y muera en la pared del pozo y no lo atraviese.
-fn recortar_extremos(pts: &mut [P3], r0: f64, r1: f64) {
-    if pts.len() < 2 {
-        return;
-    }
-    let n = pts.len();
-    let d0 = pts[0].p2().dist(pts[1].p2()).max(1e-6);
-    let t0 = (r0 / d0).min(0.45);
-    pts[0] = P3::new(
-        pts[0].x + (pts[1].x - pts[0].x) * t0,
-        pts[0].y + (pts[1].y - pts[0].y) * t0,
-        pts[0].z + (pts[1].z - pts[0].z) * t0,
-    );
-    let d1 = pts[n - 2].p2().dist(pts[n - 1].p2()).max(1e-6);
-    let t1 = (r1 / d1).min(0.45);
-    pts[n - 1] = P3::new(
-        pts[n - 1].x + (pts[n - 2].x - pts[n - 1].x) * t1,
-        pts[n - 1].y + (pts[n - 2].y - pts[n - 1].y) * t1,
-        pts[n - 1].z + (pts[n - 2].z - pts[n - 1].z) * t1,
-    );
 }
 
 /// Triángulos que quedan de uno al cortarlo (cero, uno o dos), en la pila (F14-04).
@@ -2977,6 +3081,7 @@ mod tests {
                     &opts,
                     false,
                     &sin_modelos,
+                    &Default::default(),
                 );
                 let recortada = construir(
                     &p,
@@ -2987,6 +3092,7 @@ mod tests {
                     &opts,
                     true,
                     &sin_modelos,
+                    &Default::default(),
                 );
                 // Sin recorte solo se descarta lo que queda entero detrás de la cámara.
                 assert!(recortada.descartadas >= todo.descartadas);

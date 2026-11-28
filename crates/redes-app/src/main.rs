@@ -298,7 +298,8 @@ impl State {
 
         if !self.gpu3d {
             let (modelos, simplificados) = self.piezas_pintor();
-            self.scene = view::build_with_models(
+            let tuberias = self.tuberias();
+            self.scene = view::build_with_library(
                 &self.project,
                 self.display.as_ref(),
                 &self.cam,
@@ -306,6 +307,7 @@ impl State {
                 self.sel.as_deref(),
                 &self.opts,
                 &modelos,
+                &tuberias,
             );
             if simplificados > 0 {
                 self.aviso_modelos = Some(format!(
@@ -318,21 +320,25 @@ impl State {
         if self.gpu3d {
             let clave = ClaveMalla::de(self);
             let instancias = if self.clave_malla != Some(clave) {
-                match &self.bib {
-                    Some((carpeta, bib)) => Some(modelos::instancias(
-                        &self.project,
-                        carpeta,
-                        bib,
-                        &mut self.modelos,
-                    )),
-                    None => Some(Vec::new()),
-                }
+                let instancias = match &self.bib {
+                    Some((carpeta, bib)) => {
+                        modelos::instancias(&self.project, carpeta, bib, &mut self.modelos)
+                    }
+                    None => Vec::new(),
+                };
+                Some((instancias, self.tuberias()))
             } else {
                 None
             };
             if let Ok(mut g) = self.geom.lock() {
-                if let Some(instancias) = instancias {
-                    g.load_with_models(&self.project, self.layers, &instancias, &mut self.piezas);
+                if let Some((instancias, tuberias)) = instancias {
+                    g.load_with_models(
+                        &self.project,
+                        self.layers,
+                        &instancias,
+                        &tuberias,
+                        &mut self.piezas,
+                    );
                     self.clave_malla = Some(clave);
                     self.aviso_gpu = g.scene.warning.clone();
                 }
@@ -451,6 +457,16 @@ impl State {
                 modelos::piezas_pintor(&self.project, &carpeta, &bib, &mut self.modelos, PASO_PROXY)
             }
             None => (view::ModelPieces::new(), 0),
+        }
+    }
+
+    /// The baked pipes and the node anchors they start and end at (F17-04).
+    fn tuberias(&mut self) -> redes_core::pipe_layout::PipePieces {
+        match self.bib.clone() {
+            Some((carpeta, bib)) => {
+                modelos::tuberias(&self.project, &carpeta, &bib, &mut self.modelos)
+            }
+            None => Default::default(),
         }
     }
 
@@ -1543,6 +1559,8 @@ fn main() {
             ),
             ("unidad", unit_close_up as fn(&mut State)),
             ("unidad-corte", unit_cut as fn(&mut State)),
+            ("tubo", escena_tubo as fn(&mut State)),
+            ("tubo-corte", escena_tubo_corte as fn(&mut State)),
             ("validar", validacion::escena as fn(&mut State)),
         ],
         ..AppSpec::new("Redes — visor 3D", (1280.0, 800.0), State::new, view)
@@ -1655,6 +1673,79 @@ fn unit_cut(s: &mut State) {
     s.cam.azimuth = -25.0;
     s.cam.elevation = 18.0;
     s.rebuild();
+}
+
+/// Where the pipe that ends at the sample manhole meets its wall: the point on its axis
+/// `along` metres upstream of the wall and its plan direction (degrees, towards the manhole).
+/// From there the trimmed end, the last bell and a spigot are in view (F17-04).
+fn pipe_entering_sample_manhole(s: &State, along: f64) -> Option<([f64; 3], f64)> {
+    let p = &s.project;
+    let manhole = p.node_by_code(&sample_manhole(p)?)?;
+    let link = p
+        .links
+        .iter()
+        .filter(|l| !l.deleted && l.to == manhole.id)
+        .max_by_key(|l| l.modelo.is_some())?;
+    let axis = redes_core::pipe_layout::drawn_axis_local(p, link, &Default::default());
+    let (end, before) = (axis[axis.len() - 1], axis[axis.len() - 2]);
+    let d = [end[0] - before[0], end[1] - before[1], end[2] - before[2]];
+    let plan = d[0].hypot(d[1]).max(1e-6);
+    let t = along / plan;
+    let target = [end[0] - d[0] * t, end[1] - d[1] * t, end[2] - d[2] * t];
+    Some((target, d[1].atan2(d[0]).to_degrees()))
+}
+
+/// Escena `tubo`: a pipe entering a manhole up close, without terrain or selection.
+fn escena_tubo(s: &mut State) {
+    s.layers.terreno = false;
+    s.sel = None;
+    if let Some((target, heading)) = pipe_entering_sample_manhole(s, 1.6) {
+        s.cam.target = target;
+        s.cam.distance = 5.5;
+        s.cam.azimuth = (heading - 120.0) as f32;
+        s.cam.elevation = 22.0;
+        s.cam.z_scale = 1.0;
+    }
+    s.fitted = true;
+    s.rebuild();
+}
+
+/// Escena `tubo-corte`: the same pipe cut across through the ring of its last joint, seen from
+/// the manhole side: socket, ring and spigot in section (painter only).
+fn escena_tubo_corte(s: &mut State) {
+    escena_tubo(s);
+    if let Some((target, heading)) = last_joint_ring(s) {
+        s.opts.corte_x = Some(target[0] as f32);
+        s.cam.target = target;
+        s.cam.distance = 1.6;
+        s.cam.azimuth = (heading - 200.0) as f32;
+        s.cam.elevation = 12.0;
+    }
+    s.rebuild();
+}
+
+/// The middle of the socket of the last whole segment of the pipe entering the sample manhole,
+/// where its ring is, and the pipe heading (degrees).
+fn last_joint_ring(s: &mut State) -> Option<([f64; 3], f64)> {
+    let pipes = s.tuberias();
+    let p = &s.project;
+    let manhole = p.node_by_code(&sample_manhole(p)?)?;
+    let (link, seg) = p
+        .links
+        .iter()
+        .filter(|l| !l.deleted && l.to == manhole.id)
+        .find_map(|l| pipes.by_link.get(&l.id).map(|seg| (l, seg)))?;
+    let axis = redes_core::pipe_layout::drawn_axis_local(p, link, &pipes.node_anchors);
+    let last_whole = redes_core::pipe_layout::lay_segments(&axis, seg)
+        .into_iter()
+        .rev()
+        .find(|piece| piece.kind == redes_core::pipe_layout::PieceKind::Full)?;
+    let ring = seg.laying_length_m + 0.65 * (seg.span_m.1 - seg.laying_length_m);
+    let [dx, dy, _] = last_whole.direction;
+    Some((
+        last_whole.place([ring as f32, 0.0, 0.0]),
+        dy.atan2(dx).to_degrees(),
+    ))
 }
 
 /// Escena `pozos`: primer plano del primer pozo (cono, marco, tapa y escalera). El objetivo sale

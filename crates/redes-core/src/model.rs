@@ -266,6 +266,10 @@ pub struct Link {
     /// [`COTA_SOLERA`] (las cotas del trazado son solo de dibujo). Ver [`Node::sin_dato`].
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sin_dato: Vec<String>,
+    /// Library piece the link is drawn with: one baked segment laid along it (F17-04), like
+    /// [`Node::modelo`]. Without it the link keeps the parametric pipe.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub modelo: Option<String>,
 }
 
 impl Link {
@@ -798,6 +802,7 @@ mod tests {
             cota_solera_fin: None,
             deleted: false,
             sin_dato: Vec::new(),
+            modelo: None,
         }
     }
 
@@ -851,6 +856,7 @@ mod tests {
             cota_solera_fin: None,
             deleted: false,
             sin_dato: Vec::new(),
+            modelo: None,
         });
         assert!(r.is_err());
     }

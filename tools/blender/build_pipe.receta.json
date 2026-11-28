@@ -1,0 +1,43 @@
+{
+  "schema": "redes.receta/1",
+  "familia": "saneamiento.tuberia",
+  "otras_familias": ["agua.tuberia"],
+  "parametros": {
+    "dn_mm": { "desde": "dn", "unidad": "mm" },
+    "inner_diameter_m": { "desde": "diametro_interior_o_dn", "unidad": "m" },
+    "wall_thickness_m": { "desde": "atributo", "clave": "espesor_pared", "unidad": "m" },
+    "pipe_material": { "desde": "atributo", "clave": "material" },
+    "system": { "desde": "sistema" },
+    "segment_length_m": {
+      "desde": "forma",
+      "unidad": "m",
+      "valor": {
+        "pvc": 6.0,
+        "pead": 12.0,
+        "hierro_ductil": 6.0,
+        "fundicion": 6.0,
+        "acero": 12.0,
+        "asbesto_cemento": 5.0,
+        "hormigon": 2.5,
+        "hormigon_armado": 2.5,
+        "gres": 2.0,
+        "otro": 6.0
+      }
+    },
+    "joint_type": {
+      "desde": "forma",
+      "valor": { "pead": "termofusion", "otro": "campana_espiga" }
+    },
+    "socket_depth_ratio": { "desde": "forma", "valor": 0.5 },
+    "socket_depth_min_m": { "desde": "forma", "valor": 0.08, "unidad": "m" },
+    "socket_clearance_m": { "desde": "forma", "valor": 0.002, "unidad": "m" },
+    "bell_wall_ratio": { "desde": "forma", "valor": 1.0 },
+    "bell_taper_ratio": { "desde": "forma", "valor": 3.0 },
+    "spigot_chamfer_ratio": { "desde": "forma", "valor": 1.5 },
+    "gasket_span": { "desde": "forma", "valor": [0.55, 0.8] },
+    "gasket_material": { "desde": "forma", "valor": "caucho" },
+    "bead_width_ratio": { "desde": "forma", "valor": 1.5 },
+    "bead_height_ratio": { "desde": "forma", "valor": 0.6 },
+    "segments": { "desde": "forma", "valor": 24 }
+  }
+}
