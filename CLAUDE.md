@@ -19,6 +19,7 @@
 - `skills/redes-ingesta/`: skill guiada (D5): `SKILL.md` + `references/` por formato (plan, SWMM, EPANET, DXF Civil 3D, SIG, tablas). Sin scripts: NO añadas adaptadores por programa ni en Python ni en Rust; mejora las referencias y el contrato del plan.
 - `docs/`: documentación numerada `NN-nombre.md`. `docs/consejo/` es contexto histórico (el alcance con cálculos quedó descartado), NO el alcance vigente.
 - `scripts/`: `mutar.ps1`, `empaquetar.ps1`, `traer-rune.ps1`.
+- `tools/blender/`: recetas `bpy` de las familias (D14, D15). Se hornean sin ventana: `blender -b --factory-startup --python-exit-code 1 --python tools/blender/<script>.py -- <params.json>` (sin `--python-exit-code 1` un error sale con 0). Nada de operadores `bmesh` que fusionen o reordenen: rompen el determinismo.
 - `vendor/rune`: copia fijada de Rune. `demo/`: proyectos de ejemplo. `out/`: salida generada (ignorada).
 
 ## Comandos (PowerShell; los mismos que usa el CI)
