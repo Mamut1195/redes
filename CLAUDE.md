@@ -13,7 +13,7 @@
 
 ## Mapa del repo
 - `crates/redes-core`: motor headless, SIN UI y SIN cálculo de ingeniería.
-  - `model` (objetos, `Dato`), `families`/`families_extra`/`parts`/`parts_cadena` (registro de familias y subtipos + geometría paramétrica), `topology`, `terrain` (TIN), `geom`, `view` (vista, pintor, corte, etiquetas), `ingest` (plan/DXF/GeoJSON/terreno), `export` (DXF, GeoJSON), `gltf`, `biblioteca` (modelos .glb), `cantidades`, `project_io` (`*.redes`), `envelope`, `city`, `demo*` (proyectos de demostración).
+  - `model` (objetos, `Dato`), `families`/`families_extra`/`parts`/`parts_cadena` (registro de familias y subtipos + geometría paramétrica), `topology`, `terrain` (TIN), `geom`, `view` (vista, pintor, corte, etiquetas), `ingest` (plan/DXF propio/terreno; GeoJSON solo se exporta), `export` (DXF, GeoJSON), `gltf`, `biblioteca` (modelos .glb), `cantidades`, `project_io` (`*.redes`), `envelope`, `city`, `demo*` (proyectos de demostración).
 - `crates/redes-cli`: binario `redes`. `src/main.rs` concentra todos los comandos (clap); `src/svg.rs` genera la vista SVG.
 - `crates/redes-app`: visor Rune. `main.rs` (ventana, inspector, revisión), `gpu3d.rs` (pase 3D con profundidad, `--gpu3d`), `modelos.rs` (caché de mallas, proxy).
 - `skills/redes-ingesta/`: skill guiada (D5): `SKILL.md` + `references/` por formato (plan, SWMM, EPANET, DXF Civil 3D, SIG, tablas). Sin scripts: NO añadas adaptadores por programa ni en Python ni en Rust; mejora las referencias y el contrato del plan.
@@ -33,7 +33,7 @@
 - Abrir la app: `$env:REDES_PROJECT = "out\x.redes"; cargo run -p redes-app --release` (añade `--gpu3d` para el pase con profundidad).
 - Verificar la UI sin ventana: `cargo run -p redes-app -- --snap out\vista.png --scene iso`; `--tree out\arbol.json`.
 - CLI: `redes esquema` lista los comandos y los códigos de error. Opciones globales: `-p/--project`, `--pretty`, `--dry-run`, `--quiet`.
-- Variables de entorno: `REDES_PROJECT`, `REDES_GPU`, `REDES_INFO`, `REDES_JOURNAL_USUARIO`, `REDES_BLENDER`.
+- Variables de entorno: `REDES_PROJECT`, `REDES_GPU3D` (=1 equivale a `--gpu3d`), `REDES_INFO`, `REDES_JOURNAL_USUARIO`, `REDES_BLENDER`.
 
 ## Convenciones
 - Comandos de la CLI, mensajes y docs en español. Los identificadores en español que ya existen se migran a inglés poco a poco (ver «Idioma del código»).
