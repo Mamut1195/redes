@@ -1,44 +1,23 @@
 """Bake a parametric inspection manhole to .glb with Blender running headless.
 
 Usage:
-    blender -b --factory-startup --python tools/blender/build_manhole.py -- params.json
+    blender -b --factory-startup --python-exit-code 1 --python tools/blender/build_manhole.py -- params.json
 
-Prototype for F17-01 (docs/17, section F17-01). The body and cone are one
+params.json is one parameter set or {"jobs": [...]}; the names are listed in
+build_manhole.receta.json (docs/17, section F17-02). The body and cone are one
 revolved solid built from explicit vertex and face lists; the cover is a
 Geometry Nodes modifier driven by group inputs, so the same bake exercises both
-ways of building a parametric family.
+ways of building a parametric family (docs/17, section F17-01).
 """
 
-import json
 import math
+import os
 import sys
 
 import bpy
 
-DEFAULTS = {
-    "inner_diameter_m": 1.2,
-    "depth_m": 2.5,
-    "wall_thickness_m": 0.15,
-    "cone_height_m": 0.6,
-    "opening_diameter_m": 0.6,
-    "cover_thickness_m": 0.05,
-    "body_material": "hormigon",
-    "cover_material": "hierro",
-    "segments": 48,
-}
-
-
-def read_params(argv):
-    if "--" not in argv:
-        sys.exit("expected: -- <params.json>")
-    with open(argv[argv.index("--") + 1], encoding="utf-8") as f:
-        given = json.load(f)
-    unknown = set(given) - set(DEFAULTS) - {"output"}
-    if unknown:
-        sys.exit(f"unknown params: {sorted(unknown)}")
-    if "output" not in given:
-        sys.exit("missing param: output")
-    return {**DEFAULTS, **given}
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from redes_bake import run  # noqa: E402
 
 
 def validate(p):
@@ -181,10 +160,7 @@ def tag(obj, p, part):
     obj["redes_material"] = p["body_material"] if part == "cuerpo" else p["cover_material"]
 
 
-def main():
-    p = read_params(sys.argv)
-    validate(p)
-    bpy.ops.wm.read_factory_settings(use_empty=True)
+def build(p):
     body_material = bpy.data.materials.new(p["body_material"])
     cover_material = bpy.data.materials.new(p["cover_material"])
     root = bpy.data.objects.new(
@@ -196,14 +172,6 @@ def main():
         tag(obj, p, part)
         obj.parent = root
         scene.collection.objects.link(obj)
-    bpy.ops.export_scene.gltf(
-        filepath=p["output"],
-        export_format="GLB",
-        export_apply=True,
-        export_extras=True,
-        export_yup=True,
-        export_materials="EXPORT",
-    )
 
 
-main()
+run(__file__, validate, build)

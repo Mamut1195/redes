@@ -332,6 +332,148 @@ agente para consultar la API de Python o mirar una escena mientras escribe una r
 producir piezas, porque lo que hace no queda en el repo ni se puede repetir. El comunitario se
 descarta (sin modo sin ventana, telemetría por defecto, socket sin autenticación).
 
-Siguen abiertas en F17-02: si la app hornea bajo demanda (CLI → Blender → caché por parámetros) o
-reconstruye la receta en el núcleo; cuántas piezas por proceso; y si el CI instala Blender para
-hornear o solo comprueba los `.glb` ya horneados (hoy el CI no tiene Blender).
+Las preguntas que quedaban (hornear bajo demanda o reconstruir en el núcleo, cuántas piezas por
+proceso, Blender en el CI) las resuelve F17-02 (§11, D16).
+
+## 11. F17-02: cómo llegan los parámetros a la geometría
+
+Evaluación del 28/11/2026 (decisión **D16** en docs/22). Pregunta: cómo pasan los datos de un
+objeto del proyecto (diámetro, cotas, espesor, material…) a la pieza de Blender que lo dibuja, sin
+que la app dependa de Blender para abrir y sin inventar ningún número.
+
+### 11.1 Las tres vías
+
+| | A. Hornear bajo demanda con caché | B. Reconstruir la receta en el núcleo | C. Plantilla con regiones estirables |
+|---|---|---|---|
+| Cómo | La CLI resuelve los parámetros de cada objeto, calcula una clave y solo llama a Blender (un proceso para todas) con las piezas que no están en la caché | La receta se escribe en un formato propio que leen Blender **y** Rust; el núcleo genera la malla | Blender hornea una plantilla por familia con regiones con nombre (el fuste del pozo, el cuerpo del tubo) y el núcleo las estira según el parámetro |
+| Blender en ejecución | No: la app solo lee `.glb`; Blender solo hace falta para hornear lo que falta | No | No |
+| Fidelidad | Total: es lo que dibuja Blender | Solo lo que el formato propio sepa expresar | Exacta solo en tramos prismáticos (estirar en Z un fuste recto); falla con diámetros (estirar un anillo engorda la pared), conos, número de segmentos, ángulos de accesorios |
+| Mantenimiento | Una receta por familia | **Dos implementaciones** por familia (Blender y Rust) que pueden divergir, más un intérprete de un subconjunto de Geometry Nodes (cientos de tipos de nodo; booleanas y biselados exigen una biblioteca de geometría) | Una receta más, por familia, la lista de regiones y qué parámetro estira cada una (lógica repartida) |
+| Encaje con D14 | Directo | Contradice D14: es volver a `parts.rs` con otro nombre | Compatible, como optimización |
+| Coste | Prototipo hecho (este ticket) | Semanas, y otra vez por cada familia nueva | ~2 días por familia prismática |
+
+**B se descarta**: duplicar cada receta en Rust es exactamente lo que D14 quiere dejar atrás, y
+para comprobar que las dos coinciden haría falta Blender en el CI de todos modos. **C** queda como
+optimización posible para parámetros longitudinales (profundidad del pozo, largo del tubo) si el
+número de piezas distintas pesa en redes reales (§11.5); hoy no hace falta.
+
+### 11.2 Prototipo: `redes biblioteca hornear`
+
+- **Contrato de la receta** `tools/blender/build_manhole.receta.json` (`redes.receta/1`), junto a su
+  guion `build_manhole.py` (mismo nombre) y al conductor común `tools/blender/redes_bake.py`. Dice de
+  dónde sale cada parámetro:
+  - `"desde": "atributo"`: un atributo del objeto (`diametro_interior`, `espesor_pared`, `material`);
+  - `"desde": "tapa_menos_solera"`: cota de tapa menos cota de solera, las dos del origen;
+  - `"desde": "forma"`: un detalle de dibujo fijado por la receta (altura del cono, diámetro de la
+    boca, espesor y material de la tapa, segmentos). Es parte de la receta versionada, entra en la
+    clave y en el manifiesto (`horneado.*`), y **nunca** se convierte en `Dato` ni alimenta cantidades.
+  Una prueba comprueba que las unidades de la receta coinciden con las del registro de familias.
+- **Núcleo** (`redes_core::bake`): resuelve los parámetros de un objeto, calcula la clave y arma la
+  entrada del manifiesto. No ejecuta Blender.
+- **Clave** = BLAKE3 (32 hex) de `redes_bake.py` + guion de la receta + JSON canónico de los
+  parámetros (claves ordenadas). Los finales de línea se normalizan (CRLF y LF dan la misma clave).
+  La versión de Blender **no** entra: la caché tiene que poder leerse sin Blender; las recetas se
+  fijan a Blender 5.1. La profundidad derivada se redondea al micrómetro, porque `2491,63 − 2490,0`
+  en `f64` es `1,6300000000001091` y daba otra clave y otros bytes que un `1,63` escrito a mano.
+- **Caché** en la carpeta de la biblioteca del proyecto: `biblioteca/horneado/<clave>.glb`, junto a
+  `biblioteca.json`. Viaja con el proyecto: otro equipo sin Blender ve las mismas piezas. Cada pieza
+  se escribe aparte (`<clave>.tmp.glb`) y se renombra al terminar Blender: la caché nunca tiene
+  archivos a medias; si Blender falla, se borran todas las del lote.
+- **Lote**: todas las piezas que faltan van a **un** proceso de Blender (`{"jobs": [...]}`); el
+  conductor valida todos los juegos antes de hornear el primero y vacía la escena entre pieza y pieza
+  (`read_factory_settings(use_empty=True)`).
+- **`.blend` de revisión**: junto a cada `<clave>.glb` se guarda `<clave>.blend` (sin comprimir,
+  `save_as_mainfile` **después** de exportar el glTF, para que no cambie sus bytes), salvo con
+  `--sin-blend`. Al abrirlo en Blender se ve cómo se construyó la pieza: la escena lleva
+  `redes_receta`, `redes_parametros` (el JSON) y un `redes_<parámetro>` por cada uno; cada objeto,
+  sus `redes_*`; la tapa conserva su modificador de Geometry Nodes con las entradas a la vista
+  (radio, espesor, elevación, segmentos) para tocarlas, y el texto `redes_receta.txt` explica cómo
+  rehornear el cuerpo, que es geometría explícita. El `.blend` **no entra en el determinismo** (Blender
+  guarda marcas de tiempo): no forma parte de la clave ni de las comparaciones byte a byte; si falta,
+  la pieza se rehornea (el `.glb` sale idéntico). Pesa ~585 kB por pieza frente a ~37 kB del `.glb`.
+  Muestra: los tres juegos de F17-01 (con la forma de la receta) en `out/f17-02/revision/`
+  (`pozo_a_DI1200_H2500`, `pozo_b_DI1500_H4000`, `pozo_c_DI900_H1600`, `.glb` y `.blend`), hechos con
+  `redes biblioteca hornear --receta tools/blender/build_manhole.receta.json --parametros out/f17-02/revision/juegos.json --carpeta out/f17-02/revision`.
+- **Con proyecto** (`redes -p x.redes biblioteca hornear --receta tools/blender/build_manhole.receta.json`):
+  hornea los objetos de la familia y subtipo de la receta, anota una pieza por clave en el manifiesto
+  (con todos los parámetros en `extras` `horneado.*`), apunta `modelo` de cada objeto a su pieza,
+  quita del manifiesto las piezas de esa receta que ya no usa nadie y guarda el proyecto. Sin
+  proyecto, `--parametros juegos.json` hornea juegos dados a mano (solo los parámetros de dato).
+
+### 11.3 Cuando falta un parámetro (D16)
+
+- Un parámetro de dato que el objeto no trae (atributo ausente o vacío, o la cota en `sin_dato`)
+  **no se rellena**: el objeto no se hornea, el sobre lo lista en `sin_hornear` con `faltan` y avisa
+  `W_PARAMETRO_FALTANTE`; si el objeto tenía una pieza horneada de esa receta, se le quita (sería una
+  forma que los datos ya no respaldan). El visor sigue con la pieza de respaldo de `parts.rs` y el
+  inspector muestra `—` en el dato.
+- Con `--parametros`, un juego incompleto o con un parámetro de forma falla entero:
+  `E_PARAMETRO_FALTANTE`.
+- El conductor de Blender no tiene valores por defecto (el prototipo de F17-01 sí los tenía y se
+  quitaron): un juego incompleto sale con `missing params: [...]` y código 1.
+- En el proyecto de demostración (`redes proyecto demo`) **ningún** pozo se hornea: ninguno declara
+  `espesor_pared`. Es el comportamiento esperado, y la pregunta para el usuario (§11.6).
+
+### 11.4 Sin Blender instalado
+
+- **La app abre siempre**: nunca ejecuta Blender; dibuja las piezas de la caché y, para el resto, la
+  geometría de `parts.rs`. Si falta el archivo de la caché, `modelos::Cache` lo da por fallido y se
+  ve la paramétrica.
+- **La CLI**: si todo está en la caché, `hornear` funciona sin Blender (`blender: null`). Si falta
+  alguna pieza, falla con `E_BLENDER_NO_ENCONTRADO` y **no toca** ni el proyecto ni el manifiesto.
+  Blender se busca en `--blender`, `$REDES_BLENDER`, la instalación estándar más reciente
+  (`%ProgramFiles%\Blender Foundation\Blender *\blender.exe`) y el `PATH`.
+
+### 11.5 Medido
+
+Windows 11, Blender 5.1.0, CLI en release, 28/11/2026. Pozos distintos (diámetro y profundidad
+distintos en cada uno), 764 triángulos y ~37 kB por pieza.
+
+| Caso | Tiempo |
+|---|---:|
+| Arranque de Blender (`--python-expr "pass"`) | 1,50 s |
+| 1 pieza, un proceso | 2,04–2,24 s |
+| 10 piezas en 10 procesos (como F17-01) | 20,8 s (2,08 s/pieza) |
+| 10 piezas en **un** proceso | **2,51 s** |
+| 100 piezas en **un** proceso | **7,18–7,22 s** (0,072 s/pieza; ~0,053 s por pieza añadida) |
+| `hornear` con proyecto, 1 / 10 / 100 pozos sin caché (`--sin-blend`) | 2,28 / 2,55 / 7,35 s |
+| ídem, 10 / 100 pozos **con** `.blend` de revisión (por defecto) | 2,60 / 9,03 s |
+| `hornear` con proyecto, 1 / 10 / 100 pozos **todos en caché** (sin Blender) | **26 / 31 / 86 ms** |
+
+- Hornear 100 piezas en lote es ~29 veces más rápido que en 100 procesos (7,2 s frente a ~208 s).
+- **Determinismo**: el `.glb` de un juego horneado en un lote de 1, 10 o 100 es idéntico byte a byte
+  al de un horneado suelto, y el que escribe la CLI es idéntico al horneado a mano con el mismo JSON.
+- Proyección a una red grande (sin medir): 10 000 pozos todos distintos ≈ 9 min la primera vez y
+  ~370 MB de caché; después, milisegundos. Si eso pesa, la vía C (estirar el fuste en Z, como ya hace
+  `scene3d` con los prototipos de F14-05) reduce las piezas a una por diámetro, espesor y material.
+
+### 11.6 Recomendación y lo que queda
+
+**Vía A**: hornear bajo demanda desde la CLI, en lote, con caché por clave en la carpeta del
+proyecto. La app nunca depende de Blender; un dato que falta no se inventa: deja la pieza de respaldo.
+
+**CI**: no instala Blender. Corre las pruebas de contrato con una caché sembrada (sin Blender) y la
+de Blender se salta con aviso; comprueba las recetas contra el registro y las claves. Cuando F17-03
+versione el `.glb` de la pieza piloto, el CI comprobará que su nombre es la clave que da la receta
+actual y que la malla es válida (cerrada, triángulos), sin rehornear. Un trabajo manual opcional con
+Blender podría rehornear y comparar bytes más adelante.
+
+Para el usuario:
+
+1. Qué parámetros del pozo son **dato** (vienen del origen; si faltan, no se hornea) y cuáles son
+   **forma** de la receta. Hoy: dato = diámetro interior, profundidad (tapa − solera), espesor de
+   pared y material; forma = cono, boca, tapa y segmentos. Con esa partición el demo no hornea ningún
+   pozo (no declara espesor).
+2. Si una red grande justifica la vía C para la profundidad (§11.5).
+
+Para F17-03 (no hacen falta para este prototipo; los parámetros del horneado ya quedan en `horneado.*`):
+
+- `biblioteca cantidades` guarda los `extras` de un solo nodo: el `nodo.redes_material` de la tapa
+  pisa al del cuerpo (claves sin nombre de nodo).
+- `biblioteca importar` deja `extras` vacío en el manifiesto (el `.glb` normalizado no los conserva).
+- El visor coloca el modelo con su base en la **cota de tapa** (`modelos::instancias`) y además dibuja
+  la paramétrica: un pozo horneado (base = fondo de la losa) tiene que apoyarse en la solera menos el
+  espesor de la losa y sustituir a la paramétrica.
+- Las piezas que ya no usa nadie salen del manifiesto, pero sus `.glb` y `.blend` siguen en la caché
+  (falta una limpieza). Con `.blend` la caché pesa ~16 veces más: decidir si el `.blend` va siempre o
+  solo bajo petición en redes grandes.

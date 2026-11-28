@@ -1,0 +1,16 @@
+{
+  "schema": "redes.receta/1",
+  "familia": "saneamiento.pozo",
+  "subtipo": "inspeccion",
+  "parametros": {
+    "inner_diameter_m": { "desde": "atributo", "clave": "diametro_interior", "unidad": "m" },
+    "depth_m": { "desde": "tapa_menos_solera", "unidad": "m" },
+    "wall_thickness_m": { "desde": "atributo", "clave": "espesor_pared", "unidad": "m" },
+    "body_material": { "desde": "atributo", "clave": "material" },
+    "cone_height_m": { "desde": "forma", "valor": 0.6, "unidad": "m" },
+    "opening_diameter_m": { "desde": "forma", "valor": 0.6, "unidad": "m" },
+    "cover_thickness_m": { "desde": "forma", "valor": 0.05, "unidad": "m" },
+    "cover_material": { "desde": "forma", "valor": "fundicion" },
+    "segments": { "desde": "forma", "valor": 48 }
+  }
+}

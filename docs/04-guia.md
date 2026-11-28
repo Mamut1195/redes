@@ -462,6 +462,30 @@ El DXF es el que se abre en AutoCAD/Civil 3D/BricsCAD para el **detallado y el D
   que el CAD muestra como «í». Solo la carga de `REDES_INFO` va en UTF-8 tal cual (es para el
   importador; en el CAD puede verse con caracteres raros, como `mÂ³`).
 
+### 5.7 Hornear piezas de Blender (F17-02, D16)
+
+Cada familia dibujada con Blender es una receta en `tools/blender/`: el guion `X.py` y su contrato
+`X.receta.json`, que dice de dónde sale cada parámetro (`atributo` del objeto, `tapa_menos_solera`
+o `forma`, un detalle de dibujo fijado por la receta). `hornear` resuelve los parámetros de cada
+objeto, busca su `.glb` en la caché y solo llama a Blender, en **un** proceso, para los que faltan.
+
+```powershell
+# Los pozos de inspección del proyecto: caché en biblioteca/horneado/, piezas en biblioteca.json
+redes -p x.redes biblioteca hornear --receta tools\blender\build_manhole.receta.json
+# Sin proyecto: juegos dados a mano (solo los parámetros de dato), p. ej. para probar una receta
+redes biblioteca hornear --receta tools\blender\build_manhole.receta.json --parametros juegos.json
+```
+
+- Blender se busca en `--blender`, `$REDES_BLENDER`, la instalación estándar y el `PATH`. Si todo
+  está en la caché no hace falta; si falta alguna pieza y no hay Blender: `E_BLENDER_NO_ENCONTRADO`,
+  sin tocar nada. El visor nunca necesita Blender.
+- Un objeto sin todos los datos de la receta **no se hornea ni se rellena**: sale en `sin_hornear`
+  con `faltan`, avisa `W_PARAMETRO_FALTANTE` y se sigue viendo la pieza de respaldo.
+- La clave de la caché cambia si cambia la receta, el conductor `redes_bake.py` o un parámetro;
+  borrar `biblioteca/horneado/` obliga a rehornear. Los modelos se ven con `--gpu3d`.
+- Junto a cada `<clave>.glb` queda `<clave>.blend` para revisar la pieza en Blender (parámetros en
+  la escena y entradas de Geometry Nodes editables); `--sin-blend` no lo guarda.
+
 ---
 
 ## 6. Flujo de aprobación

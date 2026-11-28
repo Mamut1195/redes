@@ -5,6 +5,7 @@
 
 mod acta;
 mod diff;
+mod hornear;
 mod observaciones;
 mod perfil;
 mod reimportar;
@@ -278,6 +279,12 @@ enum BibliotecaCmd {
         #[arg(long, default_value_t = 2.4)]
         densidad: f64,
     },
+    /// Hornea con Blender una receta paramétrica (tools/blender/X.receta.json) para los objetos
+    /// del proyecto o para juegos de parámetros dados, con caché de .glb por receta y parámetros.
+    ///
+    /// Un objeto sin todos los datos de la receta no se hornea ni se rellena: sigue con la pieza
+    /// de respaldo y se avisa (D16).
+    Hornear(hornear::HornearArgs),
     /// Lista las piezas de la biblioteca del proyecto.
     Lista {
         #[arg(long)]
@@ -343,8 +350,22 @@ fn run(cli: Cli, t0: Instant) -> i32 {
     let cmd_name = command_id(&cli.cmd).to_string();
 
     // `biblioteca` no necesita proyecto: revisa un .glb suelto.
+    if let Cmd::Biblioteca {
+        cmd: BibliotecaCmd::Hornear(args),
+    } = &cli.cmd
+        && args.parametros.is_some()
+    {
+        return emit(
+            hornear::from_given_params(args, dry).within(elapsed(t0)),
+            pretty,
+            quiet,
+        );
+    }
     if let Cmd::Biblioteca { cmd } = &cli.cmd
-        && !matches!(cmd, BibliotecaCmd::Aplicar { .. })
+        && !matches!(
+            cmd,
+            BibliotecaCmd::Aplicar { .. } | BibliotecaCmd::Hornear(_)
+        )
     {
         return emit(biblioteca(cmd).within(elapsed(t0)), pretty, quiet);
     }
@@ -615,6 +636,9 @@ fn run(cli: Cli, t0: Instant) -> i32 {
                 Err(e) => io_error("biblioteca.aplicar", &e),
             }
         }
+        Cmd::Biblioteca {
+            cmd: BibliotecaCmd::Hornear(args),
+        } => hornear::from_project(&mut p, &path, &args, dry),
         Cmd::Proyecto {
             cmd: ProyectoCmd::Info,
         } => project_info(&p, &path),
@@ -863,6 +887,7 @@ fn biblioteca(cmd: &BibliotecaCmd) -> Envelope {
             autor.as_deref(),
         ),
         // `aplicar` necesita el proyecto abierto: se resuelve en el flujo principal.
+        BibliotecaCmd::Hornear(_) => unreachable!("resolved before opening the project"),
         BibliotecaCmd::Aplicar { .. } => Envelope::fail(
             "biblioteca.aplicar",
             vec![Diagnostic::new(
@@ -1076,6 +1101,7 @@ fn command_id(c: &Cmd) -> &'static str {
             BibliotecaCmd::Lista { .. } => "biblioteca.lista",
             BibliotecaCmd::Aplicar { .. } => "biblioteca.aplicar",
             BibliotecaCmd::Cantidades { .. } => "biblioteca.cantidades",
+            BibliotecaCmd::Hornear(_) => hornear::CMD,
         },
     }
 }
@@ -1191,6 +1217,7 @@ fn esquema(filtro: Option<&str>) -> Envelope {
             .iter()
             .chain(observaciones::CODIGOS)
             .chain(reimportar::CODIGOS)
+            .chain(hornear::CODIGOS)
             .collect::<Vec<_>>()
     }))
 }

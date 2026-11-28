@@ -358,6 +358,14 @@ $mutaciones = @(
         Paquete = "redes-app"
         Prueba = "undo_and_redo_buttons_restore_each_review_step"
         Que = "no llevar la revision de la app a la pila de deshacer (F14-08)"
+    },
+    @{
+        Nombre = "clave-sin-receta"
+        Archivo = "crates/redes-core/src/bake.rs"
+        Patron = 'for part in \[lf_only\(driver\), lf_only\(script\), canonical\]'
+        Reemplazo = 'for part in [lf_only(driver), canonical]'
+        Prueba = "the_key_follows_params_and_recipe_but_not_key_order_or_line_endings"
+        Que = "una clave de horneado que no cambia al editar la receta: la cache serviria piezas viejas (F17-02)"
     }
 )
 

@@ -9,6 +9,9 @@ out/
 *.redes.tmp
 *.glb.tmp
 
+# Python que importa Blender al hornear (tools/blender/redes_bake.py)
+__pycache__/
+
 # Historial del checkout de Rune: se versiona el árbol de trabajo, no su .git (74 MB)
 vendor/rune/.git-upstream/
 

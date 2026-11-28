@@ -15,6 +15,7 @@
 //! ```
 
 pub mod acta;
+pub mod bake;
 pub mod biblioteca;
 pub mod cantidades;
 pub mod city;

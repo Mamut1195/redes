@@ -186,11 +186,33 @@ horneados por juego de parámetros (detalle en docs/17 §10.2).
 Se rehace con `blender -b --factory-startup --python-exit-code 1 --python tools/blender/build_manhole.py -- params.json`
 dos veces y comparando `Get-FileHash` de las salidas.
 
+### 4.7 Horneado en lote y caché (F17-02)
+
+Pozos distintos (diámetro y profundidad distintos en cada uno), 764 triángulos y ~37 kB por pieza;
+Blender 5.1.0, CLI en release, Windows 11, 28/11/2026 (detalle en docs/17 §11.5).
+
+| Medida | Valor |
+|---|---:|
+| Arranque de Blender | 1,50 s |
+| 10 piezas en 10 procesos | 20,8 s |
+| 10 / 100 piezas en **un** proceso | **2,51 / 7,18–7,22 s** |
+| Pieza añadida a un lote | ~0,053 s |
+| `biblioteca hornear` con proyecto, 1 / 10 / 100 pozos sin caché, sin `.blend` | 2,28 / 2,55 / 7,35 s |
+| ídem, 10 / 100 pozos con `.blend` de revisión (por defecto) | 2,60 / 9,03 s |
+| `biblioteca hornear` con proyecto, 1 / 10 / 100 pozos en caché (sin Blender) | **26 / 31 / 86 ms** |
+| `.glb` de un lote igual byte a byte al horneado suelto | sí (lotes de 1, 10 y 100) |
+| `.glb` igual con y sin `.blend` de revisión | sí (3 de 3) |
+| Tamaño del `.blend` de revisión (sin comprimir) | ~585 kB por pieza |
+
+Se rehace con un plan de N pozos con `diametro`, `cota`, `cota_tapa` y `attrs.espesor_pared`/`material`,
+`redes -p x.redes biblioteca hornear --receta tools/blender/build_manhole.receta.json` dos veces
+(la primera hornea, la segunda sale de la caché) y `segundos_blender` del sobre.
+
 ## 5. Pruebas
 
 | Suite | Pruebas |
 |---|---:|
-| Núcleo (`redes-core`, unitarias) | **155** |
+| Núcleo (`redes-core`, unitarias) | **162** |
 | Validación geométrica (`redes-core/tests/validar.rs`) | **13** |
 | Acta de revisión (`redes-core/tests/acta.rs`) | **5** |
 | Reimportar (`redes-core/tests/reimportar.rs`) | **8** |
@@ -207,10 +229,11 @@ dos veces y comparando `Get-FileHash` de las salidas.
 | Validar del CLI (`tests/validar.rs`) | **4** |
 | Acta del CLI (`tests/acta.rs`) | **2** |
 | Reimportar del CLI (`tests/reimportar.rs`) | **2** |
+| Hornear del CLI (`tests/hornear.rs`; la de Blender se salta sin Blender) | **4** |
 | Doctest | **1** |
-| **Total** | **288** |
+| **Total** | **299** |
 
-Más el arnés de mutación: `powershell -File scripts/mutar.ps1` rompe cuarenta comportamientos (cinco
+Más el arnés de mutación: `powershell -File scripts/mutar.ps1` rompe cuarenta y un comportamientos (cinco
 de vista, tres de `redes validar`, el estado derivado de las observaciones y dos del acta: escapar el
 HTML y no sacar columnas de autor sin registrarlo, D2; y tres de reimportar: reiniciar el aprobado
 cuyo diseño cambió, conservar las observaciones y no dar de baja en silencio; y abrir un `.redes` de otra versión sin
@@ -220,7 +243,7 @@ dos de la caché de piezas y proxies, F14-06; y siete de la escena y la selecci�
 no recortar, esfera de pozo corta, orden de negativos, bloques de hilos desordenados, rejilla de una celda y
 rejilla que pierde tramos; y cinco de la escena 3D instanciada, F14-05: no compartir prototipos, olvidar la escala en Z, LOD fijo, sin recorte y sin tope; y dos del `.glb`: una malla por nodo y el largo truncado a `u32`; y cuatro del deshacer, F14-08: guardar cada objeto
 en cada paso, no devolver la revisión, no rehacer los índices tras un alta y no registrar la
-revisión de la app) y exige que la suite falle.
+revisión de la app; y una clave de horneado que no cambia al editar la receta, F17-02) y exige que la suite falle.
 
 ## 6. Qué cifras de los informes anteriores son falsas
 

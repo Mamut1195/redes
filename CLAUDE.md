@@ -19,7 +19,7 @@
 - `skills/redes-ingesta/`: skill guiada (D5): `SKILL.md` + `references/` por formato (plan, SWMM, EPANET, DXF Civil 3D, SIG, tablas). Sin scripts: NO añadas adaptadores por programa ni en Python ni en Rust; mejora las referencias y el contrato del plan.
 - `docs/`: documentación numerada `NN-nombre.md`. `docs/consejo/` es contexto histórico (el alcance con cálculos quedó descartado), NO el alcance vigente.
 - `scripts/`: `mutar.ps1`, `empaquetar.ps1`, `traer-rune.ps1`.
-- `tools/blender/`: recetas `bpy` de las familias (D14, D15). Se hornean sin ventana: `blender -b --factory-startup --python-exit-code 1 --python tools/blender/<script>.py -- <params.json>` (sin `--python-exit-code 1` un error sale con 0). Nada de operadores `bmesh` que fusionen o reordenen: rompen el determinismo.
+- `tools/blender/`: recetas `bpy` de las familias (D14, D15). Se hornean sin ventana: `blender -b --factory-startup --python-exit-code 1 --python tools/blender/<script>.py -- <params.json>` (sin `--python-exit-code 1` un error sale con 0). Nada de operadores `bmesh` que fusionen o reordenen: rompen el determinismo. Cada receta `X.py` lleva su contrato `X.receta.json` y usa `redes_bake.py`, sin valores por defecto; en un proyecto se hornea con `redes biblioteca hornear --receta tools/blender/X.receta.json` (lote y caché por clave, D16).
 - `vendor/rune`: copia fijada de Rune. `demo/`: proyectos de ejemplo. `out/`: salida generada (ignorada).
 
 ## Comandos (PowerShell; los mismos que usa el CI)
@@ -33,7 +33,7 @@
 - Abrir la app: `$env:REDES_PROJECT = "out\x.redes"; cargo run -p redes-app --release` (añade `--gpu3d` para el pase con profundidad).
 - Verificar la UI sin ventana: `cargo run -p redes-app -- --snap out\vista.png --scene iso`; `--tree out\arbol.json`.
 - CLI: `redes esquema` lista los comandos y los códigos de error. Opciones globales: `-p/--project`, `--pretty`, `--dry-run`, `--quiet`.
-- Variables de entorno: `REDES_PROJECT`, `REDES_GPU`, `REDES_INFO`, `REDES_JOURNAL_USUARIO`.
+- Variables de entorno: `REDES_PROJECT`, `REDES_GPU`, `REDES_INFO`, `REDES_JOURNAL_USUARIO`, `REDES_BLENDER`.
 
 ## Convenciones
 - Comandos de la CLI, mensajes y docs en español. Los identificadores en español que ya existen se migran a inglés poco a poco (ver «Idioma del código»).
