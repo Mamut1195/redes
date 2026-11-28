@@ -10,6 +10,7 @@ resume lo imprescindible y no la sustituye; si se contradicen, manda `CLAUDE.md`
 
 - Redes es un visor y revisor 3D de redes de agua y alcantarillado. **No calcula, no verifica
   normativa y no edita el diseño** (docs/01 §1, docs/22 D4 y D12).
+- Qué hace y qué no: `docs/02-features.md`.
 - Código nuevo en inglés y que se explique solo; interfaz, CLI y docs en español (D13).
 - Las piezas se dibujan con familias paramétricas de Blender (D14). Se hornean sin ventana con un
   script versionado en `tools/blender/`, no por un MCP (D15):

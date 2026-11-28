@@ -1,216 +1,293 @@
-# 02 — Plan de funcionalidades
+# 02 — Funciones: qué hace Redes, qué no y qué falta
 
-> **Regla que gobierna todo el backlog:** ninguna funcionalidad calcula ingeniería. Si un ítem
-> necesita un número que no viene del origen, se rechaza o se convierte en «mostrar el dato del
-> origen». Las excepciones aparentes (longitud, área, volumen dibujado) son **geometría**, no
-> diseño, y se marcan como derivadas de pantalla.
+> Inventario vigente, comprobado contra el código y la CLI el **2026-11-28** (rama `main` en
+> `4b12edb`, `redes esquema`, `--help` de cada comando, `crates/redes-app/src/*.rs`,
+> `ingest.rs` y `terrain.rs`). Es lo primero que lee un usuario o un colaborador nuevo. Si el
+> código y este documento discrepan, manda el código: se corrige aquí en el mismo commit.
+> Sustituye al plan de funcionalidades del 2026-11-20 (IDs ING/MOD/VIS…, plan de releases v0.x).
 
-Prioridades: **MUST** (sin esto no hay producto) · **SHOULD** (duele si falta) · **COULD**
-(deseable) · **WON'T** (decidido no hacer en v1). Esfuerzo: S ≤ 3 días · M ≤ 2 semanas ·
-L ≤ 6 semanas · XL > 6 semanas.
+Leyenda: ✅ listo · 🟡 parcial (funciona, con límites que se dicen) · 📋 planeado (ticket en
+[docs/18](18-backlog.md) o «sin ticket»).
 
----
+## 1. Qué es y para quién
 
-## 1. Ingesta (ING)
+Redes es un **visor y revisor 3D** de redes de agua potable y alcantarillado **ya diseñadas** en
+otras aplicaciones (Civil 3D, SWMM, EPANET, Excel, SIG). Sirve a quien revisa un diseño: lo carga,
+lo recorre en 3D, deja observaciones, lo aprueba y lo devuelve al CAD en DXF. Hay dos binarios:
 
-| ID | Ítem | Valor | Aceptación | Prior. | Esf. |
-|---|---|---|---|---|---|
-| ING-01 | Importar plan JSON `redes.plan/1` | El contrato que produce la skill; cualquier fuente entra por aquí | · Nodos y arcos se crean con familia/tipo validados<br>· Códigos duplicados y extremos inexistentes se rechazan con motivo<br>· Informe con leídos/descartados | MUST | S |
-| ING-02 | Importar DXF (puntos, líneas, polilíneas 3D) | El delineante ya tiene el modelo en CAD | · Lee POINT/LINE/POLYLINE/LWPOLYLINE/CIRCLE<br>· Mapea por capa (POZO, AGUA, ALC, EMIS…)<br>· Usa el CIRCLE como cota de tapa<br>· Ida y vuelta sin pérdida (44→44 objetos) | MUST | M |
-| ING-03 | Importar terreno CSV/TXT (E,N,Z) | El levantamiento en el formato más común | · Ignora encabezado y líneas no numéricas<br>· Exige ≥ 3 puntos válidos<br>· Reporta descartes por línea | MUST | S |
-| ING-04 | Importar GeoJSON | Puente con SIG y inventarios municipales | · Point y LineString con propiedades `familia`/`codigo`<br>· Extremos de línea resueltos por código o por proximidad | SHOULD | S |
-| ING-05 | Perfiles de mapeo por app de origen | Que Civil 3D, SWMM y EPANET no exijan tocar código | · Un perfil declara capas, campos y unidades de la fuente<br>· Se elige con `--perfil`<br>· El perfil se guarda en el proyecto para auditar | SHOULD | M |
-| ING-06 | Informe de importación con vista previa | Saber qué entró antes de aprobar nada | · Cuenta por familia y por capa<br>· Lista descartes con línea/entidad y motivo<br>· `--dry-run` no escribe | MUST | S |
-| ING-07 | Importar SWMM `.inp` (nodos y conducciones) | La red de alcantarillado ya está modelada ahí | · Lee [JUNCTIONS], [CONDUITS], [OUTFALLS]<br>· Traduce diámetros y cotas<br>· Los caudales entran como `Dato`, no se recalculan | COULD | M |
-| ING-08 | Importar EPANET `.inp` (nodos y tuberías) | Ídem para agua potable | · Lee [JUNCTIONS], [PIPES], [RESERVOIRS], [TANKS]<br>· Presiones y caudales como `Dato` | COULD | M |
-| ING-09 | Importar IFC/Revit | BIM municipal | · Sólo si el cliente lo pide; requiere mapeo de familias | WON'T (v1) | XL |
-| ING-10 | Reproceso: reimportar sobre un proyecto existente | Actualizar el modelo sin perder la revisión | · Empareja por código; conserva estado de revisión<br>· Informa altas, bajas y cambios | SHOULD | M |
+- `redes-app`: el visor de escritorio (Rune, Windows 10/11 x64, DX12).
+- `redes`: la CLI, con salida JSON `redes.envelope/1`, pensada para agentes.
 
-## 2. Modelo y familias (MOD)
+No calcula, no verifica normativa y no edita el diseño (§3). Arquitectura: [docs/01](01-arquitectura.md).
+Uso paso a paso: [docs/04](04-guia.md).
 
-| ID | Ítem | Valor | Aceptación | Prior. | Esf. |
-|---|---|---|---|---|---|
-| MOD-01 | Registro de familias como dato | Añadir una familia sin tocar el motor | · `families::build()` es el único lugar<br>· La UI y la CLI listan la familia nueva sin cambios<br>· Una familia inválida no rompe la app | MUST | M |
-| MOD-02 | 17 familias con subtipos | Cubre agua potable y alcantarillado | · Cada familia declara atributos, unidades y subtipos<br>· Todo subtipo referencia atributos existentes (test) | MUST | M |
-| MOD-03 | Las cuatro cotas | Evita el error clásico de confundir profundidad con cota | · terreno / tapa / clave / fondo<br>· El inspector muestra las tres primeras y el fondo si vino | MUST | S |
-| MOD-04 | Identidad estable y códigos legibles | Referencias que sobreviven a la exportación | · `ElementId` generacional<br>· Código único por familia (`PZ-001`)<br>· Duplicado rechazado | MUST | S |
-| MOD-05 | Datos de origen con procedencia | Que cada número tenga firma | · `Dato { valor, unidad, fuente }`<br>· El inspector muestra la fuente<br>· Un dato sin fuente se marca `desconocida` | MUST | S |
-| MOD-06 | Topología derivada | Navegar y validar estructura sin acoplar objetos | · Incidencia, grado, componentes<br>· Arco huérfano rechazado al crear<br>· Nodo con arcos no se borra | MUST | M |
-| MOD-07 | Estados de revisión por objeto | El flujo de aprobación es la razón de ser | · pendiente / aprobado / observado<br>· Conteo por estado en CLI y UI | MUST | S |
-| MOD-08 | Atributos definidos por el usuario | Extender sin recompilar | · Un proyecto puede añadir atributos extra a una familia<br>· Se guardan y se muestran | COULD | M |
-| MOD-09 | Validación estructural (no normativa) | Detectar modelos rotos antes de aprobar | · Arco sin extremos, código duplicado, longitud 0, nodo aislado<br>· Nunca opina sobre hidráulica | SHOULD | S |
+## 2. Lo que hace hoy
 
-## 3. Vista 3D (VIS)
+### 2.1 Ingesta
 
-| ID | Ítem | Valor | Aceptación | Prior. | Esf. |
-|---|---|---|---|---|---|
-| VIS-01 | Cámara orbital 3D | Ver la red como realmente está en el espacio | · Órbita, desplazamiento y acercamiento<br>· Encuadre automático del proyecto | MUST | M |
-| VIS-02 | Terreno sombreado con relieve | El plano de planta no muestra la profundidad | · TIN triangulado y sombreado por normal<br>· Tinte por cota<br>· Exageración vertical configurable | MUST | M |
-| VIS-03 | Tubos con diámetro visible | Se distingue un colector de una acometida | · Ancho proporcional al diámetro y a la distancia<br>· Color por red (alcantarillado / agua) | MUST | S |
-| VIS-04 | Pozos como cilindros | Ver altura real del pozo | · Cilindro de tapa a solera<br>· Símbolo de tamaño fijo cuando mide < 3 px | MUST | M |
-| VIS-05 | Capas conmutables | Revisar una red a la vez | · Terreno / alcantarillado / agua / nodos<br>· El cambio no recalcula nada del modelo | MUST | S |
-| VIS-06 | Selección por clic con inspector | Identificar el objeto y leer su ficha | · Tolerancia en píxeles<br>· Inspector con geometría, estado, atributos y datos | MUST | M |
-| VIS-07 | Vistas de cámara con nombre | Planta, isométrica, perfil con un clic | · Botones y `--scene` equivalente headless | SHOULD | S |
-| VIS-08 | Resaltado de observados | Encontrar lo que falta corregir | · Color distinto y lista en el panel | MUST | S |
-| VIS-09 | Etiquetas de código en pantalla | Nombrar sin abrir el inspector | · Etiqueta junto al objeto seleccionado y en hover<br>· Se apaga a baja escala para no ensuciar | SHOULD | M |
-| VIS-10 | Corte vertical / sección | Ver la relación tubo-terreno en un punto | · Plano de corte movible<br>· Muestra terreno, tubo y pozo | COULD | L |
-| VIS-11 | Aligerado automático de terreno | Mantener la interacción con levantamientos densos | · `Terrain::thinned` por tamaño de celda<br>· Se nota el cambio de malla, no el de relieve | MUST | S |
-| VIS-12 | Modo "sólo red" | Revisar sin terreno | · Oculta el terreno y encuadra a los objetos | COULD | S |
-| VIS-13 | Animación de recorrido | Presentar el proyecto | · Recorrido por la traza de un colector | WON'T (v1) | L |
-| VIS-14 | Realidad aumentada / móvil | Ver en campo | · Fuera de alcance | WON'T (v1) | XL |
-
-## 4. Revisión y aprobación (REV)
-
-| ID | Ítem | Valor | Aceptación | Prior. | Esf. |
-|---|---|---|---|---|---|
-| REV-01 | Aprobar / observar / reabrir un objeto | El flujo de trabajo real de una revisión | · Comandos `objeto aprobar/observar/reabrir`<br>· La UI refleja el estado al instante | MUST | S |
-| REV-02 | Nota de observación | Decir qué corregir | · `--nota` se guarda con el objeto<br>· Se muestra en el inspector | MUST | S |
-| REV-03 | Aprobación global bloqueada por pendientes | No aprobar por accidente | · `proyecto aprobar` falla con `E_STATE_PENDING` y dice cuántos faltan | MUST | S |
-| REV-04 | Filtro y lista de pendientes | Trabajar en orden | · `objeto lista --estado pendiente`<br>· Filtro por familia | MUST | S |
-| REV-05 | Historial de revisiones | Auditar quién aprobó qué | · Journal con revisión y comando<br>· Exportable a CSV | SHOULD | M |
-| REV-06 | Comentarios por objeto con autor y fecha | Revisión en equipo | · Requiere identidad de usuario | COULD | M |
-| REV-07 | Firma / sello de aprobación | Valor legal | · Hash del documento + usuario + fecha<br>· Se estampa en el informe | COULD | M |
-| REV-08 | Comparar dos revisiones | Ver qué cambió entre entregas | · `proyecto diff a.redes b.redes`<br>· Altas, bajas y cambios por objeto | SHOULD | L |
-
-## 5. Salida CAD y SIG (EXP)
-
-| ID | Ítem | Valor | Aceptación | Prior. | Esf. |
-|---|---|---|---|---|---|
-| EXP-01 | Exportar DXF con capas por familia | Es lo que el delineante necesita para el DWG | · Polilíneas 3D para arcos, POINT+CIRCLE para nodos<br>· Capas `PZ_POZO`, `CL_TUBERÍA`…<br>· Ida y vuelta verificada | MUST | M |
-| EXP-02 | Exportar GeoJSON con datos de origen | Inventario municipal y SIG | · Punto y línea con propiedades y `Dato`s<br>· CRS declarado | SHOULD | S |
-| EXP-03 | Exportar sólo lo aprobado | Entregar sin arrastrar lo observado | · `--solo-aprobados`<br>· Informe de lo omitido | SHOULD | S |
-| EXP-04 | Exportar DXF por red (agua / alcantarillado) | Entregas separadas | · Filtro por familia o red | COULD | S |
-| EXP-05 | DWG nativo | Lo pidió el cliente | · Requiere biblioteca ODA (licencia)<br>· Se entrega DXF y el CAD hace DWG | WON'T (v1) | XL |
-| EXP-06 | PDF del plano | Presentación | · Se resuelve en CAD/ Illustrator desde el DXF/SVG | COULD | M |
-| EXP-07 | Exportar vista 3D a SVG | Compartir sin abrir la app | · `redes vista --salida x.svg` (ya existe)<br>· Misma escena que la app | MUST | S |
-
-## 6. CLI e IA (CLI)
-
-| ID | Ítem | Valor | Aceptación | Prior. | Esf. |
-|---|---|---|---|---|---|
-| CLI-01 | Sobre único `redes.envelope/1` | Un parser para el agente | · 14 claves siempre presentes<br>· `ok:false` ⇔ salida ≠ 0 (test) | MUST | S |
-| CLI-02 | `esquema` autodescriptivo | Descubrir sin documentación | · Familias, atributos, subtipos, comandos, códigos<br>· Filtro por familia | MUST | S |
-| CLI-03 | Diagnósticos con `hint` y `hint_command` | Errores que enseñan el siguiente paso | · Todo error trae código estable y pista<br>· La pista es un comando ejecutable | MUST | S |
-| CLI-04 | `--dry-run` en toda escritura | Probar sin romper | · No escribe y devuelve el plan | MUST | S |
-| CLI-05 | Salida estable y determinista | Diferencias y pruebas doradas | · Orden de inserción, sin `HashMap` en salidas<br>· Mismos códigos en cada corrida | MUST | S |
-| CLI-06 | Resolución de proyecto | Menos fricción | · `--project`, `$REDES_PROJECT`, búsqueda ascendente<br>· Error con pista si no hay | MUST | S |
-| CLI-07 | `vista` sin GPU | Que un agente «vea» el modelo | · SVG de la misma escena 3D<br>· Devuelve conteo de primitivas y cámara | MUST | S |
-| CLI-08 | Modo lote (`plan run`) | Automatizar una importación completa | · Lista de comandos atómica con rollback | SHOULD | M |
-| CLI-09 | Servidor MCP | Integración con asistentes | · Tools generadas del registro<br>· Perfiles lectura/escritura | COULD | M |
-| CLI-10 | `--explain` de la ingesta | Saber por qué un objeto no entró | · Traza del mapeo capa→familia→objeto | SHOULD | S |
-
-## 7. Persistencia y proyecto (PER)
-
-| ID | Ítem | Valor | Aceptación | Prior. | Esf. |
-|---|---|---|---|---|---|
-| PER-01 | Archivo `*.redes` JSON versionado | Legible, diffeable, inspeccionable por un agente | · `schema: redes.project/N`<br>· Guardado atómico (temporal + rename) | MUST | S |
-| PER-02 | Migración de esquema | Abrir proyectos viejos | · Al abrir una versión anterior, migra y avisa<br>· Un esquema futuro falla con mensaje claro | SHOULD | M |
-| PER-03 | Autoguardado y recuperación | No perder una revisión | · Guarda cada N cambios en un trabajador<br>· Al reabrir ofrece recuperar | SHOULD | M |
-| PER-04 | Bloqueo de archivo | Dos personas no pisan el mismo proyecto | · Aviso si el archivo cambió en disco | COULD | M |
-| PER-05 | SQLite para proyectos grandes | > 50 MB o guardado incremental | · Migración transparente desde JSON | COULD | L |
-| PER-06 | Empaquetado con el proyecto | Llevar la evidencia con el modelo | · Los DXF/CSV originales se adjuntan al archivo | SHOULD | M |
-
-## 8. Extensibilidad (EXT)
-
-| ID | Ítem | Valor | Aceptación | Prior. | Esf. |
-|---|---|---|---|---|---|
-| EXT-01 | Familia nueva en un solo lugar | Crecer sin tocar el motor | · Añadir `FamilyDef` basta<br>· Test: la familia aparece en CLI, UI e inspector | MUST | M |
-| EXT-02 | Perfiles de ingesta como dato | Cada app de origen, su mapeo | · JSON de perfil versionado<br>· Sin recompilar | SHOULD | M |
-| EXT-03 | Exportadores enchufables | Nuevos formatos | · Trait `Exporter` + registro | COULD | M |
-| EXT-04 | Scripting del usuario | Automatizaciones locales | · Se prefiere la CLI a un lenguaje embebido | WON'T (v1) | L |
-| EXT-05 | API estable para plugins | Ecosistema | · Sólo cuando haya un tercero real | WON'T (v1) | XL |
-
-## 9. Idiomas y accesibilidad (I18N)
-
-| ID | Ítem | Valor | Aceptación | Prior. | Esf. |
-|---|---|---|---|---|---|
-| I18N-01 | Interfaz y mensajes en español (es-EC) | El usuario y su norma | · Toda etiqueta y mensaje en español<br>· Códigos de error en inglés estable | MUST | S |
-| I18N-02 | Glosario ES/EN | Coherencia con CAD y normas | · Términos del dominio con su equivalente | SHOULD | S |
-| I18N-03 | Inglés para la CLI | Agentes y colegas | · `--lang en` para mensajes | COULD | M |
-| I18N-04 | Accesibilidad (roles, foco, contraste) | Uso institucional | · Roles y etiquetas en la UI<br>· Navegación por teclado | SHOULD | M |
-
-## 10. Documentación y ayuda (DOC)
-
-| ID | Ítem | Valor | Aceptación | Prior. | Esf. |
-|---|---|---|---|---|---|
-| DOC-01 | Guía de inicio (15 min) | Que alguien vea su red en 3D hoy | · Importar → ver → aprobar → exportar<br>· Comandos copiables y verificados | MUST | S |
-| DOC-02 | Referencia de la CLI | Todo comando con ejemplo | · Generada del `esquema` cuando sea posible | MUST | S |
-| DOC-03 | Referencia de familias y atributos | Saber qué significa cada campo | · Una ficha por familia con unidades | MUST | M |
-| DOC-04 | Guía de la skill de ingesta | Convertir desde cada app | · Un caso por app de origen<br>· Tabla de mapeo y validación | MUST | M |
-| DOC-05 | Limitaciones explícitas | Evitar expectativas falsas | · «No calcula», «DXF no DWG», «sin búsqueda de conflictos» | MUST | S |
-| DOC-06 | Arquitectura para desarrolladores | Mantener el proyecto | · Este documento + el de Rune | SHOULD | S |
-| DOC-07 | Vídeo de 3 minutos | Demostración | · Del DXF al modelo aprobado | COULD | S |
-
-## 11. Colaboración (COL)
-
-| ID | Ítem | Valor | Aceptación | Prior. | Esf. |
-|---|---|---|---|---|---|
-| COL-01 | Comentarios y menciones | Revisión distribuida | · Requiere usuarios | COULD | L |
-| COL-02 | Edición simultánea | Varios revisores | · Fuera de alcance: un archivo, un revisor | WON'T (v1) | XL |
-| COL-03 | Exportar acta de revisión | Dejar constancia | · PDF/CSV con aprobados, observados y notas | SHOULD | M |
-
----
-
-## 12. Plan de releases
-
-### v0.1 — Esqueleto caminante (lo que ya está)
-
-Importar plan/DXF/GeoJSON/CSV · 17 familias · vista 3D con capas y selección · revisión por
-objeto · exportar DXF/GeoJSON/SVG · CLI con sobre JSON · app Rune con inspector · demo.
-
-**Demo de aceptación:** DXF de Civil 3D → 44 objetos en 3D → aprobar todo → DXF de vuelta con
-los mismos 44 objetos y capas por familia.
-
-### v0.2 — Ingesta real y revisión cómoda (4–6 semanas)
-
-ING-05 perfiles, ING-06 informe con vista previa, ING-10 reproceso, REV-04/05, VIS-07/08/09,
-EXP-03, PER-02/03, DOC-02/03/04.
-
-**Demo:** tres orígenes distintos (DXF, plan JSON, GeoJSON) entran con un perfil cada uno; una
-revisión de 200 objetos se completa y se exporta sólo lo aprobado.
-
-### v0.3 — Escala y automatización (6–8 semanas)
-
-VIS-11 fino, VIS-10 sección, ING-07 SWMM, ING-08 EPANET, CLI-08 lote, REV-08 diff, PER-05
-SQLite, COL-03 acta.
-
-**Demo:** proyecto de 50 000 objetos navegable; lote de importación + aprobación + exportación
-sin intervención.
-
-### v1.0 — Producto vendible
-
-Perfiles certificados por app, acta de revisión firmada, instalador Windows, guía completa,
-accesibilidad, i18n. DWG sigue fuera (se entrega DXF).
-
----
-
-## 12.1 Estado de implementación (verificado en v0.1)
-
-| Área | Hecho | Parcial | Pendiente |
+| Función | Estado | Cómo se usa | Referencia |
 |---|---|---|---|
-| ING | 01, 02, 03, 04, 06 | — | 05, 07, 08, 09, 10 |
-| MOD | 01, 02, 03, 04, 05, 06, 07 | 09 (validación estructural básica) | 08 |
-| VIS | 01, 02, 03, 04, 05, 06, 08, 11 | 07 (escenas headless, no selector en UI) | 09, 10, 12, 13, 14 |
-| REV | 01, 02, 03, 04 | 05 (journal en el archivo, sin exportar) | 06, 07, 08 |
-| EXP | 01, 02, 03, 07 | — | 04, 05, 06 |
-| CLI | 01, 02, 03, 04, 05, 06, 07 | — | 08, 09, 10 |
-| PER | 01 | — | 02–06 |
-| EXT | 01 | — | 02–05 |
-| I18N | 01, 02 | — | 03, 04 |
-| DOC | 01, 02, 03, 04, 05, 06 | — | 07 |
-| COL | — | — | 01, 03 |
+| Plan JSON `redes.plan/1` (nodos, arcos, terreno, `datos` con fuente) | ✅ | `redes importar plan --archivo plan.json [--dry-run]` | D5, F12-15, [skill plan](../skills/redes-ingesta/references/plan.md) |
+| Contrato estricto del plan: campo desconocido → `E_FMT_CAMPO` con sugerencia; otra versión → `E_FMT_VERSION`; nada se rellena (lo ausente se ve como `—`) | ✅ | igual; `--dry-run` valida sin escribir | F12-03, F12-15, D10 |
+| DXF exportado por Redes (capa `REDES_INFO`), ida y vuelta sin pérdida | ✅ | `redes importar dxf --archivo x.dxf` | D1, F8-01 |
+| DXF de otra aplicación | ✅ por skill | se rechaza con `E_FMT_NOT_REDES`; un agente lo adapta a plan con la skill | D5 |
+| SWMM `.inp`, EPANET `.inp`, DXF de Civil 3D, GeoJSON/SIG, tablas Excel/CSV | ✅ por skill | skill [`skills/redes-ingesta`](../skills/redes-ingesta/SKILL.md) (referencias por formato, sin scripts) → plan → `importar plan` | D5, [docs/03](03-skill-ingesta.md) |
+| Reimportar una entrega nueva sin perder la revisión (empareja por código) | ✅ | `redes importar reimportar --archivo nuevo.json [--aceptar-bajas] [--tolerancia-pos 0.01]` | D9, F13-06 |
+| Sistema de coordenadas | 🟡 | solo UTM sur WGS 84 (`EPSG:327NN`); otro CRS, coordenadas en grados o CRS distinto del proyecto → `E_CRS`; **no reproyecta** | F12-13 |
+| Reimportar o importar desde la app | 📋 | hoy solo por CLI | sin ticket ([docs/23](23-estado-y-pendientes.md)) |
 
-Pruebas que sostienen lo marcado como hecho: `cargo test` (31 pruebas de `redes-core` + 2 de
-interacción de la app con `Runtime`), ida y vuelta DXF (44 objetos → 44 objetos), conversión de
-un `.inp` de SWMM, y capturas headless de las cuatro escenas.
+### 2.2 Topografía
 
-## 13. Lo que este producto **no** hará (por contrato)
-1. Calcular hidráulica, hidrología, caudales, presiones o volúmenes de excavación.
-2. Verificar cumplimiento normativo.
-3. Editar el diseño (se corrige en la app de origen y se reimporta).
-4. Producir DWG nativo.
-5. Presupuestar.
-6. Editar colaborativamente en tiempo real.
+| Función | Estado | Cómo se usa | Referencia |
+|---|---|---|---|
+| Puntos de terreno de un CSV/TXT | 🟡 | `redes importar terreno --archivo t.csv [--epsg 32717]`. Lee **las tres primeras columnas como E, N, Z**; separa por `,` `;` tabulador o espacio; salta líneas vacías, las que empiezan por `#` y una cabecera solo en la primera línea; descarta NaN e infinitos línea a línea; exige ≥ 3 puntos. Las demás columnas se ignoran | `ingest::import_terreno` |
+| Terreno dentro del plan (`"terreno": [[E,N,Z], …]`) | ✅ | en el plan | [skill plan](../skills/redes-ingesta/references/plan.md) |
+| TIN por Delaunay **sin restricciones** sobre la planta de los puntos | 🟡 | automático al importar (`delaunator`); descarta triángulos degenerados | `terrain::Terrain::build` |
+| Cota y pendiente interpoladas en el TIN, solo dentro del casco convexo (fuera: sin cota, nunca extrapola) | ✅ | lo usan la vista, el perfil y `validar` | `Terrain::z_at`, `slope_at` |
+| Terreno aligerado para dibujar (un punto por celda) | ✅ | automático en la app | `Terrain::thinned` |
+| Curvas de nivel | 🟡 | se calculan (`Terrain::contours`), pero **ni se dibujan ni se exportan** | sin ticket |
+| Terreno en el perfil longitudinal | ✅ | `redes perfil … --paso 10` muestrea la rasante entre pozos | F13-02 |
+| Terreno en la salida | 🟡 | solo en glTF (`exportar gltf`, `--sin-terreno` lo quita); no en DXF ni en GeoJSON | sin ticket |
+| Ejemplo sobre topografía real (MDT Copernicus GLO-30) | 📋 | `redes proyecto cadena` | F17-09, D17 |
 
-Si el cliente pide cualquiera de estas cosas, es un producto distinto con otro alcance, otro
-equipo y otro presupuesto — y probablemente dos motores de cálculo que discrepan.
+Lo que falta para un levantamiento real está en §4.1.
+
+### 2.3 Modelo y familias
+
+| Función | Estado | Cómo se usa | Referencia |
+|---|---|---|---|
+| Registro de **46 familias / 315 subtipos** (15 de saneamiento, 19 de agua, 12 comunes), 854 entradas de atributo | ✅ | `redes esquema` (`data.familias`, `total_familias`) | [docs/20](20-familias-captacion-tratamiento.md), [docs/21](21-cifras-medidas.md) §1 |
+| Todo número es `Dato{valor, unidad, fuente}` con procedencia | ✅ | inspector «Datos importados (no calculados)» | D4, [docs/01](01-arquitectura.md) §1 |
+| Cotas separadas: terreno, tapa, solera (y clave) del nodo; soleras de inicio y fin del tramo | ✅ | en el plan | F12-01, F12-02 |
+| Un único espacio de códigos para nodos y tramos vivos | ✅ | `E_STATE_DUPLICATE_NAME`; la ingesta descarta el repetido y lo informa | D11 |
+| Topología para navegar y contar, con el sentido de flujo declarado (la contrapendiente es aviso, no se invierte) | ✅ | `perfil`, `validar` | F12-06 |
+| Geometría paramétrica de respaldo para cada familia (`parts.rs`, `parts_cadena.rs`) | ✅ | se dibuja cuando el objeto no tiene modelo | D14 |
+| Catálogo de familias como datos (no código) | 📋 | — | F15-03 |
+
+### 2.4 Vista 3D (app)
+
+| Función | Estado | Cómo se usa | Referencia |
+|---|---|---|---|
+| Cámara orbital | ✅ | botón izquierdo gira, derecho o central desplaza, rueda acerca | — |
+| Botones de cámara | ✅ | barra: Encuadrar, Planta, Isométrica; panel «Cámaras»: Planta, Isométrica, Perfil (vista lateral rasante, no el perfil longitudinal) | — |
+| Dos motores de dibujo: pintor 2D (por defecto) y pase 3D con profundidad, instancias, 3 LOD y recorte | ✅ | `redes-app --gpu3d` (o `REDES_GPU3D=1`) | F14-02…05, [docs/16](16-fase-4-5-gltf-y-3d.md) |
+| Capas | 🟡 | chips Terreno, Alcantarillado, Agua potable, Edificios. La capa `nodos` existe en el núcleo (`view::Layers::nodos`) pero **no tiene chip** | [docs/11](11-modos-inspeccion.md) |
+| Selección por clic con rejilla espacial | ✅ | clic sin arrastrar | F14-07 |
+| Inspector de nodo | 🟡 | familia, subtipo, estado, E/N, cotas, altura, datos con fuente y atributos; **solo los 10 primeros atributos**; muestra «diámetro 1,20 m» aunque el objeto no traiga diámetro (§4.6) | D12 |
+| Inspector de tramo | 🟡 | DN, longitud **en planta**, cotas inicial y final, datos; sin atributos | D12 |
+| Inspector sin selección: proyecto, CRS, estado, objetos, procedencia (`fuentes`) | ✅ | — | — |
+| Solo lectura: no hay controles para editar el diseño | ✅ | prueba `el_inspector_no_edita_parametros_del_diseno` | D12 |
+| Etiquetas de código con carriles anti-solape (hasta 28 en pantalla) | ✅ | automáticas | F10-03 |
+| Foco sobre el objeto (encuadra la caja del modelo si lo tiene) | ✅ | botón Foco; Salir vuelve a la vista general | F6-07, [docs/11](11-modos-inspeccion.md) |
+| Corte vertical con poché | 🟡 | botón Corte; Shift + rueda lo desplaza. Un solo plano, perpendicular al eje E local, por el nodo seleccionado; no corta a lo largo de un tramo | F10-02 |
+| Rayos X (lo enterrado translúcido) | ✅ | botón Rayos X o `--rayos-x` | F10-04 |
+| Explosión de la pieza enfocada | ✅ | botón Explosión; Shift + rueda la abre | [docs/11](11-modos-inspeccion.md) |
+| Perfil longitudinal en panel | ✅ | botón Perfil en el inspector de un tramo | F13-02 |
+| Leyenda por forma y color con conteos | ✅ | panel izquierdo | — |
+| Modelos `.glb` de biblioteca en su nodo; proxy decimado sin GPU | ✅ | `--gpu3d` para la malla real; sin él, silueta y aviso | F6-01…05 |
+| Exageración vertical | 🟡 | fija (×2,0; ×2,6 con contexto urbano; ×1 en foco); sin control en la UI | sin ticket |
+| Abrir proyecto | 🟡 | `redes-app --abrir x.redes` (o `-p`, una ruta `.redes` suelta, `REDES_PROJECT`); sin diálogo de abrir. Sin nada, abre el demo; si lo pedido falla, abre vacío y lo dice | — |
+| Capturas y árbol sin ventana | ✅ | `--snap out.png --scene <escena>`, `--tree arbol.json`, `--size`, `--scale` (Rune). 16 escenas: `iso`, `planta`, `perfil`, `detalle`, `ciudad`, `calle`, `catalogo`, `vitrina`, `pozos`, `pieza`, `foco`, `corte`, `explosion`, `ptap`, `ptar`, `validar` | [docs/00](00-investigacion-rune.md) |
+| Vista SVG sin GPU para agentes | ✅ | `redes vista --salida v.svg [--azimut --elevacion --distancia --ancho --alto]`; sin capas, corte ni foco | — |
+| Buscar por código, filtrar por estado o familia | 📋 | no existen en la app (la CLI sí filtra: §2.5) | §4.2 |
+
+### 2.5 Revisión
+
+| Función | Estado | Cómo se usa | Referencia |
+|---|---|---|---|
+| Estados pendiente / aprobado / observado (observado ⇔ alguna observación abierta) | ✅ | panel «Revisión» con conteos | D7 |
+| Aprobar y observar un objeto | ✅ | inspector (Aprobar, Observar) o `redes objeto aprobar/observar --codigo X` | D7, F12-07 |
+| Observaciones con historial: añadir, cerrar, listar | ✅ | inspector (Añadir observación, Cerrar) o `objeto observar`, `objeto cerrar-observacion`, `objeto observaciones` | D7, F13-03 |
+| Reabrir un aprobado | 🟡 | solo CLI: `objeto reabrir` | D7 |
+| Listar por estado o familia | ✅ | `redes objeto lista [--estado pendiente] [--familia saneamiento.pozo]` | — |
+| Aprobar el proyecto (exige 0 pendientes y 0 observados) | 🟡 | solo CLI: `redes proyecto aprobar` (`E_STATE_PENDING`, `E_STATE_OBSERVED`) | F12-07 |
+| Deshacer y rehacer 20 pasos (revisión y modelo asignado) | ✅ | botones Deshacer, Rehacer | F14-08 |
+| Guardar atómico (temporal + renombrar) | ✅ | botón Guardar (el `*` indica cambios) | F15-09 (sigue en el hilo de UI) |
+| Comparar dos entregas por código (diseño y revisión) | ✅ | `redes proyecto diff --a a.redes --b b.redes [--solo diseno\|revision] [--salida d.csv]` | F13-05 |
+| Acta de revisión CSV (Excel) o HTML imprimible | 🟡 | solo CLI: `redes acta --salida acta.html` | F13-04, D2 |
+| Journal con revisión, comando y fecha UTC; sin identidad salvo `REDES_JOURNAL_USUARIO=1` | ✅ | automático | D2 |
+
+### 2.6 Validación geométrica
+
+| Función | Estado | Cómo se usa | Referencia |
+|---|---|---|---|
+| 10 reglas sobre las cotas importadas: `contrapendiente`, `pendiente`, `salto_pozo`, `recubrimiento`, `profundidad_pozo`, `separacion`, `dn_aguas_abajo`, `tramo_huerfano`, `nodo_aislado`, `longitud` | ✅ | `redes validar [--solo pendiente,recubrimiento] [--reglas r.json] [--guardar]`; es un informe (`ok:true` con hallazgos) | D6, F13-01 |
+| Umbrales del usuario; los de fábrica son referencia, no norma; falta un dato → `no_evaluable` | ✅ | `--reglas`, `Project::reglas_validacion` | D6 |
+| Panel Validación con navegación a cada hallazgo | ✅ | botón Validar en el panel izquierdo; escena `--scene validar` | F13-01 |
+| Tapa o rasante declaradas frente al TIN; objetos fuera del terreno | 📋 | no hay regla | sin ticket |
+
+### 2.7 Salida
+
+| Función | Estado | Cómo se usa | Referencia |
+|---|---|---|---|
+| DXF: capa por familia con color, metros, bloques con atributos, polilíneas 3D, capa `OBSERVACIONES`, capa `REDES_INFO` (apagada) para la vuelta | 🟡 | `redes exportar dxf --salida x.dxf [--solo-aprobados]`. Sin abrir aún en AutoCAD/BricsCAD reales | D1, F8-01, F8-02, F12-08 |
+| GeoJSON con atributos y datos como propiedades | ✅ | `redes exportar geojson --salida x.geojson` (sin `--solo-aprobados`) | F8-05 |
+| glTF binario `.glb` (piezas iguales comparten malla; > 4 GB → `E_IO_TOO_LARGE`) | ✅ | `redes exportar gltf --salida x.glb [--sin-terreno]` | F14-05, [docs/16](16-fase-4-5-gltf-y-3d.md) |
+| Cantidades con procedencia: objetos, longitudes por DN y material, volúmenes, áreas, pesos, discrepancias declarado/medido | ✅ | `redes cantidades [--grupo …] [--csv c.csv] [--tolerancia 10]` | D3, F7 |
+| Perfil longitudinal SVG y JSON | ✅ | `redes perfil --desde P1 --hasta P9 --salida p.svg` o `--tramos T1,T2` | F13-02 |
+| Exportar desde la app | 📋 | no hay botón: todo sale por CLI | sin ticket |
+
+### 2.8 Biblioteca de piezas
+
+| Función | Estado | Cómo se usa | Referencia |
+|---|---|---|---|
+| Revisar un `.glb` (mallas, triángulos, medidas, avisos) | ✅ | `redes biblioteca revisar --glb x.glb` | [docs/17](17-biblioteca-modelos.md) |
+| Importar y normalizar (base en 0, centrado, escala) con licencia y autor | ✅ | `redes biblioteca importar --glb x.glb --familia … [--licencia --autor]` | F11-05 |
+| Medir un `.glb` (volumen, área, materiales) | ✅ | `redes biblioteca cantidades --glb x.glb` | F7 |
+| Listar y aplicar a una familia (escribe `modelo` y datos con fuente `modelo:<id>`, sin pisar otra fuente) | ✅ | `biblioteca lista`, `biblioteca aplicar --modelo … --familia …`; en la app, «Modelos de la biblioteca» en el inspector | F6-06, F7-01 |
+| Anclas de conexión (la tubería nace en el puerto del modelo) | ✅ | automático al aplicar | F6-08 |
+| Hornear piezas paramétricas con Blender sin ventana, en lote y con caché por clave; un dato que falta no se rellena (pieza de respaldo y `W_PARAMETRO_FALTANTE`) | ✅ | `redes biblioteca hornear --receta tools/blender/build_manhole.receta.json [--parametros …] [--sin-blend] [--blender …]` | D15, D16, F17-02 |
+| Recetas disponibles | 🟡 | solo el pozo (`tools/blender/build_manhole.*`), en piloto | F17-03 |
+| Tubería, accesorios, captación, planta de tratamiento | 📋 | — | F17-04…F17-07 |
+| Cadena completa dibujada solo con piezas de Blender; biblioteca horneada en el paquete | 📋 | — | F17-08, F17-10, D17 |
+
+### 2.9 CLI para agentes
+
+| Función | Estado | Cómo se usa | Referencia |
+|---|---|---|---|
+| Sobre único `redes.envelope/1` con 14 claves siempre presentes; `ok:false` ⇔ salida ≠ 0 | ✅ | toda la CLI; pruebas de contrato con el binario real | `envelope.rs`, F9-01 |
+| Introspección: 36 comandos (con el alias `capacidades`), 29 códigos `E_*` con su código de salida, familias, formatos | ✅ | `redes esquema` | — |
+| Opciones globales `-p/--project` (o `REDES_PROJECT`, o búsqueda ascendente), `--pretty`, `--dry-run`, `--quiet` | ✅ | todas las órdenes | — |
+| Errores tipados (hoy códigos dentro de `String`) | 📋 | — | F15-06 |
+| Fachada única `redes_core::api` y canal `Comando → aplicar → Evento` | 📋 | — | F15-13, F15-14 |
+| `--pretty` automático en terminal | 📋 | — | F16-12 |
+
+### 2.10 Proyecto y persistencia
+
+| Función | Estado | Cómo se usa | Referencia |
+|---|---|---|---|
+| Archivo `*.redes` JSON `redes.project/3`; solo se abre la versión vigente (`E_PROJ_SCHEMA`), sin migraciones hasta v1 | ✅ | `redes proyecto nuevo --salida x.redes`, `proyecto info` | D10, F15-01 |
+| Proyectos de demostración | ✅ | `redes proyecto demo\|ciudad\|plantilla\|cadena\|catalogo\|catalogo-total --salida …` | F11-04 |
+| Paquete portable (zip con binarios, demos, docs y lanzadores) | ✅ | `powershell -File scripts/empaquetar.ps1` | F11-03 |
+| Guardar fuera del hilo de UI | 📋 | — | F15-09 |
+| Instalador MSI/winget firmado | 📋 | — | F16-06 |
+
+### 2.11 Rendimiento
+
+| Función | Estado | Cómo se usa | Referencia |
+|---|---|---|---|
+| Índices por id, código y nodo → tramos | ✅ | automático | F14-01 |
+| Red de 20k tramos fluida (escena, apertura, reimportación) con banco y umbrales en el CI | ✅ | `cargo test --release -p redes-core --test banco -- --include-ignored` | F14-04…F14-10 |
+| Cifras | ✅ | §5 | [docs/21](21-cifras-medidas.md) |
+
+## 3. Lo que NO hace, por decisión
+
+| No hace | Por qué | Decisión |
+|---|---|---|
+| Cálculo hidráulico, hidrológico, de caudales, presiones ni movimiento de tierras | Dos motores dan dos verdades; el número lo firma quien lo calculó en su aplicación. Todo número entra como `Dato` con fuente | D4, [docs/01](01-arquitectura.md) §1 |
+| Verificar normativa o «cumplimiento» | `validar` marca discrepancias geométricas con umbrales del usuario; no es una norma | D6 |
+| Editar el diseño (DN, cotas, trazado, parámetros) | Se corrige en la aplicación de origen y se reimporta; la app solo escribe revisión y el modelo 3D asignado | D12, D9 |
+| Inventar o rellenar datos | Lo ausente se muestra `—`; lo que no cuadra es discrepancia, no corrección | D4, F12-03, D16 |
+| Leer o escribir DWG | DXF basta para la ida y vuelta; DWG exige licencia ODA | D1 |
+| Adaptadores por programa (SWMM, EPANET, Civil 3D, SIG, Excel) en el código | Los adapta un agente con la skill guiada, que escribe el plan; la CLI lo valida | D5 |
+| Valorar cantidades o presupuestar | Emite cantidades con procedencia; los precios son de otra aplicación | D3 |
+| Identificar o firmar al revisor | El journal guarda revisión, comando y fecha; el usuario solo con `REDES_JOURNAL_USUARIO=1` | D2 |
+| Abrir `.redes` de versiones anteriores | No hay nada en producción; se regenera reimportando la entrega. Migraciones al congelar v1 | D10 |
+| Reproyectar coordenadas | Solo UTM sur WGS 84; la entrada llega ya proyectada | F12-13 |
+| Ejecutar Blender desde la app | La app abre sin Blender; hornear es de la CLI | D16 |
+| Producir piezas con un MCP de Blender | Las piezas salen de scripts versionados con `bpy` sin ventana | D15 |
+| Edición colaborativa en tiempo real | Un archivo, un revisor | [docs/01](01-arquitectura.md) |
+
+Decisiones abiertas: A1 (vertedero), A2 (pozo profundo), A3 (repo público) en [docs/22](22-decisiones.md).
+
+## 4. Lo que falta
+
+### 4.1 Topografía para un levantamiento real (sin ticket)
+
+Hoy `importar terreno` toma las tres primeras columnas como E, N, Z y arma un Delaunay sin
+restricciones (`ingest.rs` `import_terreno`, `terrain.rs` `Terrain::build`). `SurfacePoint`
+solo guarda `{e, n, z}`. Para un levantamiento de campo falta:
+
+| Falta | Qué pasa hoy |
+|---|---|
+| Formatos de columnas PNEZD, PENZD, NEZ, ENZ con número de punto y descripción; orden elegible o leído de la cabecera | Un PNEZD **se lee mal sin aviso**: el número de punto entra como E, el norte como N y el este como Z. `rechazar_lonlat` no lo detecta porque N > 90. Un NEZ cambia E por N en silencio |
+| Número y descripción (código) del punto en el modelo | Se descartan: no se guardan, no se muestran, no salen |
+| Puntos clasificados por código: terreno frente a no terreno (árboles, postes, edificaciones, tapas existentes, cercas) | Todo punto entra al TIN y deforma la superficie |
+| Líneas de quiebre como restricciones (bordes de vía, cunetas, ejes, pie y corona de talud, quebradas) | El TIN no es restringido: redondea los quiebres. Haría falta un Delaunay restringido (CDT) |
+| Polígono de borde y de exclusión (huecos: edificios, lagunas) | El TIN cubre el casco convexo: triángulos largos sobre las concavidades dan cotas falsas que la vista, el perfil y `validar` usan |
+| MDT en rejilla: GeoTIFF y ESRI ASCII (`.asc`) | No hay lector. F17-09 (Copernicus GLO-30) tendrá que convertir la rejilla a puntos fuera de la app |
+| Curvas de nivel como entrada (polilíneas con cota en DXF), TIN de Civil 3D (LandXML), nubes LAS/LAZ | No hay lector |
+| CRS y datum | Solo UTM sur WGS 84 (`327NN`), sin reproyección ni hemisferio norte; sin datum vertical (ortométrico/EGM2008 frente a elipsoidal): Copernicus va en EGM2008 y nada lo anota |
+| Más de una superficie (existente y proyectada) y añadir puntos a la existente | Importar reemplaza el terreno entero |
+| Puntos duplicados (misma E, N con distinta Z) e informe de calidad (densidad, triángulos largos, espigas) | No se detectan ni se informan |
+| Curvas de nivel en la vista y en el DXF; terreno en DXF y GeoJSON | Se calculan y no se usan; el terreno solo sale en glTF |
+| Aligerado que respete quiebres y picos | `thinned` guarda el primer punto de cada celda: puede perder picos en la vista |
+| Referencia de topografía en la skill de ingesta | No hay `references/topografia.md`; el plan solo admite `terreno: [[E,N,Z]]` |
+
+Con D5, el mapeo de columnas (PNEZD, NEZ, descripciones) puede ir por la skill, pero el plan
+necesita campos nuevos (código del punto, quiebres, bordes) y el núcleo un TIN restringido. El
+TIN es geometría del levantamiento, no cálculo de ingeniería: no cruza D4 mientras no derive
+volúmenes ni diseño.
+
+### 4.2 App
+
+| Falta | Ticket |
+|---|---|
+| Buscar un objeto por código | sin ticket (frente «Inventario de features», [docs/18](18-backlog.md) §Orden de fases vigente) |
+| Filtrar por estado de revisión y por familia | ídem |
+| Chip de la capa `nodos` (existe en `view::Layers`, no en la app) | ídem |
+| Botones de acta, reimportar, exportar, reabrir y aprobar el proyecto | sin ticket |
+| Todos los atributos en el inspector de nodo (hoy 10) y atributos en el de tramo | sin ticket |
+| Longitud 3D en el inspector de tramo (hoy en planta; `cantidades` ya da la 3D) | sin ticket |
+| Corte a lo largo de un tramo u orientable | sin ticket |
+| Control de exageración vertical | sin ticket |
+| Seleccionar un objeto en una escena `--snap` (capturar el inspector) | sin ticket ([docs/23](23-estado-y-pendientes.md)) |
+| Guardar fuera del hilo de UI | F15-09 |
+
+### 4.3 Validación y salida
+
+| Falta | Ticket |
+|---|---|
+| Regla de tapa o rasante declaradas frente al TIN, y de objetos fuera del terreno | sin ticket |
+| `--solo-aprobados` en GeoJSON; DXF por red (agua o alcantarillado) | sin ticket |
+| Abrir un DXF exportado en AutoCAD/BricsCAD y dejar constancia | sin ticket ([docs/23](23-estado-y-pendientes.md)) |
+| Reimportar reaplica las anclas de `biblioteca aplicar` | sin ticket ([docs/23](23-estado-y-pendientes.md)) |
+
+### 4.4 Piezas, arquitectura y release
+
+- F17: pozo piloto (F17-03), tubería (F17-04), accesorios (F17-05), captación (F17-06), planta
+  (F17-07), cadena solo con piezas de Blender (F17-08), topografía real (F17-09), biblioteca horneada
+  en el paquete (F17-10).
+- F15: agregado `Project` encapsulado (F15-02), catálogo como datos (F15-03), sin `match` por familia
+  (F15-04), funciones gigantes (F15-05), errores tipados (F15-06), demos tras `feature` (F15-07),
+  núcleo sin E/S (F15-08), sin `panic` (F15-10), fachada `api` y canal de comandos (F15-13…15).
+- F16: fixtures reales (F16-03), cobertura (F16-04), CI de publicación (F16-05), instalador
+  (F16-06), icono (F16-07), CHANGELOG (F16-08), licencias (F16-09), mensajes para personas
+  (F16-10), avisos de compilación (F16-11), `--pretty` automático (F16-12).
+- Fuera de v1, sin ticket: IFC/Revit, servidor MCP, modo lote, autoguardado, atributos definidos por
+  el usuario.
+
+### 4.5 Decisiones pendientes que cambian funciones
+
+A1 y A2 ([docs/22](22-decisiones.md)); sumideros de la topología (`is_sink`); identidad de la
+revisión (F11-02, hoy cerrada por D2).
+
+### 4.6 Contradicciones encontradas al verificar
+
+- El inspector muestra «diámetro 1,20 m» cuando el nodo no trae `diametro_interior`
+  (`Node::diametro`, `model.rs`, `unwrap_or(1.20)`): es un dato inventado en pantalla, contra D4 y
+  F12-03. Debería mostrarse `—`.
+- El aviso del foco dice «Flechas para girar», pero la app no atiende el teclado.
+- `skills/redes-ingesta/references/plan.md` dice que el TIN del plan «se etiqueta siempre como
+  32717»; el código usa el EPSG del plan.
+- `CLAUDE.md` cita la variable `REDES_GPU`; la app lee `REDES_GPU3D=1` (`gpu3d::activo`). También
+  lista GeoJSON entre lo que importa `ingest`, que desde D5 no lo lee.
+- `redes proyecto aprobar --help` dice que exige «que no queden objetos pendientes»; también exige
+  que no queden observados (`E_STATE_OBSERVED`).
+
+## 5. Cifras clave
+
+De [docs/21](21-cifras-medidas.md), que manda sobre cualquier cifra:
+
+| Medida | Valor |
+|---|---:|
+| Familias / subtipos | 46 / 315 |
+| Cadena completa (`redes proyecto cadena`) | 90 objetos, 72 tramos, 961,4 m |
+| 20k tramos, release: ingesta / escena / abrir / reimportar | 182 ms / 7,0 ms / 115 ms / 349 ms |
+| 50k tramos: escena | 13,4 ms |
+| Pase 3D, 20k tramos: GPU / primer frame / RAM pico | 22,9 MB / 135 ms / 319 MB |
+| glTF de 20k tramos | 26,2 MB en 3,6 s |
+| Cambio de cámara en 3D (ciudad) | 0,008 ms, sin regenerar la malla |
+| Deshacer, 20 pasos con 20k tramos | 14,9 kB (antes 270 MB) |
+| Horneado: 100 pozos en un proceso / todo en caché | 7,2 s / 86 ms sin Blender |
+| Pruebas / mutaciones | 299 / 41 |
