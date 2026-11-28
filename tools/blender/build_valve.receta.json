@@ -1,0 +1,47 @@
+{
+  "schema": "redes.receta/1",
+  "familia": "agua.valvula",
+  "subtipos": ["compuerta", "mariposa", "retencion"],
+  "modulos": ["redes_mallas.py"],
+  "colocacion": "puertos",
+  "parametros": {
+    "dn_mm": { "desde": "atributo", "clave": "diametro_nominal", "unidad": "mm" },
+    "material": { "desde": "atributo", "clave": "material" },
+    "subtype": { "desde": "subtipo" },
+    "ports": {
+      "desde": "puertos",
+      "por_subtipo": { "compuerta": 2, "mariposa": 2, "retencion": 2 },
+      "paso_angulo_deg": 1.0, "recto": true
+    },
+    "flange_od_dn": { "desde": "forma", "valor": 1.5 },
+    "flange_od_extra_m": { "desde": "forma", "valor": 0.08, "unidad": "m" },
+    "flange_thickness_m": { "desde": "forma", "valor": 0.025, "unidad": "m" },
+    "operator_material": { "desde": "forma", "valor": "acero" },
+    "gate": {
+      "desde": "forma",
+      "valor": {
+        "length_base_m": 0.1, "length_per_dn": 0.9, "body_od_dn": 1.35,
+        "bonnet_height_dn": 1.3, "bonnet_width_dn": 1.1,
+        "stem_height_m": 0.12, "stem_diameter_m": 0.03,
+        "wheel_diameter_dn": 0.8, "wheel_extra_m": 0.1, "wheel_rim_m": 0.025
+      }
+    },
+    "butterfly": {
+      "desde": "forma",
+      "valor": {
+        "length_base_m": 0.05, "length_per_dn": 0.25, "body_od_dn": 1.45,
+        "neck_height_m": 0.08, "neck_diameter_m": 0.07, "gearbox_m": 0.16,
+        "wheel_diameter_dn": 0.6, "wheel_extra_m": 0.12, "wheel_rim_m": 0.025
+      }
+    },
+    "check": {
+      "desde": "forma",
+      "valor": {
+        "length_base_m": 0.15, "length_per_dn": 1.4, "body_od_dn": 1.35,
+        "cover_offset_ratio": 0.12, "cover_height_dn": 0.25, "cover_diameter_dn": 1.0,
+        "hinge_diameter_m": 0.04, "arrow_m": 0.12
+      }
+    },
+    "segments": { "desde": "forma", "valor": 32 }
+  }
+}

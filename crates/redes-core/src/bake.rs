@@ -79,6 +79,28 @@ pub enum ParamSource {
     /// `agua` or `saneamiento`, from the object's family.
     #[serde(rename = "sistema")]
     System,
+    /// The object's subtype, for a recipe that draws several (`subtipos`).
+    #[serde(rename = "subtipo")]
+    Subtype,
+    /// The ports of a fitting in its own frame (docs/familias/F17-05): one per pipe that reaches
+    /// it, with the direction relative to the reference port and the pipe's DN. The frame turns
+    /// with the pipes, so equal fittings share one piece wherever they point.
+    #[serde(rename = "puertos")]
+    Ports {
+        /// How many ports each subtype has; another count is missing data, not a guess.
+        #[serde(rename = "por_subtipo")]
+        count_by_subtype: BTreeMap<String, usize>,
+        /// Angles are drawn to this step (degrees), so a bend of 44.97° shares the 45° piece.
+        #[serde(rename = "paso_angulo_deg")]
+        angle_step_deg: f64,
+        /// Every pipe must declare its DN (the piece is drawn with it).
+        #[serde(rename = "con_dn", default)]
+        require_dn: bool,
+        /// The piece is straight (a valve, a reducer): the far port is drawn on the run, so a
+        /// pipe that leaves at an angle does not make another piece.
+        #[serde(rename = "recto", default)]
+        straight: bool,
+    },
     /// A drawing detail fixed by the recipe (cone height, segments…). Never becomes a `Dato`.
     #[serde(rename = "forma")]
     Shape {
@@ -99,6 +121,11 @@ pub struct Recipe {
     /// More families the recipe draws: one pipe recipe serves water and sewer links.
     #[serde(rename = "otras_familias", default)]
     pub other_families: Vec<String>,
+    /// Subtypes one recipe draws when they share their data (gate, butterfly and check valves).
+    #[serde(rename = "subtipos", default)]
+    pub subtypes: Vec<String>,
+    #[serde(rename = "colocacion", default)]
+    pub placement: Placement,
     #[serde(rename = "parametros")]
     pub params: BTreeMap<String, ParamSource>,
     /// Python modules next to the script that it imports (`plant_units.py`…). They shape the
@@ -106,6 +133,34 @@ pub struct Recipe {
     #[serde(rename = "modulos", default)]
     pub modules: Vec<String>,
 }
+
+/// How the viewer turns and lifts a baked piece onto its object.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+pub enum Placement {
+    /// Turned by the object's `giro`, sat on its invert (the manhole, F17-03).
+    #[default]
+    #[serde(rename = "objeto")]
+    Object,
+    /// Turned like its ports' frame and sat on the reference pipe's invert: a fitting on a line.
+    #[serde(rename = "puertos")]
+    Ports,
+    /// Turned like its ports' frame and sat on the object's invert: a hydrant on its branch.
+    #[serde(rename = "puertos_en_objeto")]
+    PortsOnObject,
+}
+
+impl Placement {
+    fn extra_value(self) -> Option<&'static str> {
+        match self {
+            Placement::Object => None,
+            Placement::Ports => Some("puertos"),
+            Placement::PortsOnObject => Some("puertos_en_objeto"),
+        }
+    }
+}
+
+/// Manifest extra that tells the viewer how to place a piece (absent: [`Placement::Object`]).
+pub const PLACEMENT_EXTRA: &str = "horneado.colocacion";
 
 /// One set of recipe parameters, by recipe name. Sorted, so its JSON is canonical.
 pub type ParamSet = BTreeMap<String, Json>;
@@ -198,6 +253,7 @@ impl Recipe {
     fn draws(&self, family: &str, ty: &str) -> bool {
         (family == self.family || self.other_families.iter().any(|f| f == family))
             && self.subtype.as_deref().is_none_or(|s| ty == s)
+            && (self.subtypes.is_empty() || self.subtypes.iter().any(|s| s == ty))
     }
 
     /// Parameters of an object, or the project data it lacks (D16: nothing is filled in).
@@ -215,6 +271,18 @@ impl Recipe {
                 attribute_minus_invert(node, key, unit.as_deref())
             }
             ParamSource::Connections => Ok(node_connections(p, node).to_json()),
+            ParamSource::Subtype => Ok(Json::from(node.ty.clone())),
+            ParamSource::Ports {
+                count_by_subtype,
+                angle_step_deg,
+                require_dn,
+                straight,
+            } => {
+                let wanted = count_by_subtype.get(&node.ty).copied();
+                let step = (!*straight).then_some(*angle_step_deg);
+                ports_param(p, node, wanted, step, *require_dn)
+                    .map_err(|why| format!("{PORTS_MISSING} ({why})"))
+            }
             ParamSource::NominalDiameter { .. } | ParamSource::DrawingBore { .. } => {
                 Err(DIAMETRO_NOMINAL.to_string())
             }
@@ -242,6 +310,8 @@ impl Recipe {
             ParamSource::RimMinusInvert { .. } => Err(COTA_TAPA.to_string()),
             ParamSource::AttributeMinusInvert { .. } => Err(COTA_SOLERA.to_string()),
             ParamSource::Connections => Ok(Connections::default().to_json()),
+            ParamSource::Subtype => Ok(Json::from(link.ty.clone())),
+            ParamSource::Ports { .. } => Err(PORTS_MISSING.to_string()),
             ParamSource::Shape { .. } => unreachable!("shape values come from the recipe"),
         })
     }
@@ -334,7 +404,11 @@ impl Recipe {
                         (unit.as_deref().unwrap_or(""), "m")
                     }
                     ParamSource::NominalDiameter { unit } => (unit.as_deref().unwrap_or(""), "mm"),
-                    ParamSource::Connections | ParamSource::System | ParamSource::Shape { .. } => {
+                    ParamSource::Connections
+                    | ParamSource::System
+                    | ParamSource::Subtype
+                    | ParamSource::Ports { .. }
+                    | ParamSource::Shape { .. } => {
                         continue;
                     }
                 };
@@ -543,6 +617,221 @@ fn normalise_degrees(a: f64) -> f64 {
     }
 }
 
+/// Name of the missing datum when a fitting's pipes do not give its ports.
+pub const PORTS_MISSING: &str = "conexiones";
+
+/// A fitting's ports in its own frame: the reference port points to -X (azimuth 180°), so the
+/// run goes along +X. Turning the piece by `rotation_deg` puts every port on its pipe.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PortFrame {
+    /// World azimuth the frame is turned by (degrees, counter-clockwise from +X).
+    pub rotation_deg: f64,
+    /// Invert of the reference pipe at the object (m).
+    pub reference_invert_m: f64,
+    /// The reference port first, then the others by azimuth.
+    pub ports: Vec<Port>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Port {
+    /// `entrada__<n>` for a pipe that ends at the fitting, `salida__<n>` for one that starts there;
+    /// it names the anchor. The number is the port's place in the frame, not the pipe's code, so
+    /// the piece is shared.
+    pub name: String,
+    pub link: String,
+    /// Direction to the pipe in the frame (degrees), unrounded.
+    pub azimuth_deg: f64,
+    pub dn_mm: Option<u32>,
+}
+
+struct PipeEnd<'a> {
+    link: &'a Link,
+    incoming: bool,
+    azimuth_deg: f64,
+    invert_m: f64,
+}
+
+/// The ports of a fitting from the pipes that reach it, or why they cannot be placed. Nothing
+/// is guessed: each pipe needs its drawn direction and its invert at the fitting.
+pub fn node_port_frame(p: &Project, node: &Node) -> Result<PortFrame, String> {
+    let mut links: Vec<&Link> = p.tramos_de(node.id).collect();
+    if links.is_empty() {
+        return Err("sin tramos conectados".into());
+    }
+    links.sort_by(|a, b| a.code.cmp(&b.code));
+    let ends = links
+        .into_iter()
+        .map(|l| pipe_end(l, node).map_err(|why| format!("{}: {why}", l.code)))
+        .collect::<Result<Vec<_>, _>>()?;
+    let reference = &ends[reference_end(&ends)];
+    let rotation = normalise_degrees(reference.azimuth_deg - 180.0);
+    let mut others: Vec<(f64, &PipeEnd)> = ends
+        .iter()
+        .filter(|e| !std::ptr::eq(*e, reference))
+        .map(|e| (normalise_degrees(e.azimuth_deg - rotation), e))
+        .collect();
+    others.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let ordered = std::iter::once((180.0, reference)).chain(others);
+    let ports = ordered
+        .enumerate()
+        .map(|(i, (azimuth_deg, e))| Port {
+            name: format!(
+                "{}__{}",
+                if e.incoming { "entrada" } else { "salida" },
+                i + 1
+            ),
+            link: e.link.code.clone(),
+            azimuth_deg,
+            dn_mm: e.link.dn(),
+        })
+        .collect();
+    Ok(PortFrame {
+        rotation_deg: rotation,
+        reference_invert_m: reference.invert_m,
+        ports,
+    })
+}
+
+/// The port the frame starts from: one of the straightest pair of pipes (the run of a tee), the
+/// incoming one if only one of the pair comes in, else the first by code.
+fn reference_end(ends: &[PipeEnd]) -> usize {
+    let mut best: Option<(f64, usize, usize)> = None;
+    for i in 0..ends.len() {
+        for j in i + 1..ends.len() {
+            let spread = normalise_degrees(ends[i].azimuth_deg - ends[j].azimuth_deg).abs();
+            if best.is_none_or(|(s, _, _)| spread > s + 1e-9) {
+                best = Some((spread, i, j));
+            }
+        }
+    }
+    match best {
+        Some((_, i, j)) if !ends[i].incoming && ends[j].incoming => j,
+        Some((_, i, _)) => i,
+        None => 0,
+    }
+}
+
+fn pipe_end<'a>(l: &'a Link, node: &Node) -> Result<PipeEnd<'a>, String> {
+    let starts_here = l.from == node.id;
+    let declared = if starts_here {
+        l.cota_solera_inicio
+    } else {
+        l.cota_solera_fin
+    };
+    let invert = declared
+        .or_else(|| {
+            l.cotas_trazado()
+                .map(|(a, b)| if starts_here { a } else { b })
+        })
+        .filter(|z| z.is_finite())
+        .ok_or("el tramo no trae cota de solera en este extremo")?;
+    let mut path = l.path.iter();
+    let neighbour = if starts_here {
+        path.find(|q| q.p2().dist(node.pos) > 1e-6)
+    } else {
+        path.rev().find(|q| q.p2().dist(node.pos) > 1e-6)
+    }
+    .ok_or("el trazado del tramo no sale del objeto")?;
+    Ok(PipeEnd {
+        link: l,
+        incoming: !starts_here,
+        azimuth_deg: (neighbour.y - node.pos.y)
+            .atan2(neighbour.x - node.pos.x)
+            .to_degrees(),
+        invert_m: invert,
+    })
+}
+
+/// The `puertos` parameter: the ports of the frame with their angles drawn to the recipe's step.
+fn ports_param(
+    p: &Project,
+    node: &Node,
+    wanted: Option<usize>,
+    step_deg: Option<f64>,
+    require_dn: bool,
+) -> Result<Json, String> {
+    let Some(wanted) = wanted else {
+        return Err(format!(
+            "la receta no dice cuántas bocas tiene «{}»",
+            node.ty
+        ));
+    };
+    let frame = node_port_frame(p, node)?;
+    if frame.ports.len() != wanted {
+        return Err(format!(
+            "{} tramos conectados; la pieza tiene {wanted} bocas",
+            frame.ports.len()
+        ));
+    }
+    if require_dn && let Some(port) = frame.ports.iter().find(|q| q.dn_mm.is_none()) {
+        return Err(format!("{}: el tramo no trae DN", port.link));
+    }
+    Ok(Json::Array(
+        frame
+            .ports
+            .iter()
+            .enumerate()
+            .map(|(i, q)| {
+                let azimuth = match step_deg {
+                    Some(step) => drawn_angle(q.azimuth_deg, step),
+                    None if i == 0 => 180.0,
+                    None => 0.0,
+                };
+                serde_json::json!({
+                    "name": q.name,
+                    "azimuth_deg": azimuth,
+                    "dn_mm": q.dn_mm,
+                })
+            })
+            .collect(),
+    ))
+}
+
+fn drawn_angle(a: f64, step_deg: f64) -> f64 {
+    let stepped = if step_deg > 0.0 {
+        (a / step_deg).round() * step_deg
+    } else {
+        a
+    };
+    round_to(normalise_degrees(stepped), 1e6)
+}
+
+/// Where a library piece goes on an object: its turn about Z and the elevation of its z = 0.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ModelPlacement {
+    pub rotation_deg: f64,
+    pub base_m: f64,
+}
+
+/// Placement of a piece on an object. A piece baked in its ports' frame turns with the pipes;
+/// if the pipes no longer give a frame, it is placed like any other piece.
+pub fn model_placement(p: &Project, node: &Node, piece: &Entrada) -> ModelPlacement {
+    let by_object = ModelPlacement {
+        rotation_deg: node.num("giro").filter(|g| g.is_finite()).unwrap_or(0.0),
+        base_m: biblioteca::cota_base_modelo(node, &piece.anclas),
+    };
+    let mode = piece.extras.get(PLACEMENT_EXTRA).map(String::as_str);
+    let on_pipe = mode == Placement::Ports.extra_value();
+    if !on_pipe && mode != Placement::PortsOnObject.extra_value() {
+        return by_object;
+    }
+    let Ok(frame) = node_port_frame(p, node) else {
+        return by_object;
+    };
+    let invert_anchor = piece
+        .anclas
+        .get(biblioteca::ANCLA_SOLERA)
+        .map_or(0.0, |a| a[2] as f64);
+    ModelPlacement {
+        rotation_deg: frame.rotation_deg,
+        base_m: if on_pipe {
+            frame.reference_invert_m - invert_anchor
+        } else {
+            by_object.base_m
+        },
+    }
+}
+
 /// Cache key of a bake: the driver, the recipe script and the canonical parameters.
 ///
 /// Line endings are normalised so a checkout with CRLF names the same `.glb` as one with LF.
@@ -621,15 +910,27 @@ pub fn baked_entry(
     let measured = biblioteca::cantidades_glb(glb).ok();
     let mut extras = model.extras;
     extras.extend(bake_extras(&loaded.name, key, params));
+    if let Some(mode) = loaded.recipe.placement.extra_value() {
+        extras.insert(PLACEMENT_EXTRA.to_string(), mode.to_string());
+    }
+    let baked_subtype = loaded
+        .recipe
+        .params
+        .iter()
+        .find(|(_, s)| matches!(s, ParamSource::Subtype))
+        .and_then(|(name, _)| params.get(name))
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
     Ok(Entrada {
         id: loaded.piece_id(key),
         familia: loaded.recipe.family.clone(),
-        subtipo: loaded.recipe.subtype.clone(),
+        subtipo: loaded.recipe.subtype.clone().or(baked_subtype),
         // A pipe piece is one DN; a manhole has none (each pipe's DN goes in its anchor).
         dn_mm: params
             .get(PIPE_DN_PARAM)
             .and_then(Json::as_u64)
-            .map(|d| d as u32),
+            .map(|d| d as u32)
+            .or_else(|| baked_dn_mm(&loaded.recipe, params)),
         archivo: cached_glb_relative(key),
         escala: 1.0,
         triangulos: model.triangulos,
@@ -644,6 +945,19 @@ pub fn baked_entry(
         licencia: Some("MIT".into()),
         autor: Some(format!("receta:{}", loaded.name)),
     })
+}
+
+/// The piece's DN when the recipe draws it from the object's `diametro_nominal` (a manhole has
+/// none: its pipes carry theirs).
+fn baked_dn_mm(recipe: &Recipe, params: &ParamSet) -> Option<u32> {
+    recipe
+        .params
+        .iter()
+        .find(|(_, s)| matches!(s, ParamSource::Attribute { key, .. } if key == crate::model::DIAMETRO_NOMINAL))
+        .and_then(|(name, _)| params.get(name))
+        .and_then(Json::as_f64)
+        .filter(|d| d.is_finite() && *d > 0.0)
+        .map(|d| d.round() as u32)
 }
 
 fn round_to(v: f64, scale: f64) -> f64 {
@@ -958,6 +1272,331 @@ mod tests {
             without.key(&set),
             bake_key(&r.driver_bytes, &r.script_bytes, &set),
             "a recipe without modules keeps its old key"
+        );
+    }
+
+    fn recipe(name: &str) -> LoadedRecipe {
+        let contract = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join(format!("../../tools/blender/{name}.receta.json"));
+        LoadedRecipe::load(&contract).unwrap_or_else(|e| panic!("{name}: {e}"))
+    }
+
+    const FITTING_RECIPES: [&str; 6] = [
+        "build_elbow",
+        "build_tee",
+        "build_reducer",
+        "build_valve",
+        "build_air_valve",
+        "build_hydrant",
+    ];
+
+    fn node_at(family: &str, ty: &str, code: &str, x: f64, y: f64) -> Node {
+        Node {
+            id: crate::model::ElementId::new(0, 0),
+            family: family.into(),
+            ty: ty.into(),
+            code: code.into(),
+            pos: crate::geom::P2::new(758_000.0 + x, 9_797_000.0 + y),
+            z_terrain: 2500.0,
+            z_rim: 2500.0,
+            z_invert: 2498.8,
+            attrs: BTreeMap::new(),
+            datos: BTreeMap::new(),
+            estado: crate::model::EstadoObjeto::Pendiente,
+            observaciones: Vec::new(),
+            modelo: None,
+            deleted: false,
+            sin_dato: Vec::new(),
+        }
+    }
+
+    /// A fitting at the origin and one pipe per `(code, towards the fitting, azimuth, DN)`,
+    /// 10 m long, with its invert 2498.8 at the fitting.
+    fn fitting(family: &str, ty: &str, pipes: &[(&str, bool, f64, u32)]) -> (Project, Node) {
+        let mut p = Project::new("F17-05", "EPSG:32717");
+        let mut centre = node_at(family, ty, "AX-1", 0.0, 0.0);
+        centre
+            .attrs
+            .insert("diametro_nominal".into(), Value::Int(200));
+        centre
+            .attrs
+            .insert("material".into(), Value::Text("PVC".into()));
+        let centre_id = p.add_node(centre).unwrap();
+        for (i, (code, incoming, azimuth, dn)) in pipes.iter().enumerate() {
+            let (dx, dy) = (
+                10.0 * azimuth.to_radians().cos(),
+                10.0 * azimuth.to_radians().sin(),
+            );
+            let far = p
+                .add_node(node_at(
+                    "agua.arqueta",
+                    "medidor",
+                    &format!("AQ-{i}"),
+                    dx,
+                    dy,
+                ))
+                .unwrap();
+            let at = |x: f64, y: f64| crate::geom::P3::new(758_000.0 + x, 9_797_000.0 + y, 2498.8);
+            let (from, to, path) = if *incoming {
+                (far, centre_id, vec![at(dx, dy), at(0.0, 0.0)])
+            } else {
+                (centre_id, far, vec![at(0.0, 0.0), at(dx, dy)])
+            };
+            p.add_link(Link {
+                id: crate::model::ElementId::new(0, 0),
+                family: "agua.tuberia".into(),
+                ty: "conduccion".into(),
+                code: code.to_string(),
+                from,
+                to,
+                path,
+                d_mm: *dn,
+                attrs: BTreeMap::new(),
+                datos: BTreeMap::new(),
+                estado: crate::model::EstadoObjeto::Pendiente,
+                observaciones: Vec::new(),
+                cota_solera_inicio: None,
+                cota_solera_fin: None,
+                modelo: None,
+                deleted: false,
+                sin_dato: Vec::new(),
+            })
+            .unwrap();
+        }
+        let n = p.node(centre_id).unwrap().clone();
+        (p, n)
+    }
+
+    #[test]
+    fn the_fitting_recipes_load_and_agree_with_the_registry() {
+        for name in FITTING_RECIPES {
+            let r = recipe(name);
+            assert_eq!(r.recipe.unit_mismatches(), Vec::<String>::new(), "{name}");
+            assert_eq!(r.module_bytes.len(), 1, "{name} imports redes_mallas.py");
+            assert_ne!(r.recipe.placement, Placement::Object, "{name}");
+        }
+    }
+
+    #[test]
+    fn an_elbow_turns_with_its_pipes_and_equal_elbows_share_one_piece() {
+        let r = recipe("build_elbow");
+        // Heading east then north, and heading north then west: both a 90° left turn.
+        let (p1, east) = fitting(
+            "comun.accesorio",
+            "codo",
+            &[("TB-1", true, 180.0, 200), ("TB-2", false, 90.0, 200)],
+        );
+        let (p2, north) = fitting(
+            "comun.accesorio",
+            "codo",
+            &[("TB-7", true, -90.0, 200), ("TB-8", false, 180.0, 200)],
+        );
+        let a = r.recipe.params_for_node(&p1, &east).unwrap();
+        let b = r.recipe.params_for_node(&p2, &north).unwrap();
+        assert_eq!(
+            a["ports"], b["ports"],
+            "codes and heading are not in the piece"
+        );
+        assert_eq!(r.key(&a), r.key(&b));
+        assert_eq!(a["ports"][0]["name"], "entrada__1");
+        assert_eq!(a["ports"][1]["azimuth_deg"], Json::from(90.0));
+
+        let f1 = node_port_frame(&p1, &east).unwrap();
+        let f2 = node_port_frame(&p2, &north).unwrap();
+        assert!(f1.rotation_deg.abs() < 1e-9, "{f1:?}");
+        assert!((f2.rotation_deg - 90.0).abs() < 1e-9, "{f2:?}");
+        assert_eq!(f2.ports[1].link, "TB-8");
+        assert!((f1.reference_invert_m - 2498.8).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_bend_is_drawn_to_the_recipe_step() {
+        let r = recipe("build_elbow");
+        let (p, n) = fitting(
+            "comun.accesorio",
+            "codo",
+            &[("TB-1", true, 180.0, 200), ("TB-2", false, 44.7, 200)],
+        );
+        let set = r.recipe.params_for_node(&p, &n).unwrap();
+        assert_eq!(set["ports"][1]["azimuth_deg"], Json::from(45.0));
+    }
+
+    #[test]
+    fn the_reference_of_a_tee_is_on_its_run_whatever_the_codes() {
+        let r = recipe("build_tee");
+        // The branch sorts first by code; the run is TB-5 (in) and TB-6 (out).
+        let (p, mut n) = fitting(
+            "comun.accesorio",
+            "tee",
+            &[
+                ("TB-0", false, 90.0, 100),
+                ("TB-5", true, 180.0, 200),
+                ("TB-6", false, 0.0, 200),
+            ],
+        );
+        n.attrs.insert("dn_ramal".into(), Value::Int(100));
+        let frame = node_port_frame(&p, &n).unwrap();
+        let links: Vec<&str> = frame.ports.iter().map(|q| q.link.as_str()).collect();
+        assert_eq!(links, ["TB-5", "TB-6", "TB-0"]);
+        let set = r.recipe.params_for_node(&p, &n).unwrap();
+        let names: Vec<&str> = set["ports"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|q| q["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(names, ["entrada__1", "salida__2", "salida__3"]);
+        assert_eq!(set["ports"][2]["dn_mm"], Json::from(100));
+    }
+
+    #[test]
+    fn a_fitting_without_its_pipes_keeps_the_fallback_and_says_why() {
+        let r = recipe("build_valve");
+        let (p, n) = fitting("agua.valvula", "compuerta", &[("TB-1", true, 180.0, 200)]);
+        assert!(r.recipe.applies_to(&n));
+        let missing = r.recipe.params_for_node(&p, &n).unwrap_err();
+        assert_eq!(
+            missing,
+            vec!["conexiones (1 tramos conectados; la pieza tiene 2 bocas)".to_string()]
+        );
+
+        let (mut p, n) = fitting(
+            "agua.valvula",
+            "compuerta",
+            &[("TB-1", true, 180.0, 200), ("TB-2", false, 0.0, 200)],
+        );
+        assert!(r.recipe.params_for_node(&p, &n).is_ok());
+        for l in p.links.iter_mut() {
+            l.sin_dato.push(COTA_SOLERA.into());
+        }
+        let missing = r.recipe.params_for_node(&p, &n).unwrap_err();
+        assert!(
+            missing[0].contains("TB-1: el tramo no trae cota"),
+            "{missing:?}"
+        );
+    }
+
+    #[test]
+    fn one_valve_recipe_draws_the_subtypes_it_lists_and_names_them() {
+        let r = recipe("build_valve");
+        for (ty, drawn) in [
+            ("compuerta", true),
+            ("mariposa", true),
+            ("retencion", true),
+            ("aire", false),
+            ("purga", false),
+        ] {
+            let n = node_at("agua.valvula", ty, "VL-1", 0.0, 0.0);
+            assert_eq!(r.recipe.applies_to(&n), drawn, "{ty}");
+        }
+        let (p, mut n) = fitting(
+            "agua.valvula",
+            "mariposa",
+            &[("TB-1", true, 180.0, 150), ("TB-2", false, 0.0, 150)],
+        );
+        n.attrs
+            .insert("material".into(), Value::Text("hierro_ductil".into()));
+        let set = r.recipe.params_for_node(&p, &n).unwrap();
+        assert_eq!(set["subtype"], Json::from("mariposa"));
+    }
+
+    #[test]
+    fn an_air_valve_needs_the_dn_of_the_main_it_sits_on() {
+        let r = recipe("build_air_valve");
+        let (mut p, n) = fitting(
+            "agua.valvula",
+            "aire",
+            &[("TB-1", true, 180.0, 200), ("TB-2", false, 0.0, 200)],
+        );
+        assert!(r.recipe.params_for_node(&p, &n).is_ok());
+        p.links[0]
+            .sin_dato
+            .push(crate::model::DIAMETRO_NOMINAL.into());
+        let missing = r.recipe.params_for_node(&p, &n).unwrap_err();
+        assert!(missing[0].contains("el tramo no trae DN"), "{missing:?}");
+    }
+
+    #[test]
+    fn a_port_framed_piece_turns_with_its_pipes_and_sits_on_the_pipe_invert() {
+        let (p, mut n) = fitting(
+            "comun.accesorio",
+            "codo",
+            &[("TB-1", true, -90.0, 200), ("TB-2", false, 180.0, 200)],
+        );
+        // The object's own elevations disagree with its pipes: the piece follows the pipes.
+        n.z_invert = 2497.0;
+        n.attrs.insert("giro".into(), Value::Num(33.0));
+        let mut piece = Entrada {
+            id: "comun.accesorio.codo-x".into(),
+            familia: "comun.accesorio".into(),
+            subtipo: Some("codo".into()),
+            dn_mm: Some(200),
+            archivo: String::new(),
+            escala: 1.0,
+            triangulos: 0,
+            dimensiones_m: [0.0; 3],
+            bytes: 0,
+            volumen_m3: None,
+            area_m2: None,
+            cerrada: None,
+            anclas: BTreeMap::from([(biblioteca::ANCLA_SOLERA.to_string(), [0.0f32, 0.0, 0.0])]),
+            extras: BTreeMap::new(),
+            licencia: None,
+            autor: None,
+        };
+        let by_object = model_placement(&p, &n, &piece);
+        assert_eq!(by_object.rotation_deg, 33.0, "no frame extra: the giro");
+        assert!((by_object.base_m - 2497.0).abs() < 1e-9);
+
+        piece
+            .extras
+            .insert(PLACEMENT_EXTRA.into(), "puertos".into());
+        let on_pipe = model_placement(&p, &n, &piece);
+        assert!((on_pipe.rotation_deg - 90.0).abs() < 1e-9, "{on_pipe:?}");
+        assert!((on_pipe.base_m - 2498.8).abs() < 1e-9, "{on_pipe:?}");
+
+        piece
+            .extras
+            .insert(PLACEMENT_EXTRA.into(), "puertos_en_objeto".into());
+        let on_object = model_placement(&p, &n, &piece);
+        assert!((on_object.rotation_deg - 90.0).abs() < 1e-9);
+        assert!((on_object.base_m - 2497.0).abs() < 1e-9);
+    }
+
+    /// The chain demo's in-line valves share one piece, even where the pipe turns at the valve:
+    /// only the valve at the end of a line (one pipe) keeps its fallback piece.
+    #[test]
+    fn the_chain_demo_valves_bake_to_few_pieces() {
+        let p = crate::demo_cadena::cadena();
+        let gate = recipe("build_valve");
+        let mut keys = std::collections::BTreeSet::new();
+        let mut lacking = Vec::new();
+        for n in p.nodes.iter().filter(|n| gate.recipe.applies_to(n)) {
+            match gate.recipe.params_for_node(&p, n) {
+                Ok(set) => {
+                    keys.insert(gate.key(&set));
+                }
+                Err(m) => lacking.push((n.code.clone(), m)),
+            }
+        }
+        assert_eq!(lacking.len(), 1, "{lacking:?}");
+        assert!(lacking[0].1[0].starts_with(PORTS_MISSING), "{lacking:?}");
+        assert_eq!(keys.len(), 1, "eleven valves, one piece");
+        let air = recipe("build_air_valve");
+        let vl001 = p.node_by_code("VL-001").unwrap();
+        assert!(air.recipe.params_for_node(&p, vl001).is_ok());
+    }
+
+    #[test]
+    fn editing_the_shared_mesh_module_invalidates_the_fitting_pieces() {
+        let r = recipe("build_elbow");
+        let set = ParamSet::from([("dn_mm".to_string(), Json::from(200))]);
+        let mut edited = r.clone();
+        edited.module_bytes[0].extend_from_slice(b"\n# edited\n");
+        assert_ne!(
+            r.key(&set),
+            edited.key(&set),
+            "redes_mallas.py is in the key"
         );
     }
 

@@ -8,7 +8,8 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use redes_core::biblioteca::{Biblioteca, Entrada, cota_base_modelo};
+use redes_core::bake::model_placement;
+use redes_core::biblioteca::{Biblioteca, Entrada};
 use redes_core::gltf::Vertice;
 use redes_core::model::{ElementId, Node, Project};
 use redes_core::parts::{Material, Mesh, Parte};
@@ -225,12 +226,8 @@ fn modelados<'a>(
     out
 }
 
-fn giro(n: &Node) -> f32 {
-    n.num("giro").map(|v| v as f32).unwrap_or(0.0)
-}
-
-/// Resolves which mesh each object draws and places it: in plan at the object, in height where
-/// its z = 0 goes ([`redes_core::biblioteca::cota_base_modelo`]).
+/// Resolves which mesh each object draws and places it: in plan at the object, turned and in
+/// height as [`model_placement`] says (a fitting turns with its pipes, docs/familias/F17-05).
 pub fn instancias(
     p: &Project,
     carpeta: &Path,
@@ -239,16 +236,19 @@ pub fn instancias(
 ) -> Vec<Instancia> {
     modelados(p, carpeta, bib, cache)
         .into_iter()
-        .map(|m| Instancia {
-            // The origin is subtracted in f64 and only then lowered to f32 (docs/15).
-            pos: [
-                (m.nodo.pos.x - p.origin.x) as f32,
-                (m.nodo.pos.y - p.origin.y) as f32,
-                cota_base_modelo(m.nodo, &m.pieza.anclas) as f32,
-            ],
-            malla: m.malla,
-            giro: giro(m.nodo),
-            nodo: m.nodo.id,
+        .map(|m| {
+            let at = model_placement(p, m.nodo, m.pieza);
+            Instancia {
+                // The origin is subtracted in f64 and only then lowered to f32 (docs/15).
+                pos: [
+                    (m.nodo.pos.x - p.origin.x) as f32,
+                    (m.nodo.pos.y - p.origin.y) as f32,
+                    at.base_m as f32,
+                ],
+                malla: m.malla,
+                giro: at.rotation_deg as f32,
+                nodo: m.nodo.id,
+            }
         })
         .collect()
 }
@@ -277,12 +277,13 @@ pub fn piezas_pintor(
             cache.parte(m.pieza, &m.malla)
         };
         let Some(parte) = parte else { continue };
+        let at = model_placement(p, m.nodo, m.pieza);
         out.insert(
             m.nodo.id,
             ModelPiece {
                 part: parte,
-                lift_m: cota_base_modelo(m.nodo, &m.pieza.anclas) - m.nodo.z_invert,
-                rotation_deg: giro(m.nodo),
+                lift_m: at.base_m - m.nodo.z_invert,
+                rotation_deg: at.rotation_deg as f32,
             },
         );
     }

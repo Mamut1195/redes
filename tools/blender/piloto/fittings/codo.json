@@ -1,0 +1,8 @@
+{
+  "dn_mm": 150.0,
+  "material": "PVC",
+  "ports": [
+    { "name": "entrada__1", "azimuth_deg": 180.0, "dn_mm": 150 },
+    { "name": "salida__2", "azimuth_deg": 45.0, "dn_mm": 150 }
+  ]
+}

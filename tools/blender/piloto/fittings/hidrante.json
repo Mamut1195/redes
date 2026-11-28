@@ -1,0 +1,9 @@
+{
+  "dn_mm": 100.0,
+  "outlets": 2.0,
+  "height_m": 0.9,
+  "bury_depth_m": 1.15,
+  "ports": [
+    { "name": "entrada__1", "azimuth_deg": 180.0, "dn_mm": 100 }
+  ]
+}

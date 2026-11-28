@@ -1,0 +1,18 @@
+{
+  "schema": "redes.receta/1",
+  "familia": "comun.accesorio",
+  "subtipo": "reduccion",
+  "modulos": ["redes_mallas.py"],
+  "colocacion": "puertos",
+  "parametros": {
+    "dn_mm": { "desde": "atributo", "clave": "diametro_nominal", "unidad": "mm" },
+    "outlet_dn_mm": { "desde": "atributo", "clave": "dn_salida" },
+    "material": { "desde": "atributo", "clave": "material" },
+    "ports": { "desde": "puertos", "por_subtipo": { "reduccion": 2 }, "paso_angulo_deg": 1.0, "recto": true },
+    "body_od_dn": { "desde": "forma", "valor": 1.2 },
+    "socket_od_dn": { "desde": "forma", "valor": 1.45 },
+    "socket_length_dn": { "desde": "forma", "valor": 0.6 },
+    "cone_length_per_step": { "desde": "forma", "valor": 1.5 },
+    "segments": { "desde": "forma", "valor": 24 }
+  }
+}

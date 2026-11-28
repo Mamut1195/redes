@@ -1,0 +1,26 @@
+{
+  "schema": "redes.receta/1",
+  "familia": "agua.valvula",
+  "subtipo": "aire",
+  "modulos": ["redes_mallas.py"],
+  "colocacion": "puertos",
+  "parametros": {
+    "dn_mm": { "desde": "atributo", "clave": "diametro_nominal", "unidad": "mm" },
+    "material": { "desde": "atributo", "clave": "material" },
+    "ports": {
+      "desde": "puertos",
+      "por_subtipo": { "aire": 2 },
+      "paso_angulo_deg": 1.0, "recto": true,
+      "con_dn": true
+    },
+    "saddle_od_main": { "desde": "forma", "valor": 1.25 },
+    "saddle_length_dn": { "desde": "forma", "valor": 1.6 },
+    "saddle_material": { "desde": "forma", "valor": "hierro_ductil" },
+    "riser_m": { "desde": "forma", "valor": 0.08, "unidad": "m" },
+    "flange_od_dn": { "desde": "forma", "valor": 1.8 },
+    "flange_thickness_m": { "desde": "forma", "valor": 0.025, "unidad": "m" },
+    "body_od_dn": { "desde": "forma", "valor": 1.6 },
+    "body_height_dn": { "desde": "forma", "valor": 2.2 },
+    "segments": { "desde": "forma", "valor": 32 }
+  }
+}

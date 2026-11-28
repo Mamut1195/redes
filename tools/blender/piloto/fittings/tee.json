@@ -1,0 +1,10 @@
+{
+  "dn_mm": 200.0,
+  "branch_dn_mm": 100.0,
+  "material": "PVC",
+  "ports": [
+    { "name": "entrada__1", "azimuth_deg": 180.0, "dn_mm": 200 },
+    { "name": "salida__2", "azimuth_deg": 0.0, "dn_mm": 200 },
+    { "name": "salida__3", "azimuth_deg": 90.0, "dn_mm": 100 }
+  ]
+}

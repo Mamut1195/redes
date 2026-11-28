@@ -1,0 +1,26 @@
+{
+  "schema": "redes.receta/1",
+  "familia": "agua.hidrante",
+  "subtipo": "columna",
+  "modulos": ["redes_mallas.py"],
+  "colocacion": "puertos_en_objeto",
+  "parametros": {
+    "dn_mm": { "desde": "atributo", "clave": "diametro_nominal", "unidad": "mm" },
+    "outlets": { "desde": "atributo", "clave": "numero_bocas" },
+    "height_m": { "desde": "atributo", "clave": "altura_sobre_rasante", "unidad": "m" },
+    "bury_depth_m": { "desde": "tapa_menos_solera", "unidad": "m" },
+    "ports": { "desde": "puertos", "por_subtipo": { "columna": 1 }, "paso_angulo_deg": 1.0 },
+    "inlet_length_dn": { "desde": "forma", "valor": 1.5 },
+    "shoe_radius_dn": { "desde": "forma", "valor": 1.0 },
+    "pipe_od_dn": { "desde": "forma", "valor": 1.2 },
+    "column_od_dn": { "desde": "forma", "valor": 1.8 },
+    "flange_thickness_m": { "desde": "forma", "valor": 0.03, "unidad": "m" },
+    "outlet_dn_mm": { "desde": "forma", "valor": 65, "unidad": "mm" },
+    "outlet_length_m": { "desde": "forma", "valor": 0.1, "unidad": "m" },
+    "outlet_height_ratio": { "desde": "forma", "valor": 0.62 },
+    "buried_material": { "desde": "forma", "valor": "fundicion" },
+    "paint_material": { "desde": "forma", "valor": "pintura_roja" },
+    "fittings_material": { "desde": "forma", "valor": "laton" },
+    "segments": { "desde": "forma", "valor": 32 }
+  }
+}

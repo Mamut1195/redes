@@ -259,6 +259,14 @@ fn declare_demo_plant_units(p: &mut Project) {
     );
 }
 
+/// Body material of a demo valve, so the valve recipes can bake it (F17-05: it is design data).
+fn declare_demo_valve_material(p: &mut Project, code: &str) {
+    p.node_by_code_mut(code)
+        .unwrap_or_else(|| panic!("{code}: demo valve"))
+        .attrs
+        .insert("material".into(), Value::Text("hierro_ductil".into()));
+}
+
 /// Proyecto de la cadena completa (≈ 60 objetos).
 pub fn cadena() -> Project {
     let mut p = Project::new("Cadena completa · San Bartolo", "EPSG:32717");
@@ -384,6 +392,7 @@ pub fn cadena() -> Project {
         2523.4,
         &[("diametro_nominal", 100.0)],
     );
+    declare_demo_valve_material(&mut p, "VL-001");
     let valvula_purga = nodo(
         &mut p,
         "agua.valvula",
@@ -742,6 +751,7 @@ pub fn cadena() -> Project {
                 z,
                 &[("diametro_nominal", 150.0)],
             );
+            declare_demo_valve_material(&mut p, &format!("VL-1{:02}", n));
             let _ = tuberia(
                 &mut p,
                 "agua.tuberia",

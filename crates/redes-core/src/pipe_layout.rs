@@ -302,21 +302,47 @@ impl<'a> Walk<'a> {
     }
 }
 
-/// Plan distance from the node to where the link is drawn from: its anchor on a baked piece
-/// (the outer face of the wall), else the edge of the fallback piece.
+/// Plan distance from the node to where the link is drawn from: its anchor on a baked piece (the
+/// outer face of a manhole wall, the mouth of a fitting's port), else the edge of the fallback
+/// piece.
 pub fn wall_offset(p: &Project, link: &Link, node: ElementId, anchors: &NodeAnchors) -> f64 {
-    let anchored = anchors.get(&node).and_then(|by_name| {
+    let by_name = anchors.get(&node);
+    let named_after_link = by_name.and_then(|by_name| {
         by_name.iter().find_map(|(name, a)| {
             name.rsplit_once("__")
                 .is_some_and(|(_, code)| code == link.code)
-                .then(|| (a[0] as f64).hypot(a[1] as f64))
+                .then(|| plan_distance(a))
         })
     });
-    anchored.unwrap_or_else(|| {
-        p.node(node)
-            .map(|n| n.drawing_diameter_m() * 0.5 + FALLBACK_WALL_GAP_M)
-            .unwrap_or(0.4)
-    })
+    named_after_link
+        .or_else(|| by_name.and_then(|by_name| port_anchor_offset(p, link, node, by_name)))
+        .unwrap_or_else(|| p.node(node).map(fallback_wall_offset).unwrap_or(0.4))
+}
+
+fn plan_distance(a: &[f32; 3]) -> f64 {
+    (a[0] as f64).hypot(a[1] as f64)
+}
+
+/// A fitting baked in its ports' frame names its anchors by port, not by pipe, so equal fittings
+/// share a piece (docs/familias/F17-05); the frame says which port is this link's.
+fn port_anchor_offset(
+    p: &Project,
+    link: &Link,
+    node: ElementId,
+    by_name: &BTreeMap<String, [f32; 3]>,
+) -> Option<f64> {
+    let frame = crate::bake::node_port_frame(p, p.node(node)?).ok()?;
+    let port = frame.ports.iter().find(|q| q.link == link.code)?;
+    by_name.get(&port.name).map(plan_distance)
+}
+
+/// Without a baked piece the pipe stops at the edge of a chamber's fallback piece. A fitting, a
+/// valve or a hydrant has no wall: the pipe runs to its centre and the piece covers the joint.
+fn fallback_wall_offset(n: &crate::model::Node) -> f64 {
+    match n.family.as_str() {
+        "comun.accesorio" | "agua.valvula" | "agua.hidrante" => 0.0,
+        _ => n.drawing_diameter_m() * 0.5 + FALLBACK_WALL_GAP_M,
+    }
 }
 
 /// The axis of a link as drawn (UTM, real elevations): the path raised half the bore and trimmed
@@ -478,6 +504,37 @@ mod tests {
             (on_axis - trimmed[0].z).abs() < 1e-6,
             "on the axis, not on the invert"
         );
+    }
+
+    #[test]
+    fn pipes_run_into_unbaked_fittings_but_stop_at_chamber_walls() {
+        let p = crate::demo_cadena::cadena();
+        let into = |code: &str| {
+            let n = p.node_by_code(code).unwrap();
+            let l = p.tramos_de(n.id).next().unwrap();
+            wall_offset(&p, l, n.id, &NodeAnchors::new())
+        };
+        assert_eq!(into("VL-101"), 0.0, "the valve covers the pipe end");
+        assert!(into("PZ-302") > 0.6, "a manhole wall stops it");
+    }
+
+    #[test]
+    fn a_pipe_ends_at_the_mouth_of_its_port_on_a_baked_fitting() {
+        let p = crate::demo_cadena::cadena();
+        let valve = p.node_by_code("VL-102").unwrap();
+        let frame = crate::bake::node_port_frame(&p, valve).unwrap();
+        let anchors = NodeAnchors::from([(
+            valve.id,
+            BTreeMap::from([
+                (frame.ports[0].name.clone(), [-0.13f32, 0.0, 0.075]),
+                (frame.ports[1].name.clone(), [0.31f32, 0.0, 0.075]),
+            ]),
+        )]);
+        for (port, mouth) in frame.ports.iter().zip([0.13, 0.31]) {
+            let l = p.link_by_code(&port.link).unwrap();
+            let offset = wall_offset(&p, l, valve.id, &anchors);
+            assert!((offset - mouth).abs() < 1e-6, "{}: {offset}", port.link);
+        }
     }
 
     #[test]

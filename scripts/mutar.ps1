@@ -370,7 +370,7 @@ $mutaciones = @(
     @{
         Nombre = "modelo-en-la-tapa"
         Archivo = "crates/redes-app/src/modelos.rs"
-        Patron = 'cota_base_modelo\(m\.nodo, &m\.pieza\.anclas\) as f32,'
+        Patron = 'at\.base_m as f32,'
         Reemplazo = 'm.nodo.z_rim as f32,'
         Paquete = "redes-app"
         Prueba = "a_piece_with_an_invert_anchor_sits_on_the_invert_minus_its_slab"
@@ -483,6 +483,46 @@ $mutaciones = @(
         Reemplazo = 'let (x, z) = (x, z); let _ = (cp, sp);'
         Prueba = "baked_pipe_segments_are_instanced_on_their_sloped_axis"
         Que = "colocar los tramos de tubo horneados horizontales en un tramo con pendiente (F17-04)"
+    },
+    @{
+        Nombre = "tubo-fuera-de-la-boca"
+        Archivo = "crates/redes-core/src/pipe_layout.rs"
+        Patron = '\.or_else\(\|\| by_name\.and_then\(\|by_name\| port_anchor_offset\(p, link, node, by_name\)\)\)'
+        Reemplazo = ''
+        Prueba = "a_pipe_ends_at_the_mouth_of_its_port_on_a_baked_fitting"
+        Que = "llevar el tubo al centro del accesorio horneado en vez de a la boca: asoma por la esquina del codo (F17-05)"
+    },
+    @{
+        Nombre = "accesorio-sin-girar"
+        Archivo = "crates/redes-core/src/bake.rs"
+        Patron = 'rotation_deg: frame\.rotation_deg,'
+        Reemplazo = 'rotation_deg: by_object.rotation_deg,'
+        Prueba = "a_port_framed_piece_turns_with_its_pipes_and_sits_on_the_pipe_invert"
+        Que = "dejar el accesorio horneado sin girar con sus tubos (F17-05)"
+    },
+    @{
+        Nombre = "tee-referencia-en-el-ramal"
+        Archivo = "crates/redes-core/src/bake.rs"
+        Patron = 'Some\(\(_, i, _\)\) => i,'
+        Reemplazo = 'Some((_, _, j)) => j,'
+        Prueba = "the_reference_of_a_tee_is_on_its_run_whatever_the_codes"
+        Que = "empezar el marco de una tee por la salida en vez de por la entrada del tramo recto (F17-05)"
+    },
+    @{
+        Nombre = "valvula-recta-con-angulo"
+        Archivo = "crates/redes-core/src/bake.rs"
+        Patron = 'None => 0\.0,'
+        Reemplazo = 'None => drawn_angle(q.azimuth_deg, 1.0),'
+        Prueba = "the_chain_demo_valves_bake_to_few_pieces"
+        Que = "una pieza distinta por cada desvio del tubo en una valvula recta (F17-05)"
+    },
+    @{
+        Nombre = "tubo-corto-en-accesorio"
+        Archivo = "crates/redes-core/src/pipe_layout.rs"
+        Patron = '"comun\.accesorio" \| "agua\.valvula" \| "agua\.hidrante" => 0\.0,'
+        Reemplazo = ''
+        Prueba = "pipes_run_into_unbaked_fittings_but_stop_at_chamber_walls"
+        Que = "cortar el tubo a 0,75 m del accesorio: hueco entre el tubo y la pieza horneada (F17-05)"
     }
 )
 

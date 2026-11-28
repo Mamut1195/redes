@@ -384,7 +384,7 @@ impl State {
             && let Some(malla) = self.modelos.malla(&carpeta, &pieza)
             && let Some(n) = self.project.node_by_code(&code)
         {
-            let base = redes_core::biblioteca::cota_base_modelo(n, &pieza.anclas);
+            let at = redes_core::bake::model_placement(&self.project, n, &pieza);
             let (mut min, mut max) = ([f32::MAX; 3], [f32::MIN; 3]);
             for v in malla.iter() {
                 for k in 0..3 {
@@ -393,10 +393,15 @@ impl State {
                 }
             }
             if min[0] < max[0] {
+                let (cx, cy) = (
+                    ((min[0] + max[0]) * 0.5) as f64,
+                    ((min[1] + max[1]) * 0.5) as f64,
+                );
+                let (sin, cos) = at.rotation_deg.to_radians().sin_cos();
                 centro = [
-                    (pos.x - self.project.origin.x) + ((min[0] + max[0]) * 0.5) as f64,
-                    (pos.y - self.project.origin.y) + ((min[1] + max[1]) * 0.5) as f64,
-                    base + ((min[2] + max[2]) * 0.5) as f64,
+                    (pos.x - self.project.origin.x) + cx * cos - cy * sin,
+                    (pos.y - self.project.origin.y) + cx * sin + cy * cos,
+                    at.base_m + ((min[2] + max[2]) * 0.5) as f64,
                 ];
                 tamano = ((max[0] - min[0]).hypot(max[1] - min[1])).max(max[2]) as f64;
             }
@@ -1524,6 +1529,27 @@ fn main() {
                 }) as fn(&mut State),
             ),
             (
+                "codo-modelo",
+                (|s: &mut State| show_baked(s, "comun.accesorio", "codo", 1.4)) as fn(&mut State),
+            ),
+            (
+                "tee-modelo",
+                (|s: &mut State| show_baked(s, "comun.accesorio", "tee", 1.4)) as fn(&mut State),
+            ),
+            (
+                "reduccion-modelo",
+                (|s: &mut State| show_baked(s, "comun.accesorio", "reduccion", 1.4))
+                    as fn(&mut State),
+            ),
+            (
+                "valvula-modelo",
+                (|s: &mut State| show_baked(s, "agua.valvula", "", 1.8)) as fn(&mut State),
+            ),
+            (
+                "hidrante-modelo",
+                (|s: &mut State| show_baked(s, "agua.hidrante", "", 6.0)) as fn(&mut State),
+            ),
+            (
                 "corte",
                 (|s: &mut State| {
                     s.sel = scene_object(&s.project);
@@ -1746,6 +1772,29 @@ fn last_joint_ring(s: &mut State) -> Option<([f64; 3], f64)> {
         last_whole.place([ring as f32, 0.0, 0.0]),
         dy.atan2(dx).to_degrees(),
     ))
+}
+
+/// Scenes `codo-modelo`, `valvula-modelo`…: the first object of the family (and subtype, if
+/// given) drawn with a baked piece, up close without terrain or selection tint, as
+/// `pozo-modelo` does for the manhole (docs/familias/F17-05-accesorios.md).
+fn show_baked(s: &mut State, family: &str, subtype: &str, distance_m: f64) {
+    s.sel = s
+        .project
+        .nodes
+        .iter()
+        .find(|n| {
+            !n.deleted
+                && n.modelo.is_some()
+                && n.family == family
+                && (subtype.is_empty() || n.ty == subtype)
+        })
+        .map(|n| n.code.clone());
+    s.enfocar();
+    s.layers.terreno = false;
+    s.sel = None;
+    s.cam.elevation = 28.0;
+    s.cam.distance = distance_m;
+    s.rebuild();
 }
 
 /// Escena `pozos`: primer plano del primer pozo (cono, marco, tapa y escalera). El objetivo sale

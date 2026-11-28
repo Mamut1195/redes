@@ -1,0 +1,9 @@
+{
+  "dn_mm": 200.0,
+  "material": "hierro_ductil",
+  "subtype": "compuerta",
+  "ports": [
+    { "name": "entrada__1", "azimuth_deg": 180.0, "dn_mm": 200 },
+    { "name": "salida__2", "azimuth_deg": 0.0, "dn_mm": 200 }
+  ]
+}
