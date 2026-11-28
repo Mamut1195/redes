@@ -12,13 +12,14 @@ Documento de traspaso: qué está hecho, qué falta y por dónde seguir. Las cif
 | Modelos | importación, validación, medidas, caché, dibujo en el pase 3D, política de pesados, foco sobre el modelo, **selector en el inspector** y **anclas de conexión** (se leen del `.glb` y la tubería nace en el puerto, no en el centro) |
 | Cantidades | `redes cantidades`: unidades, longitudes por DN/material, volúmenes, pesos, discrepancias y CSV |
 | CAD | ida y vuelta DXF sin pérdida (46 familias y 7 arcos vuelven idénticos), **bloques con atributos** por familia y GeoJSON con atributos |
-| Calidad | **281 pruebas** (núcleo 155 + 13 validar + 5 acta + 8 reimportar + 33 ingesta + 3 cotas + 2 rendimiento + 3 índices + 1 banco + 2 escena, app 25, CLI 19 + 3 + 4 + 2 acta + 2 reimportar, doctest 1), arnés de 36 mutaciones, CI en GitHub **en verde** |
+| Calidad | **288 pruebas** (núcleo 155 + 13 validar + 5 acta + 8 reimportar + 33 ingesta + 3 cotas + 2 rendimiento + 3 índices + 1 banco + 2 escena + 6 deshacer, app 26, CLI 19 + 3 + 4 + 2 acta + 2 reimportar, doctest 1), arnés de 40 mutaciones, CI en GitHub **en verde** |
 | Formato (F15-01, D10) | solo se abre la versión vigente: `redes.project/3` (otra versión → `E_PROJ_SCHEMA`, con pista para regenerar desde la entrega) y `redes.plan/1` (otra → `E_FMT_VERSION`); sin migraciones antes de v1; demos de `demo/` regeneradas a `/3` |
 | Revisor (F13) | `redes validar` geométrico con panel Validación (F13-01, D6), `redes perfil` con botón Perfil en el inspector (F13-02), observaciones con historial (`objeto observar/observaciones/cerrar-observacion`, panel en el inspector, `redes.project/3`, F13-03, D7; sin conversión de `.redes` anteriores), `redes proyecto diff` (F13-05, compara estado y cada observación por id), `redes acta` en CSV (Excel, BOM y «;») o HTML imprimible (F13-04, sin autor si no se registró, D2), `redes importar reimportar` (F13-06, D9: empareja por código, conserva estados y observaciones, reinicia a pendiente el aprobado cuyo diseño cambió y exige `--aceptar-bajas` para dar de baja objetos con revisión) |
 | Índices (F14-01) | `Project` indexa por id, por código y nodo → tramos (`indice.rs`, no se serializa; se rehace al abrir y al reimportar); 50k tramos: ingesta 91 s → 485 ms, escena 4,0 s → 49 ms, reimportar 167 s → 912 ms (`docs/21` §4.1). Un código dado de baja se puede reutilizar: la unicidad de códigos al abrir solo cuenta objetos vivos (los ids, todos). **D11**: nodos y tramos vivos comparten un único espacio de códigos; `add_node`/`add_link` rechazan el choque (`E_STATE_DUPLICATE_NAME`) y la ingesta lo descarta con aviso. La app busca por código con el índice (`node_by_code_mut`) |
 | Pase 3D (F14-02, F14-03) | La cámara no regenera la malla (`ClaveMalla`, exageración vertical en la matriz, `rebuild()` sin `build_opts` en `--gpu3d`) y el búfer no se copia por frame (`Arc<[u8]>`, `Geometria::tomar`). Ciudad: cambio de cámara 6,03 ms → 0,008 ms; 30 → 0 regeneraciones en 30 cambios; 3,6 MB → 0 copiados por frame (`docs/21` §4.2). La escena `--snap pozos` vuelve a mostrar el pozo (miraba a un punto fijo de un demo anterior; lienzo vacío con y sin `--gpu3d`) |
 | Rendimiento P1 (F14-04, F14-06, F14-07, F14-09, F14-10) | Caché de mallas por pieza y `Biblioteca` en `Arc` (F14-06); banco de 20k tramos con umbral en el CI (paso «Banco», release) y crecimiento 5k→20k (F14-10); perfil release con LTO fina y dependencias en `opt-level 2` en dev (F14-09); escena con cámara precalculada, sin `Vec` por triángulo y en hilos (F14-04); recorte por pantalla y `seleccion::RejillaSeleccion` para el clic (F14-07). 20k tramos, release: escena 30 → 7 ms, ingesta 392 → 182 ms, reimportar 697 → 349 ms; de cerca 444 → 5 ms (`docs/21` §4.3) |
 | Pase 3D con instancias, LOD y recorte (F14-05) | `redes_core::scene3d`: las piezas se parten en prototipos indexados y compartidos, con tres LOD (completo, simple y caja) elegidos por radio en pantalla; la geometría fija va en lotes de 16×16 recortados por tronco de visión. `gpu3d.rs` usa búferes de índices e instancias con su shader. El tope es `min(512 MB, max_buffer_size)` y se avisa en la barra de estado. 20k tramos en una GPU de 256 MB: 1 110 MB (recortado) → **22,9 MB**, la red entera, primer frame 2,75 s → 135 ms y RAM 2,9 GB → 319 MB. El `.glb` comparte la malla de las piezas iguales y se escribe sin copias: 20k tramos 1,1 GB / 26 s → 26 MB / 3,6 s; pasar de 4 GB es `E_IO_TOO_LARGE` (`docs/21` §4.4) |
+| Deshacer por diferencias (F14-08) | `redes_core::undo::History`: 20 pasos que guardan solo los nodos, tramos y entradas del journal que cambiaron (antes y después) más `revision`, `estado` y `next_slot`; rehace los índices si cambian altas, códigos o extremos. La app registra con `State::commit_edit`, deshace en su sitio y gana el botón **Rehacer**. 20k tramos, 20 pasos: ~270 MB → 14,9 kB (`docs/21` §4.5) |
 | Limpieza del 27/11/2026 | Fuera el código muerto (11 funciones; `options`, `as_bool` y `by_category` quedan `#[cfg(test)]`), las 13 claves retiradas sin alias (`RETIRADOS`, `alias()`, `renombrados`: un plan que las use se descarta con «subtipo no existe», docs/20 §4.2), los `.glb`/`.png` sin uso, la copia `docs/demo/ciudad-san-bartolo.redes` y `spike/`. Docs corregidos (F15-11 parte): docs/01, README §Estado, docs/11 (poché, carriles, rayos X), docs/04, `vendor/LEEME.md` (no hay `vendor/parches/`), cifras de F14-01. `indice_al_dia` sigue `pub` y `#[doc(hidden)]`: lo usan las pruebas de integración (`tests/indices.rs`), que no ven `#[cfg(test)]` |
 | Inspector de solo lectura (D12) | Se retiró «Parámetros (en vivo)» (`State::ajustar`, journal `ui.parametro`, que inventaba DN 200): la app no edita el diseño |
 | Producto | plantilla, licencias de modelos, journal con fecha, paquete portable y **release 0.1.0 publicada** |
@@ -33,8 +34,8 @@ y en Linear (MAM-1085…MAM-1139). Se trabaja **por fases en orden**; no se abre
 |---|---|
 | F12 — Corrección de dominio | **cerrada** (F12-01…F12-15). Ingesta por skill guiada (D5) |
 | F13 — Herramientas del revisor | **cerrada** (F13-01…F13-06): `redes validar`, perfil longitudinal, observaciones con historial, `redes acta`, `proyecto diff` y `importar reimportar` |
-| F14 — Rendimiento con redes reales | **en curso**: **P0 cerrados** — F14-01 (índices en `Project`, MAM-1105), F14-02 (cámara 3D sin regenerar malla, MAM-1106) y F14-03 (sin copia del búfer por frame, MAM-1107). **P1 hechos**: F14-04, F14-05 (LOD, recorte e instanciado en el pase 3D), F14-06, F14-07, F14-09, F14-10. Sigue F14-08 (deshacer por diferencias, P2) |
-| F15 — Arquitectura | pendiente; **F15-01 hecha por adelantado** (solo la versión vigente del `.redes`, D10, MAM-1115). Falta agregado, catálogo como datos y errores tipados |
+| F14 — Rendimiento con redes reales | **cerrada** (F14-01…F14-10). F14-04 aceptada por el usuario con ×2,7 a 20k (×3,7 a 50k, ×4,3 contando el perfil) en lugar del ×3 estricto; F14-08 (deshacer por diferencias) cerró la fase |
+| F15 — Arquitectura | **siguiente**; **F15-01 hecha por adelantado** (solo la versión vigente del `.redes`, D10, MAM-1115). Falta agregado, catálogo como datos y errores tipados |
 | F16 — Release v1 | pendiente (F16-01 ya cerrada por F12-09) |
 
 Decisiones abiertas del usuario: A1 (vertedero), A2 (pozo profundo), sumideros de la topología
@@ -48,14 +49,20 @@ Pendientes menores conocidos de F13 (no bloquean F14):
 - Cada reimportación añade una entrada a `fuentes` aunque la entrega sea idéntica.
 - La escena `--snap` no permite seleccionar un tramo (no se puede capturar el inspector con un objeto elegido).
 
-Pendientes conocidos de F14:
+Pendientes conocidos de F14 (fase cerrada; no bloquean F15):
 
 - En la cadena completa (`redes proyecto cadena`), el último tramo de alcantarillado hacia la descarga
   queda fuera de la superficie del terreno. Sin revisar si es el dato del demo o el dibujo.
 - `ClaveMalla` supone que todo cambio del proyecto sube `revision` (o cambia el `Arc` del proyecto).
-  Un cambio que no pase por `commit` dejaría la malla del pase 3D desfasada hasta el siguiente.
+  Un cambio que no pase por `commit` dejaría la malla del pase 3D desfasada hasta el siguiente. Desde
+  F14-08 deshacer y rehacer cambian el proyecto en su sitio (mismo `Arc`): dependen de que cada paso
+  registrado mueva `revision`, como hacen hoy todas las ediciones de la app.
+- F14-08: cada edición de la app sigue clonando el proyecto entero un momento (para no dejarlo a medias
+  si el dominio la rechaza) y compara nodos y tramos para sacar la diferencia; es memoria transitoria,
+  no se guarda. La pila no sigue `terrain`, `entorno`, `fuentes` ni `enlaces`: la app no los edita (D12).
 - F14-04 pedía escena ≥ 3×: con el mismo perfil da ×2,7 a 20k encuadrada y ×3,7 a 50k (×4,3 a 20k contando
-  F14-09). Se dio por hecho; si se quiere el ×3 estricto a 20k, lo que queda es el teselado de tubos y pozos.
+  F14-09). **El usuario lo acepta como hecho**; si algún día se quiere el ×3 estricto a 20k, lo que queda es
+  el teselado de tubos y pozos.
 - La rejilla de selección (F14-07) se rehace al primer clic tras cada `rebuild`; con 20k encuadrados una
   celda junta hasta ~3 000 objetos (filas lejanas apiñadas). Es O(1) amortizado por cámara, no por densidad.
 - F14-05: el `.glb` comparte la malla de las piezas con la misma `ClavePieza`, pero no parte las
@@ -71,8 +78,8 @@ Pendientes conocidos de F14:
 ## Cómo retomar
 
 ```powershell
-cargo test --workspace                       # 275 pruebas
-powershell -File scripts/mutar.ps1           # 29 mutaciones
+cargo test --workspace                       # 288 pruebas
+powershell -File scripts/mutar.ps1           # 40 mutaciones
 powershell -File scripts/empaquetar.ps1      # zip portable
 gh run list --limit 3                        # CI
 ```
