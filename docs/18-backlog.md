@@ -251,10 +251,11 @@ Un solo frente abierto a la vez; no se abre una fase sin cerrar la anterior.
 
 1. ~~F14 — Rendimiento~~ (cerrada).
 2. **F17 — Familias paramétricas en Blender** (D14). Va **antes** de F15: los IDs de F15/F16 se conservan porque ya están en Linear.
-3. **F15 — Arquitectura y mantenibilidad**, ampliada con la fachada única y el canal de comandos (ver F15-13…F15-15).
-4. **F18 — Revisión completa en la app y salidas que faltan** (huecos del inventario docs/02 §4), sobre la fachada de F15.
-5. **F19 — Entregables: escena de Blender, IFC para BIM (Bonsai) y planos de planta y perfil en DXF** (D19).
-6. **F16 — Release v1.**
+3. **F20 — Familias de referencia** (D20): cada familia contrastada con la bibliografía técnica y con lo que se construye; ficha de cuándo se usa y cuándo no, y recetas mejoradas.
+4. **F15 — Arquitectura y mantenibilidad**, ampliada con la fachada única y el canal de comandos (ver F15-13…F15-15).
+5. **F18 — Revisión completa en la app y salidas que faltan** (huecos del inventario docs/02 §4), sobre la fachada de F15.
+6. **F19 — Entregables: escena de Blender, IFC para BIM (Bonsai) y planos de planta y perfil en DXF** (D19).
+7. **F16 — Release v1.**
 
 Frentes transversales, revisados al cerrar cada ticket:
 
@@ -294,6 +295,44 @@ modelan agentes con Blender 5.1 sin ventana; el usuario aprueba cada pieza por c
 | F17-13 | P1 | **Calidad del terreno** | informe al importar: puntos duplicados (misma E,N con distinta Z), densidad, triángulos largos y espigas; el aligerado de la vista conserva picos y quiebres (hoy `thinned` guarda el primer punto de la celda) | fixture con duplicados y espiga → avisos con coordenadas; la vista aligerada no pierde la cima | 1,5 |
 
 **Total F17: 26 días.**
+
+---
+
+## F20 — Familias de referencia: lo que recomiendan los expertos y lo que se construye (D20) (P1)
+
+Tras F17 (las familias ya existen y se hornean), cada familia se contrasta con la bibliografía técnica y
+con lo que de verdad se construye, y se mejora su receta y su ficha. La ficha sirve a la vez al usuario
+(qué es, cuándo se usa y cuándo no), al agente de ingesta (para elegir familia y subtipo al traducir una
+entrega, D5) y a quien modela en Blender (proporciones y detalles reales). Es **orientación documentada,
+no verificación**: la app sigue sin comprobar normativa ni calcular (D4); lo que la ficha diga nunca se
+convierte en una regla que corrija el diseño.
+
+Ficha por familia y subtipo (`docs/familias/fichas/<familia>.md`): qué es; cuándo se usa y cuándo no
+(situaciones típicas, alternativas); partes y materiales reales; rangos habituales de dimensiones como
+referencia, nunca como valor por defecto; cómo se construye (procedimiento, juntas, cimentación);
+datos que debe traer el diseño; **tabla de parámetros** —todas las medidas son paramétricas, y la tabla
+dice de cada una si es dato del diseño (viene del plan), si se adapta al sitio (la cambia quien diseña
+según terreno, caudal o acceso) o si es forma de catálogo que normalmente no se toca (y qué pasa si se
+cambia)—; fuentes citadas (normas y guías de la región —p. ej. INEN/CPE INEN en
+Ecuador, RAS en Colombia, OS.070/OS.100 en Perú, CONAGUA-MAPAS en México, guías OPS/CEPIS— y manuales de
+fabricantes); y qué cambia en la receta de Blender.
+
+| ID | P | Ticket | Alcance | Aceptación | Días |
+|---|---|---|---|---|---|
+| F20-01 | P1 | **Método y plantilla de la ficha** | plantilla, criterios para elegir y citar fuentes, cómo se enlaza la ficha con el registro de familias (`families*.rs`), la skill de ingesta y la receta | plantilla aprobada por el usuario con una ficha de ejemplo (pozo de inspección) | 1 |
+| F20-02 | P1 | **Alcantarillado** | pozos de inspección y de caída, cámaras, sumideros, conexiones domiciliarias, descargas | fichas aprobadas; recetas mejoradas con capturas aprobadas | 3 |
+| F20-03 | P1 | **Tuberías y juntas por material** | PVC, PEAD, hormigón, hierro dúctil, acero, PRFV: campana y espiga, unión mecánica, termofusión, bridas; longitudes comerciales | ídem | 2 |
+| F20-04 | P1 | **Accesorios y válvulas** | codos, tees, reducciones, cruces, tapones; válvulas de compuerta, mariposa, retención, aire, purga, reductoras; hidrantes; cajas de válvulas | ídem | 3 |
+| F20-05 | P1 | **Captación y conducción** | todos los subtipos de bocatoma, desarenador y cámaras (rompe presión, carga, reunión), pasos elevados y anclajes | ídem | 3 |
+| F20-06 | P1 | **Planta de potabilización (PTAP)** | unidades de la cadena (docs/20) con lo que se construye de verdad en plantas pequeñas y medianas | ídem | 3 |
+| F20-07 | P1 | **Planta de aguas residuales (PTAR)** | rejas, desarenadores, tanques sépticos e Imhoff, UASB, lagunas, filtros, lechos de secado | ídem | 3 |
+| F20-08 | P2 | **Reservorios y bombeo** | tanques apoyados y elevados, estaciones de bombeo, cámaras de válvulas | ídem | 2 |
+| F20-09 | P1 | **Fichas en la skill y en la app** | la skill de ingesta usa las fichas para proponer familia y subtipo (y preguntar si duda); el inspector enlaza la ficha de cada objeto | el agente elige bien el subtipo en los fixtures; botón «Ficha» en el inspector | 1,5 |
+
+La misma tabla de parámetros se ve en el `.blend` de revisión (propiedades agrupadas en «dato», «se
+adapta al sitio» y «forma») y en el inspector, para que cualquiera sepa qué puede cambiar y qué no.
+
+**Total F20: 21,5 días.** Cada ficha la aprueba el usuario antes de cambiar la receta.
 
 ---
 
