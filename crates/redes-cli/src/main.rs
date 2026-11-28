@@ -1261,6 +1261,11 @@ const CODIGOS: &[(&str, &str, i32)] = &[
     ),
     ("E_IO_NOT_FOUND", "archivo inexistente", 7),
     (
+        "E_IO_TOO_LARGE",
+        "el .glb pasaría de 4 GB, el máximo del formato: exporte sin terreno o por partes",
+        7,
+    ),
+    (
         "E_CRS",
         "CRS ausente, no admitido (solo UTM sur EPSG:327NN), distinto del proyecto o coordenadas en grados",
         1,
@@ -1450,7 +1455,10 @@ fn exportar(p: &Project, cmd: ExportarCmd, dry: bool) -> Envelope {
             let opts = redes_core::gltf::OpcionesGltf {
                 con_terreno: !sin_terreno,
             };
-            let bytes = redes_core::gltf::exportar_glb(p, opts);
+            let bytes = match redes_core::gltf::exportar_glb(p, opts) {
+                Ok(bytes) => bytes,
+                Err(e) => return io_error("exportar.gltf", &format!("E_IO_TOO_LARGE: {e}")),
+            };
             if dry {
                 return Envelope::ok("exportar.gltf").with_data(json!({
                     "dry_run": true,

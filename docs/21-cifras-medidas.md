@@ -142,6 +142,17 @@ se dibuja entera y sin aviso. La captura de la ciudad se ve igual que antes: mis
 completo de cerca y cajas de 1 a 3 px de lejos. En la escena `pozos` el recorte deja 960
 triángulos de 33 320. Captura de la red de 20k entera: `docs/img/gpu3d-20k.png`.
 
+Exportación glTF (`redes exportar gltf`, release, proceso entero). Las piezas iguales comparten
+malla y el binario se escribe sin copias intermedias:
+
+| Red | Antes | Después |
+|---|---:|---:|
+| 5k tramos | 286 MB, 34,9 s, 1,0 GB de RAM | **6,8 MB**, 0,3 s |
+| 20k tramos | 1 111 MB, 25,9 s, 4,0 GB de RAM | **26,2 MB**, 3,6 s, 80 MB de RAM |
+| Ciudad demo | 3,4 MB, 95 ms | 3,5 MB, 82 ms (43 piezas distintas: no comparte) |
+
+El `.glb` de 20k tiene 20 201 nodos y 2 mallas (241 710 triángulos guardados, 10,8 M dibujados).
+
 Banco (`tests/banco.rs`, release, fase «malla 3D»): la escena de 20k tramos se arma en ~85 ms
 (umbral CI 1 000 ms) y pide 22,9 MB, 1 188 bytes por objeto (tope 4 000; antes ~55 kB por pozo).
 
@@ -149,7 +160,7 @@ Banco (`tests/banco.rs`, release, fase «malla 3D»): la escena de 20k tramos se
 
 | Suite | Pruebas |
 |---|---:|
-| Núcleo (`redes-core`, unitarias) | **155** |
+| Núcleo (`redes-core`, unitarias) | **157** |
 | Validación geométrica (`redes-core/tests/validar.rs`) | **13** |
 | Acta de revisión (`redes-core/tests/acta.rs`) | **5** |
 | Reimportar (`redes-core/tests/reimportar.rs`) | **8** |
@@ -166,9 +177,9 @@ Banco (`tests/banco.rs`, release, fase «malla 3D»): la escena de 20k tramos se
 | Acta del CLI (`tests/acta.rs`) | **2** |
 | Reimportar del CLI (`tests/reimportar.rs`) | **2** |
 | Doctest | **1** |
-| **Total** | **280** |
+| **Total** | **282** |
 
-Más el arnés de mutación: `powershell -File scripts/mutar.ps1` rompe treinta y cuatro comportamientos (cinco
+Más el arnés de mutación: `powershell -File scripts/mutar.ps1` rompe treinta y seis comportamientos (cinco
 de vista, tres de `redes validar`, el estado derivado de las observaciones y dos del acta: escapar el
 HTML y no sacar columnas de autor sin registrarlo, D2; y tres de reimportar: reiniciar el aprobado
 cuyo diseño cambió, conservar las observaciones y no dar de baja en silencio; y abrir un `.redes` de otra versión sin
@@ -176,7 +187,7 @@ migrar, F15-01, D10; y olvidar el nodo final en el índice de tramos por nodo, F
 al mover la cámara, F14-02, y volver a subirla en cada frame, F14-03; una escena cuadrática en el banco, F14-10;
 dos de la caché de piezas y proxies, F14-06; y siete de la escena y la selección, F14-04/07: recortar de más,
 no recortar, esfera de pozo corta, orden de negativos, bloques de hilos desordenados, rejilla de una celda y
-rejilla que pierde tramos; y cinco de la escena 3D instanciada, F14-05: no compartir prototipos, olvidar la escala en Z, LOD fijo, sin recorte y sin tope) y exige que la suite falle.
+rejilla que pierde tramos; y cinco de la escena 3D instanciada, F14-05: no compartir prototipos, olvidar la escala en Z, LOD fijo, sin recorte y sin tope; y dos del `.glb`: una malla por nodo y el largo truncado a `u32`) y exige que la suite falle.
 
 ## 6. Qué cifras de los informes anteriores son falsas
 

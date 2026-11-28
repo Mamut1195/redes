@@ -1,9 +1,10 @@
 //! Exportador glTF 2.0 (`.glb`) para abrir el modelo en Blender, three.js o cualquier visor
 //! estándar.
 //!
-//! Una malla por familia, con posiciones, normales y color por vértice; material `unlit` para que
-//! el visor externo muestre el mismo color que la app (que ya sombrea por triángulo). El nodo raíz
-//! lleva la rotación de Z-arriba (modelo) a Y-arriba (glTF).
+//! La geometría fija va en una primitiva por familia, y cada pieza en un nodo hijo que comparte su
+//! malla con las piezas iguales. Posiciones, normales y color por vértice; material `unlit` para
+//! que el visor externo muestre el mismo color que la app (que ya sombrea por triángulo). El nodo
+//! raíz lleva la rotación de Z-arriba (modelo) a Y-arriba (glTF).
 
 use std::collections::BTreeMap;
 
@@ -292,42 +293,116 @@ fn push_static_triangles(
     }
 }
 
-/// Exporta el proyecto a un binario glTF (`.glb`).
-/// Número de primitivas (una por familia) que tendría el `.glb` del proyecto.
+/// Número de primitivas por familia que tendría el `.glb` del proyecto (familias con geometría).
 pub fn contar_primitivas(p: &Project, con_terreno: bool) -> usize {
-    let malla = triangulos_exportables(p, con_terreno);
-    let mut vistas: std::collections::BTreeSet<u16> = std::collections::BTreeSet::new();
-    for t in &malla.tris {
-        vistas.insert(t.familia);
-    }
-    vistas.len()
-}
-
-pub fn exportar_glb(p: &Project, opts: OpcionesGltf) -> Vec<u8> {
-    let malla = triangulos_exportables(p, opts.con_terreno);
-    // La z se lleva al origen (base en 0): en glTF la altura pasa a Y con el giro del nodo, y
-    // dejar 2 500 m de cota haría que el modelo flote a 2,5 km en el visor externo.
-    let z_min = malla
+    let fixed = static_triangles(p, con_terreno);
+    let mut families: std::collections::BTreeSet<&str> = fixed
         .tris
         .iter()
-        .flat_map(|t| t.pos.iter().map(|v| v[2]))
-        .fold(f32::INFINITY, f32::min);
-    let z0 = if z_min.is_finite() { z_min } else { 0.0 };
-    let mut por_familia: BTreeMap<String, Vec<Vertice>> = BTreeMap::new();
-    for tri in &malla.tris {
-        let nombre = &malla.familias[tri.familia as usize];
-        let destino = por_familia.entry(nombre.clone()).or_default();
-        for k in 0..3 {
-            let mut pos = tri.pos[k];
-            pos[2] -= z0;
-            destino.push(Vertice {
-                pos,
-                normal: tri.normal,
-                color: tri.color,
-            });
+        .map(|t| fixed.familias[t.familia as usize].as_str())
+        .collect();
+    let mut cache = crate::mallas::CachePiezas::default();
+    for n in p.nodes.iter().filter(|n| !n.deleted) {
+        if !cache.pieza(n, 2).is_empty() {
+            families.insert(n.family.as_str());
         }
     }
-    construir_glb(&por_familia)
+    families.len()
+}
+
+/// The `.glb` would not fit the format: GLB lengths are `u32`, so 4 GiB at most.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GlbTooLarge {
+    pub bytes: u64,
+}
+
+impl std::fmt::Display for GlbTooLarge {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "el .glb pesaría {} MB y el formato admite 4 096 MB como máximo; exporte sin terreno o por partes",
+            self.bytes.div_ceil(1024 * 1024)
+        )
+    }
+}
+
+impl std::error::Error for GlbTooLarge {}
+
+/// Exports the project to a binary glTF (`.glb`).
+///
+/// Pipes, urban context and terrain go in one mesh with a primitive per family. Each node piece is
+/// a child node with its translation, and nodes with the same piece (same `ClavePieza`) share one
+/// mesh, so 20k equal manholes write one manhole mesh instead of 20k copies (F14-05).
+pub fn exportar_glb(p: &Project, opts: OpcionesGltf) -> Result<Vec<u8>, GlbTooLarge> {
+    let fixed = static_triangles(p, opts.con_terreno);
+    let mut cache = crate::mallas::CachePiezas::default();
+    let pieces: Vec<(&crate::model::Node, std::sync::Arc<parts::Mesh>)> = p
+        .nodes
+        .iter()
+        .filter(|n| !n.deleted)
+        .map(|n| (n, cache.pieza(n, 2)))
+        .filter(|(_, m)| !m.is_empty())
+        .collect();
+    // The base goes to z = 0: in glTF height becomes Y through the root rotation, and 2 500 m of
+    // elevation would leave the model floating 2.5 km up in an external viewer.
+    let z0 = lowest_elevation(&fixed, &pieces);
+
+    let mut by_family: BTreeMap<&str, Vec<&Triangulo>> = BTreeMap::new();
+    for t in &fixed.tris {
+        by_family
+            .entry(fixed.familias[t.familia as usize].as_str())
+            .or_default()
+            .push(t);
+    }
+    let mut glb = GlbDocument::default();
+    let root_primitives: Vec<GlbPrimitive> = by_family
+        .into_iter()
+        .map(|(family, tris)| glb.primitive(family, Source::Triangles(tris, z0)))
+        .collect();
+    if !root_primitives.is_empty() {
+        glb.root_mesh = Some(glb.add_mesh("redes", root_primitives));
+    }
+
+    let mut mesh_of: std::collections::HashMap<usize, usize> = Default::default();
+    for (n, mesh) in &pieces {
+        let key = std::sync::Arc::as_ptr(mesh) as usize;
+        let index = match mesh_of.get(&key) {
+            Some(i) => *i,
+            None => {
+                let primitive = glb.primitive(&n.family, Source::Piece(mesh));
+                let i = glb.add_mesh(&n.family, vec![primitive]);
+                mesh_of.insert(key, i);
+                i
+            }
+        };
+        glb.nodes.push(GlbNode {
+            name: n.code.clone(),
+            mesh: index,
+            translation: [
+                (n.pos.x - p.origin.x) as f32,
+                (n.pos.y - p.origin.y) as f32,
+                (n.z_invert - z0) as f32,
+            ],
+        });
+    }
+    glb.write()
+}
+
+fn lowest_elevation(
+    fixed: &Malla,
+    pieces: &[(&crate::model::Node, std::sync::Arc<parts::Mesh>)],
+) -> f64 {
+    let fixed_min = fixed
+        .tris
+        .iter()
+        .flat_map(|t| t.pos.iter().map(|v| v[2] as f64))
+        .fold(f64::INFINITY, f64::min);
+    let pieces_min = pieces
+        .iter()
+        .map(|(n, m)| n.z_invert + m.bbox().0[2] as f64)
+        .fold(f64::INFINITY, f64::min);
+    let z = fixed_min.min(pieces_min);
+    if z.is_finite() { z } else { 0.0 }
 }
 
 fn normal_de(tri: [[f32; 3]; 3]) -> [f32; 3] {
@@ -354,116 +429,269 @@ fn normal_de(tri: [[f32; 3]; 3]) -> [f32; 3] {
 ///
 /// Lo usa el importador de la biblioteca para reescribir un modelo ya normalizado (Y-arriba,
 /// origen en la base, escala) sin volver a pasar por el proyecto.
-pub fn glb_desde_vertices(por_familia: &BTreeMap<String, Vec<Vertice>>) -> Vec<u8> {
-    construir_glb(por_familia)
+pub fn glb_desde_vertices(
+    por_familia: &BTreeMap<String, Vec<Vertice>>,
+) -> Result<Vec<u8>, GlbTooLarge> {
+    let mut glb = GlbDocument::default();
+    let primitives = por_familia
+        .iter()
+        .filter(|(_, verts)| !verts.is_empty())
+        .map(|(family, verts)| glb.primitive(family, Source::Vertices(verts)))
+        .collect();
+    glb.root_mesh = Some(glb.add_mesh("redes", primitives));
+    glb.write()
 }
 
-fn construir_glb(por_familia: &BTreeMap<String, Vec<Vertice>>) -> Vec<u8> {
-    let mut bin: Vec<u8> = Vec::new();
-    let mut vistas: Vec<String> = Vec::new();
-    let mut accesores: Vec<String> = Vec::new();
-    let mut primitivas: Vec<String> = Vec::new();
-    let mut materiales: Vec<String> = Vec::new();
-    let mut color_medio: BTreeMap<&str, [f32; 3]> = BTreeMap::new();
+/// Where a primitive takes its vertices from. Writing reads the source again instead of keeping a
+/// copy: the `.glb` is written once, with no intermediate buffers.
+enum Source<'a> {
+    Vertices(&'a [Vertice]),
+    /// Static triangles, lowered by `z0`.
+    Triangles(Vec<&'a Triangulo>, f64),
+    /// A piece mesh in its local frame; its node carries the translation.
+    Piece(&'a parts::Mesh),
+}
 
-    let mut indice_material = 0usize;
-    for (familia, verts) in por_familia {
-        if verts.is_empty() {
-            continue;
+impl Source<'_> {
+    fn vertex_count(&self) -> usize {
+        match self {
+            Source::Vertices(v) => v.len(),
+            Source::Triangles(t, _) => t.len() * 3,
+            Source::Piece(m) => m.tris.len() * 3,
         }
-        let cuenta = verts.len();
-        let mut pos = Vec::with_capacity(cuenta * 12);
-        let mut nor = Vec::with_capacity(cuenta * 12);
-        let mut col = Vec::with_capacity(cuenta * 12);
-        let mut min = [f32::INFINITY; 3];
-        let mut max = [f32::NEG_INFINITY; 3];
-        let mut suma = [0.0f32; 3];
-        for v in verts {
-            for k in 0..3 {
-                pos.extend_from_slice(&v.pos[k].to_le_bytes());
-                nor.extend_from_slice(&v.normal[k].to_le_bytes());
-                col.extend_from_slice(&v.color[k].to_le_bytes());
-                min[k] = min[k].min(v.pos[k]);
-                max[k] = max[k].max(v.pos[k]);
-                suma[k] += v.color[k];
+    }
+
+    fn for_each_vertex(&self, mut f: impl FnMut(&Vertice)) {
+        match self {
+            Source::Vertices(vertices) => vertices.iter().for_each(f),
+            Source::Triangles(tris, z0) => {
+                for t in tris {
+                    for pos in t.pos {
+                        let lowered = [pos[0], pos[1], (pos[2] as f64 - z0) as f32];
+                        f(&Vertice {
+                            pos: lowered,
+                            normal: t.normal,
+                            color: t.color,
+                        });
+                    }
+                }
+            }
+            Source::Piece(mesh) => {
+                for t in &mesh.tris {
+                    let normal = normal_de(t.p);
+                    let color = [t.color[0], t.color[1], t.color[2]];
+                    for pos in t.p {
+                        f(&Vertice { pos, normal, color });
+                    }
+                }
             }
         }
-        let medio = [
-            suma[0] / cuenta as f32,
-            suma[1] / cuenta as f32,
-            suma[2] / cuenta as f32,
-        ];
-        color_medio.insert(familia.as_str(), medio);
+    }
+}
 
-        let n = verts.len() as u64;
-        for (datos, tipo, extra) in [
-            (pos, "VEC3", Some((min, max))),
-            (nor, "VEC3", None),
-            (col, "VEC3", None),
-        ] {
-            let offset = bin.len();
-            bin.extend_from_slice(&datos);
-            while !bin.len().is_multiple_of(4) {
-                bin.push(0);
+struct GlbPrimitive<'a> {
+    material: usize,
+    source: Source<'a>,
+}
+
+struct GlbMesh<'a> {
+    name: String,
+    primitives: Vec<GlbPrimitive<'a>>,
+}
+
+struct GlbNode {
+    name: String,
+    mesh: usize,
+    translation: [f32; 3],
+}
+
+struct GlbMaterial {
+    name: String,
+    colour_sum: [f64; 3],
+    vertices: usize,
+}
+
+/// A `.glb` under construction: the root node (Z-up to Y-up, with the optional root mesh) and its
+/// child nodes.
+#[derive(Default)]
+struct GlbDocument<'a> {
+    materials: Vec<GlbMaterial>,
+    material_of: BTreeMap<String, usize>,
+    meshes: Vec<GlbMesh<'a>>,
+    root_mesh: Option<usize>,
+    nodes: Vec<GlbNode>,
+}
+
+const GLB_HEADER_BYTES: u64 = 12 + 8 + 8;
+
+/// GLB lengths are `u32`: a larger file cannot be written.
+fn check_glb_size(total: u64) -> Result<u32, GlbTooLarge> {
+    u32::try_from(total).map_err(|_| GlbTooLarge { bytes: total })
+}
+
+impl<'a> GlbDocument<'a> {
+    fn primitive(&mut self, family: &str, source: Source<'a>) -> GlbPrimitive<'a> {
+        let material = match self.material_of.get(family) {
+            Some(m) => *m,
+            None => {
+                self.materials.push(GlbMaterial {
+                    name: family.to_string(),
+                    colour_sum: [0.0; 3],
+                    vertices: 0,
+                });
+                self.material_of
+                    .insert(family.to_string(), self.materials.len() - 1);
+                self.materials.len() - 1
             }
-            vistas.push(format!(
-                r#"{{"buffer":0,"byteOffset":{offset},"byteLength":{},"target":34962}}"#,
-                datos.len()
-            ));
-            let indice_vista = vistas.len() - 1;
-            let extra_json = match extra {
-                Some((mn, mx)) => format!(
-                    r#","min":[{},{},{}],"max":[{},{},{}]"#,
-                    mn[0], mn[1], mn[2], mx[0], mx[1], mx[2]
-                ),
-                None => String::new(),
-            };
-            accesores.push(format!(
-                r#"{{"bufferView":{indice_vista},"componentType":5126,"count":{n},"type":"{tipo}"{extra_json}}}"#
+        };
+        GlbPrimitive { material, source }
+    }
+
+    fn add_mesh(&mut self, name: &str, primitives: Vec<GlbPrimitive<'a>>) -> usize {
+        self.meshes.push(GlbMesh {
+            name: name.to_string(),
+            primitives,
+        });
+        self.meshes.len() - 1
+    }
+
+    /// Lays out the binary chunk, writes the JSON and then streams every vertex straight into the
+    /// output: one copy of the geometry instead of three.
+    fn write(mut self) -> Result<Vec<u8>, GlbTooLarge> {
+        let mut views = Vec::new();
+        let mut accessors = Vec::new();
+        let mut meshes = Vec::new();
+        let mut bin_len = 0u64;
+        for mesh in &self.meshes {
+            let mut primitives = Vec::new();
+            for prim in &mesh.primitives {
+                let count = prim.source.vertex_count();
+                let (min, max) =
+                    bounds_and_colour(&prim.source, &mut self.materials[prim.material]);
+                let base = accessors.len();
+                for (k, extra) in [Some((min, max)), None, None].into_iter().enumerate() {
+                    let bytes = count as u64 * 12;
+                    views.push(format!(
+                        r#"{{"buffer":0,"byteOffset":{bin_len},"byteLength":{bytes},"target":34962}}"#
+                    ));
+                    bin_len += bytes;
+                    let range = extra
+                        .map(|(mn, mx)| {
+                            format!(
+                                r#","min":[{},{},{}],"max":[{},{},{}]"#,
+                                mn[0], mn[1], mn[2], mx[0], mx[1], mx[2]
+                            )
+                        })
+                        .unwrap_or_default();
+                    accessors.push(format!(
+                        r#"{{"bufferView":{},"componentType":5126,"count":{count},"type":"VEC3"{range}}}"#,
+                        base + k
+                    ));
+                }
+                primitives.push(format!(
+                    r#"{{"attributes":{{"POSITION":{base},"NORMAL":{},"COLOR_0":{}}},"material":{},"mode":4}}"#,
+                    base + 1,
+                    base + 2,
+                    prim.material
+                ));
+            }
+            meshes.push(format!(
+                r#"{{"name":{},"primitives":[{}]}}"#,
+                json_string(&mesh.name),
+                primitives.join(",")
             ));
         }
-        let base = accesores.len() - 3;
-        primitivas.push(format!(
-            r#"{{"attributes":{{"POSITION":{base},"NORMAL":{},"COLOR_0":{}}},"material":{indice_material},"mode":4}}"#,
-            base + 1,
-            base + 2
-        ));
-        materiales.push(format!(
-            r#"{{"name":"{familia}","pbrMetallicRoughness":{{"baseColorFactor":[{},{},{},1.0],"metallicFactor":0.0,"roughnessFactor":0.9}},"doubleSided":true,"extensions":{{"KHR_materials_unlit":{{}}}}}}"#,
-            medio[0], medio[1], medio[2]
-        ));
-        indice_material += 1;
+        let mut json = self.json(&meshes, &accessors, &views, bin_len).into_bytes();
+        while !json.len().is_multiple_of(4) {
+            json.push(b' ');
+        }
+        let total = check_glb_size(GLB_HEADER_BYTES + json.len() as u64 + bin_len)?;
+
+        let mut out = Vec::with_capacity(total as usize);
+        out.extend_from_slice(&0x4654_6C67u32.to_le_bytes()); // "glTF"
+        out.extend_from_slice(&2u32.to_le_bytes());
+        out.extend_from_slice(&total.to_le_bytes());
+        out.extend_from_slice(&(json.len() as u32).to_le_bytes());
+        out.extend_from_slice(&0x4E4F_534Au32.to_le_bytes()); // "JSON"
+        out.extend_from_slice(&json);
+        out.extend_from_slice(&(bin_len as u32).to_le_bytes());
+        out.extend_from_slice(&0x004E_4942u32.to_le_bytes()); // "BIN\0"
+        for prim in self.meshes.iter().flat_map(|m| &m.primitives) {
+            let attributes: [fn(&Vertice) -> [f32; 3]; 3] = [|v| v.pos, |v| v.normal, |v| v.color];
+            for attribute in attributes {
+                prim.source.for_each_vertex(|v| {
+                    for c in attribute(v) {
+                        out.extend_from_slice(&c.to_le_bytes());
+                    }
+                });
+            }
+        }
+        debug_assert_eq!(out.len(), total as usize);
+        Ok(out)
     }
 
-    let json = format!(
-        r#"{{"asset":{{"version":"2.0","generator":"Redes"}},"extensionsUsed":["KHR_materials_unlit"],"scene":0,"scenes":[{{"nodes":[0]}}],"nodes":[{{"name":"Redes","mesh":0,"rotation":[-0.7071068,0.0,0.0,0.7071068]}}],"meshes":[{{"name":"redes","primitives":[{}]}}],"materials":[{}],"accessors":[{}],"bufferViews":[{}],"buffers":[{{"byteLength":{}}}]}}"#,
-        primitivas.join(","),
-        materiales.join(","),
-        accesores.join(","),
-        vistas.join(","),
-        bin.len()
-    );
+    fn json(
+        &self,
+        meshes: &[String],
+        accessors: &[String],
+        views: &[String],
+        bin_len: u64,
+    ) -> String {
+        let mut root = r#"{"name":"Redes""#.to_string();
+        if let Some(mesh) = self.root_mesh {
+            root.push_str(&format!(r#","mesh":{mesh}"#));
+        }
+        root.push_str(r#","rotation":[-0.7071068,0.0,0.0,0.7071068]"#);
+        if !self.nodes.is_empty() {
+            let children: Vec<String> = (1..=self.nodes.len()).map(|i| i.to_string()).collect();
+            root.push_str(&format!(r#","children":[{}]"#, children.join(",")));
+        }
+        root.push('}');
+        let nodes = std::iter::once(root).chain(self.nodes.iter().map(|n| {
+            let [x, y, z] = n.translation;
+            format!(
+                r#"{{"name":{},"mesh":{},"translation":[{x},{y},{z}]}}"#,
+                json_string(&n.name),
+                n.mesh
+            )
+        }));
+        let materials = self.materials.iter().map(|m| {
+            let c = m.colour_sum.map(|s| (s / m.vertices.max(1) as f64) as f32);
+            format!(
+                r#"{{"name":{},"pbrMetallicRoughness":{{"baseColorFactor":[{},{},{},1.0],"metallicFactor":0.0,"roughnessFactor":0.9}},"doubleSided":true,"extensions":{{"KHR_materials_unlit":{{}}}}}}"#,
+                json_string(&m.name),
+                c[0],
+                c[1],
+                c[2]
+            )
+        });
+        format!(
+            r#"{{"asset":{{"version":"2.0","generator":"Redes"}},"extensionsUsed":["KHR_materials_unlit"],"scene":0,"scenes":[{{"nodes":[0]}}],"nodes":[{}],"meshes":[{}],"materials":[{}],"accessors":[{}],"bufferViews":[{}],"buffers":[{{"byteLength":{bin_len}}}]}}"#,
+            nodes.collect::<Vec<_>>().join(","),
+            meshes.join(","),
+            materials.collect::<Vec<_>>().join(","),
+            accessors.join(","),
+            views.join(","),
+        )
+    }
+}
 
-    // Contenedor GLB: cabecera + chunk JSON + chunk BIN.
-    let mut json_bytes = json.into_bytes();
-    while json_bytes.len() % 4 != 0 {
-        json_bytes.push(b' ');
-    }
-    while !bin.len().is_multiple_of(4) {
-        bin.push(0);
-    }
-    let total = 12 + 8 + json_bytes.len() + 8 + bin.len();
-    let mut out = Vec::with_capacity(total);
-    out.extend_from_slice(&0x4654_6C67u32.to_le_bytes()); // "glTF"
-    out.extend_from_slice(&2u32.to_le_bytes());
-    out.extend_from_slice(&(total as u32).to_le_bytes());
-    out.extend_from_slice(&(json_bytes.len() as u32).to_le_bytes());
-    out.extend_from_slice(&0x4E4F_534Au32.to_le_bytes()); // "JSON"
-    out.extend_from_slice(&json_bytes);
-    out.extend_from_slice(&(bin.len() as u32).to_le_bytes());
-    out.extend_from_slice(&0x004E_4942u32.to_le_bytes()); // "BIN\0"
-    out.extend_from_slice(&bin);
-    out
+fn bounds_and_colour(source: &Source<'_>, material: &mut GlbMaterial) -> ([f32; 3], [f32; 3]) {
+    let mut min = [f32::INFINITY; 3];
+    let mut max = [f32::NEG_INFINITY; 3];
+    source.for_each_vertex(|v| {
+        for k in 0..3 {
+            min[k] = min[k].min(v.pos[k]);
+            max[k] = max[k].max(v.pos[k]);
+            material.colour_sum[k] += v.color[k] as f64;
+        }
+        material.vertices += 1;
+    });
+    (min, max)
+}
+
+fn json_string(s: &str) -> String {
+    serde_json::to_string(s).unwrap_or_else(|_| "\"\"".to_string())
 }
 
 #[cfg(test)]
@@ -510,7 +738,7 @@ mod tests {
     #[test]
     fn el_glb_tiene_cabecera_y_json_validos() {
         let p = crate::demo_catalog::catalogo();
-        let glb = exportar_glb(&p, OpcionesGltf::default());
+        let glb = exportar_glb(&p, OpcionesGltf::default()).expect("fits");
         assert_eq!(&glb[0..4], b"glTF", "magic");
         assert_eq!(
             u32::from_le_bytes([glb[4], glb[5], glb[6], glb[7]]),
@@ -532,7 +760,7 @@ mod tests {
     #[test]
     fn las_coordenadas_estan_en_metros_y_dentro_del_modelo() {
         let p = crate::demo_city::ciudad();
-        let glb = exportar_glb(&p, OpcionesGltf { con_terreno: false });
+        let glb = exportar_glb(&p, OpcionesGltf { con_terreno: false }).expect("fits");
         let json = leer_json(&glb);
         // El primer accessor POSITION lleva min/max: deben ser coordenadas locales en metros.
         let inicio = json.find(r#""min":["#).expect("min del POSITION");
@@ -550,12 +778,57 @@ mod tests {
     #[test]
     fn el_documento_serializado_pesa_lo_razonable() {
         let p = crate::demo_catalog::catalogo();
-        let glb = exportar_glb(&p, OpcionesGltf::default());
+        let glb = exportar_glb(&p, OpcionesGltf::default()).expect("fits");
         assert!(
             glb.len() > 10_000,
             "un catálogo no puede pesar {} bytes",
             glb.len()
         );
         assert!(glb.len() < 40_000_000, "demasiado grande: {}", glb.len());
+    }
+
+    fn json_of(glb: &[u8]) -> serde_json::Value {
+        serde_json::from_str(&leer_json(glb)).expect("valid JSON")
+    }
+
+    /// Nodes with the same piece point at one shared mesh, and the file still holds every
+    /// triangle of the project once the node translations are applied (F14-05).
+    #[test]
+    fn equal_pieces_share_one_mesh_and_keep_every_triangle() {
+        let mut p = crate::demo_city::ciudad();
+        let manhole = p
+            .nodes
+            .iter()
+            .find(|n| n.family == "saneamiento.pozo")
+            .expect("manhole")
+            .clone();
+        let copies = 6;
+        for k in 1..=copies {
+            let mut copy = manhole.clone();
+            copy.code = format!("{}-{k}", manhole.code);
+            copy.pos.x += 3.0 * k as f64;
+            p.nodes.push(copy);
+        }
+        let glb = exportar_glb(&p, OpcionesGltf::default()).expect("fits");
+        let doc = json_of(&glb);
+        let meshes = doc["meshes"].as_array().expect("meshes").len();
+        let piece_nodes = doc["nodes"].as_array().expect("nodes").len() - 1;
+        assert_eq!(piece_nodes, p.nodes.iter().filter(|n| !n.deleted).count());
+        assert!(
+            meshes + copies <= piece_nodes + 1,
+            "{meshes} meshes for {piece_nodes} pieces"
+        );
+
+        let read = crate::biblioteca::leer_glb(&glb).expect("readable");
+        let exported = triangulos_exportables(&p, true).tris.len();
+        assert_eq!(read.triangulos, exported);
+    }
+
+    #[test]
+    fn a_glb_over_4_gib_is_an_error() {
+        assert_eq!(check_glb_size(1_000), Ok(1_000));
+        assert_eq!(check_glb_size(u32::MAX as u64), Ok(u32::MAX));
+        let too_large = check_glb_size(u32::MAX as u64 + 1).expect_err("over 4 GiB");
+        assert!(too_large.to_string().contains("4 096 MB"), "{too_large}");
     }
 }

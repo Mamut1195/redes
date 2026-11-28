@@ -234,6 +234,22 @@ $mutaciones = @(
         Que = "subir la escena entera aunque pase del tope de GPU, sin aviso (F14-05)"
     },
     @{
+        Nombre = "glb-malla-por-nodo"
+        Archivo = "crates/redes-core/src/gltf.rs"
+        Patron = 'let index = match mesh_of\.get\(&key\) \{'
+        Reemplazo = 'let index = match None::<&usize> {'
+        Prueba = "equal_pieces_share_one_mesh_and_keep_every_triangle"
+        Que = "copiar la malla de cada pozo en el .glb en vez de compartirla (F14-05)"
+    },
+    @{
+        Nombre = "glb-largo-truncado"
+        Archivo = "crates/redes-core/src/gltf.rs"
+        Patron = 'u32::try_from\(total\)\.map_err\(\|_\| GlbTooLarge \{ bytes: total \}\)'
+        Reemplazo = 'Ok::<u32, GlbTooLarge>(total as u32)'
+        Prueba = "a_glb_over_4_gib_is_an_error"
+        Que = "escribir un .glb de mas de 4 GB con el largo truncado a u32 (F14-05)"
+    },
+    @{
         Nombre = "cache-piezas-sin-acierto"
         Archivo = "crates/redes-core/src/mallas.rs"
         Patron = 'if let Some\(e\) = self\.mapa\.get_mut\(&clave\) \{'

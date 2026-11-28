@@ -1059,7 +1059,7 @@ pub fn normalizar_glb(
             });
         }
     }
-    let glb = crate::gltf::glb_desde_vertices(&por_familia);
+    let glb = crate::gltf::glb_desde_vertices(&por_familia).map_err(|e| e.to_string())?;
     Ok((
         glb,
         Normalizacion {
@@ -1318,7 +1318,8 @@ mod tests {
     #[test]
     fn ida_y_vuelta_del_exportador() {
         let p = crate::demo_catalog::catalogo();
-        let glb = crate::gltf::exportar_glb(&p, crate::gltf::OpcionesGltf { con_terreno: false });
+        let glb = crate::gltf::exportar_glb(&p, crate::gltf::OpcionesGltf { con_terreno: false })
+            .expect("cabe en un .glb");
         let m = leer_glb(&glb).expect("se lee lo que exportamos");
         assert!(m.triangulos > 1000, "triángulos: {}", m.triangulos);
         assert!(!m.primitivas.is_empty());
@@ -1336,7 +1337,8 @@ mod tests {
     #[test]
     fn normalizar_centra_y_apoya_la_base() {
         let p = crate::demo_catalog::catalogo();
-        let glb = crate::gltf::exportar_glb(&p, crate::gltf::OpcionesGltf { con_terreno: false });
+        let glb = crate::gltf::exportar_glb(&p, crate::gltf::OpcionesGltf { con_terreno: false })
+            .expect("cabe en un .glb");
         let antes = leer_glb(&glb).expect("legible");
         let (norm, info) = normalizar_glb(&glb, 1.0, [0.6, 0.6, 0.6]).expect("normaliza");
         let despues = leer_glb(&norm).expect("el normalizado se vuelve a leer");
@@ -1381,7 +1383,8 @@ mod tests {
     #[test]
     fn normalizar_aplica_la_escala() {
         let p = crate::demo_catalog::catalogo();
-        let glb = crate::gltf::exportar_glb(&p, crate::gltf::OpcionesGltf { con_terreno: false });
+        let glb = crate::gltf::exportar_glb(&p, crate::gltf::OpcionesGltf { con_terreno: false })
+            .expect("cabe en un .glb");
         let (_, uno) = normalizar_glb(&glb, 1.0, [0.6, 0.6, 0.6]).expect("normaliza");
         let (_, medio) = normalizar_glb(&glb, 0.5, [0.6, 0.6, 0.6]).expect("normaliza");
         let d1 = uno.bbox.dimensiones()[0];
@@ -1471,7 +1474,7 @@ mod tests {
             }
         }
         m.insert("hormigon".to_string(), verts);
-        let glb = crate::gltf::glb_desde_vertices(&m);
+        let glb = crate::gltf::glb_desde_vertices(&m).expect("cabe en un .glb");
         let c = cantidades_glb(&glb).expect("cantidades");
         assert!(
             (c.volumen_m3.abs() - 8.0).abs() < 0.01,
@@ -1691,7 +1694,8 @@ mod tests_aplicar {
     #[test]
     fn un_glb_sin_empties_no_declara_anclas() {
         let p = crate::demo_catalog::catalogo();
-        let glb = crate::gltf::exportar_glb(&p, crate::gltf::OpcionesGltf { con_terreno: false });
+        let glb = crate::gltf::exportar_glb(&p, crate::gltf::OpcionesGltf { con_terreno: false })
+            .expect("cabe en un .glb");
         let anclas = anclas_de_glb(&glb).expect("lee");
         assert!(anclas.is_empty(), "{anclas:?}");
     }

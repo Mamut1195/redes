@@ -14,8 +14,17 @@
 
 Qué contiene el `.glb`:
 
-- **Una primitiva por familia** (material propio con `KHR_materials_unlit` y color por vértice):
-  pozos, válvulas, accesorios, tuberías, terreno, calles y manzanas.
+- La malla `redes` del nodo raíz lleva **una primitiva por familia** de la geometría fija
+  (tuberías, terreno, calles y manzanas). Cada familia tiene su material con
+  `KHR_materials_unlit` y color por vértice.
+- **Un nodo hijo por pieza** (pozos, válvulas, accesorios…), con el código del objeto como nombre
+  y su posición como `translation`. Las piezas iguales (misma `ClavePieza`) **comparten una
+  malla** (F14-05). Antes cada pozo copiaba su malla entera, y 20k tramos daban un `.glb` de
+  1,1 GB en 26 s con 4 GB de RAM (`docs/21` §4.4).
+- El binario se escribe de una vez, sin búferes intermedios: primero se calcula la disposición y
+  luego se vuelca cada vértice. Si el archivo pasara de 4 GB (los largos del GLB son `u32`),
+  `exportar_glb` devuelve `GlbTooLarge` y la CLI responde `E_IO_TOO_LARGE`, en vez de escribir un
+  largo truncado.
 - **Metros**, origen restado (coordenadas locales) para no perder precisión en `float32`.
 - Nodo raíz con rotación de **Z‑arriba a Y‑arriba** (convención glTF).
 - Sin extensiones obligatorias: se abre en Blender, three.js, Windows 3D Viewer, Babylon.

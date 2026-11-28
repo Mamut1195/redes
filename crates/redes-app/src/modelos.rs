@@ -196,6 +196,7 @@ mod tests {
             "modelo".to_string(),
             verts,
         )]))
+        .expect("fits in a .glb")
     }
 
     fn proyecto_con_dos_valvulas() -> Project {
@@ -348,7 +349,8 @@ mod tests {
                     color: [1.0, 0.0, 0.0],
                 },
             ],
-        )]));
+        )]))
+        .expect("fits in a .glb");
         let malla = malla_de_glb(&glb).expect("malla");
         assert_eq!(malla.len(), 3);
         // La altura (2 en Y del glb) acaba en Z del mundo.
