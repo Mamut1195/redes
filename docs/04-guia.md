@@ -411,6 +411,9 @@ cargo run -p redes-app --release -- --scene detalle `
   (sin él, el pozo de muestra); así se revisa de cerca cualquier pieza horneada, p. ej.
   `--snap out\dz.png --scene corte --objeto DZ-001`. La escena `captacion` encuadra las obras
   alrededor de la primera bocatoma.
+- `--scene unidad` encuadra de cerca una unidad con modelo (sin terreno) y `--scene unidad-corte`
+  la corta por su centro (solo sin `--gpu3d`). La unidad es la de `$REDES_OBJETO` (su código, p. ej.
+  `SD-001`) o, sin ella, el primer objeto con modelo que no es un pozo (docs/familias/F17-07-planta.md).
 - Los chips y botones tienen claves estables (`btn-aprobar`, `btn-observar`, `btn-guardar`,
   `btn-planta`, `btn-iso`, `btn-encuadrar`, `btn-anadir-obs`, `btn-cerrar-obs-N`, campo
   `obs-texto`) para que un guion los encuentre.

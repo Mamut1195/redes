@@ -1,0 +1,29 @@
+{
+  "schema": "redes.receta/1",
+  "familia": "agua.filtro",
+  "subtipo": "rapido_gravedad",
+  "modulos": ["plant_units.py"],
+  "parametros": {
+    "length_m": { "desde": "atributo", "clave": "largo", "unidad": "m" },
+    "width_m": { "desde": "atributo", "clave": "ancho", "unidad": "m" },
+    "height_m": { "desde": "atributo", "clave": "altura_total", "unidad": "m" },
+    "bed_depth_m": { "desde": "atributo", "clave": "altura_lecho", "unidad": "m" },
+    "cell_count": { "desde": "atributo", "clave": "numero_celdas" },
+    "bed_material": { "desde": "atributo", "clave": "tipo_lecho" },
+    "wall_thickness_m": { "desde": "atributo", "clave": "espesor_pared", "unidad": "m" },
+    "body_material": { "desde": "atributo", "clave": "material" },
+    "connections": { "desde": "conexiones" },
+    "floor_thickness_m": { "desde": "forma", "valor": 0.25, "unidad": "m" },
+    "plenum_height_m": { "desde": "forma", "valor": 0.4, "unidad": "m" },
+    "false_floor_thickness_m": { "desde": "forma", "valor": 0.1, "unidad": "m" },
+    "false_floor_material": { "desde": "forma", "valor": "polietileno" },
+    "gravel_depth_m": { "desde": "forma", "valor": 0.3, "unidad": "m" },
+    "gravel_material": { "desde": "forma", "valor": "grava" },
+    "troughs_per_cell": { "desde": "forma", "valor": 2 },
+    "trough_width_m": { "desde": "forma", "valor": 0.35, "unidad": "m" },
+    "trough_depth_m": { "desde": "forma", "valor": 0.35, "unidad": "m" },
+    "trough_crest_above_bed_m": { "desde": "forma", "valor": 0.6, "unidad": "m" },
+    "trough_plate_m": { "desde": "forma", "valor": 0.06, "unidad": "m" },
+    "trough_material": { "desde": "forma", "valor": "fibra_vidrio" }
+  }
+}

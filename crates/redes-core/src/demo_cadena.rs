@@ -149,6 +149,96 @@ fn declare_demo_intake_data(p: &mut Project) {
     }
 }
 
+/// A demo number a plant recipe needs and the demo did not declare (F17-07): it says it is
+/// demo data, like the manhole wall.
+fn demo_datum(valor: f64, unidad: &str) -> crate::model::Dato {
+    crate::model::Dato {
+        valor,
+        unidad: unidad.into(),
+        fuente: DEMO_SOURCE.into(),
+    }
+}
+
+/// Makes a demo treatment unit bakeable by its plant recipe (F17-07): its invert is its declared
+/// floor (`floor_key`, as a plan import reads `cota_fondo`), its wall thickness and material are
+/// declared, and `extra` adds the other design data the recipe asks for.
+fn declare_demo_plant_unit(
+    p: &mut Project,
+    code: &str,
+    floor_key: &str,
+    wall_thickness_m: f64,
+    extra: &[(&str, f64, &str)],
+) {
+    let n = p
+        .node_by_code_mut(code)
+        .unwrap_or_else(|| panic!("{code}: demo plant unit"));
+    n.datos
+        .insert("espesor_pared".into(), demo_datum(wall_thickness_m, "m"));
+    for (key, valor, unidad) in extra {
+        n.datos.insert((*key).into(), demo_datum(*valor, unidad));
+    }
+    n.z_invert = n
+        .num(floor_key)
+        .or_else(|| n.datos.get(floor_key).map(|d| d.valor))
+        .unwrap_or_else(|| panic!("{code}: no {floor_key}"));
+    n.attrs
+        .insert("material".into(), Value::Text("hormigon".into()));
+}
+
+/// The treatment units of both plants, with what their recipes need (F17-07).
+fn declare_demo_plant_units(p: &mut Project) {
+    declare_demo_plant_unit(p, "MZ-001", "cota_fondo", 0.20, &[]);
+    declare_demo_plant_unit(p, "FL-001", "cota_fondo", 0.25, &[]);
+    declare_demo_plant_unit(p, "SD-001", "cota_fondo", 0.30, &[]);
+    declare_demo_plant_unit(p, "FI-001", "cota_fondo", 0.30, &[]);
+    p.node_by_code_mut("FI-001")
+        .expect("demo filter")
+        .attrs
+        .insert("tipo_lecho".into(), Value::Text("arena".into()));
+    // The contact tank was a 4 m circle the registry has no attribute for; its subtype is a
+    // baffled rectangular tank (largo, numero_bafles, altura_util), about the same 50 m3.
+    p.node_by_code_mut("TQ-001")
+        .expect("demo contact tank")
+        .attrs
+        .remove("diametro_interior");
+    declare_demo_plant_unit(
+        p,
+        "TQ-001",
+        "cota_piso",
+        0.20,
+        &[
+            ("cota_piso", 2513.0, "m"),
+            ("largo", 6.0, "m"),
+            ("ancho", 3.0, "m"),
+            ("altura_util", 2.8, "m"),
+            ("numero_bafles", 4.0, ""),
+        ],
+    );
+    declare_demo_plant_unit(
+        p,
+        "LS-001",
+        "cota_fondo",
+        0.20,
+        &[("diametro_dren", 100.0, "mm")],
+    );
+    declare_demo_plant_unit(
+        p,
+        "RJ-002",
+        "cota_umbral",
+        0.20,
+        &[("espesor_barra", 10.0, "mm")],
+    );
+    declare_demo_plant_unit(p, "DZ-002", "cota_fondo", 0.25, &[]);
+    declare_demo_plant_unit(p, "RX-001", "cota_fondo", 0.30, &[]);
+    declare_demo_plant_unit(
+        p,
+        "SE-001",
+        "cota_fondo",
+        0.30,
+        &[("altura_util", 3.0, "m")],
+    );
+}
+
 /// Proyecto de la cadena completa (≈ 60 objetos).
 pub fn cadena() -> Project {
     let mut p = Project::new("Cadena completa · San Bartolo", "EPSG:32717");
@@ -860,6 +950,7 @@ pub fn cadena() -> Project {
     let _ = caseta_dosif;
     let _ = laboratorio;
     let _ = lecho;
+    declare_demo_plant_units(&mut p);
     p
 }
 

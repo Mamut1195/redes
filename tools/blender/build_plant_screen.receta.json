@@ -1,0 +1,22 @@
+{
+  "schema": "redes.receta/1",
+  "familia": "comun.reja",
+  "subtipo": "gruesos_mecanica",
+  "modulos": ["plant_units.py"],
+  "parametros": {
+    "width_m": { "desde": "atributo", "clave": "ancho", "unidad": "m" },
+    "screen_height_m": { "desde": "atributo", "clave": "altura", "unidad": "m" },
+    "inclination_deg": { "desde": "atributo", "clave": "inclinacion", "unidad": "°" },
+    "opening_mm": { "desde": "atributo", "clave": "abertura", "unidad": "mm" },
+    "bar_thickness_mm": { "desde": "atributo", "clave": "espesor_barra", "unidad": "mm" },
+    "wall_thickness_m": { "desde": "atributo", "clave": "espesor_pared", "unidad": "m" },
+    "connections": { "desde": "conexiones" },
+    "channel_length_m": { "desde": "forma", "valor": 3.0, "unidad": "m" },
+    "channel_material": { "desde": "forma", "valor": "hormigon" },
+    "floor_thickness_m": { "desde": "forma", "valor": 0.25, "unidad": "m" },
+    "bar_depth_m": { "desde": "forma", "valor": 0.05, "unidad": "m" },
+    "bar_material": { "desde": "forma", "valor": "acero" },
+    "housing_depth_m": { "desde": "forma", "valor": 0.6, "unidad": "m" },
+    "housing_height_m": { "desde": "forma", "valor": 0.5, "unidad": "m" }
+  }
+}

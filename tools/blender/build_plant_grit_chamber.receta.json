@@ -1,0 +1,30 @@
+{
+  "schema": "redes.receta/1",
+  "familia": "comun.desarenador",
+  "subtipo": "dos_naves",
+  "modulos": ["plant_units.py"],
+  "parametros": {
+    "length_m": { "desde": "atributo", "clave": "largo", "unidad": "m" },
+    "width_m": { "desde": "atributo", "clave": "ancho", "unidad": "m" },
+    "height_m": { "desde": "atributo", "clave": "altura_util", "unidad": "m" },
+    "water_depth_m": { "desde": "atributo", "clave": "tirante", "unidad": "m" },
+    "channel_count": { "desde": "atributo", "clave": "numero_naves" },
+    "gate_count": { "desde": "atributo", "clave": "numero_compuertas" },
+    "drain_dn_mm": { "desde": "atributo", "clave": "diametro_purga", "unidad": "mm" },
+    "wall_thickness_m": { "desde": "atributo", "clave": "espesor_pared", "unidad": "m" },
+    "body_material": { "desde": "atributo", "clave": "material" },
+    "connections": { "desde": "conexiones" },
+    "floor_thickness_m": { "desde": "forma", "valor": 0.25, "unidad": "m" },
+    "gutter_width_m": { "desde": "forma", "valor": 0.4, "unidad": "m" },
+    "bench_rise_m": { "desde": "forma", "valor": 0.3, "unidad": "m" },
+    "weir_offset_m": { "desde": "forma", "valor": 0.6, "unidad": "m" },
+    "weir_thickness_m": { "desde": "forma", "valor": 0.15, "unidad": "m" },
+    "gate_offset_m": { "desde": "forma", "valor": 0.3, "unidad": "m" },
+    "gate_plate_m": { "desde": "forma", "valor": 0.03, "unidad": "m" },
+    "gate_material": { "desde": "forma", "valor": "acero" },
+    "stem_diameter_m": { "desde": "forma", "valor": 0.05, "unidad": "m" },
+    "stem_height_m": { "desde": "forma", "valor": 0.8, "unidad": "m" },
+    "drain_material": { "desde": "forma", "valor": "pvc" },
+    "segments": { "desde": "forma", "valor": 16 }
+  }
+}

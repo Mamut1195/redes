@@ -838,11 +838,39 @@ const ATTRS_DE_SUBTIPO: &[(&str, &[AttrSpec])] = &[
     ),
 ];
 
+/// Treatment units baked by a Blender recipe (F17-07): their wall thickness is a design datum
+/// the recipe needs (D17), and the base registry did not declare it.
+const PLANT_UNITS_WITH_WALLS: &[&str] = &[
+    "agua.mezcla",
+    "agua.floculador",
+    "agua.sedimentador",
+    "agua.filtro",
+    "agua.tanque",
+    "comun.reja",
+    "comun.desarenador",
+    "comun.lecho_secado",
+    "saneamiento.reactor",
+    "saneamiento.sedimentador",
+];
+
+const WALL_THICKNESS: AttrSpec = (
+    "espesor_pared",
+    "Espesor de pared",
+    "m",
+    "num",
+    false,
+    "geo",
+);
+
 /// Aplica los huecos sobre el catálogo recién construido.
 pub fn aplicar(catalogo: &mut Vec<FamilyDef>) {
+    let walls: Vec<(&str, &[AttrSpec])> = PLANT_UNITS_WITH_WALLS
+        .iter()
+        .map(|f| (*f, std::slice::from_ref(&WALL_THICKNESS)))
+        .collect();
     for f in catalogo.iter_mut() {
         // Atributos nuevos (y los que piden los subtipos nuevos).
-        for lista in [ATTRS, ATTRS_DE_SUBTIPO] {
+        for lista in [ATTRS, ATTRS_DE_SUBTIPO, walls.as_slice()] {
             for (familia, specs) in lista {
                 if *familia != f.key {
                     continue;

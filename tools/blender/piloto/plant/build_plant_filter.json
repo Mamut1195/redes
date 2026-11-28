@@ -1,0 +1,11 @@
+{
+  "bed_depth_m": 0.9,
+  "bed_material": "arena",
+  "body_material": "hormigon",
+  "cell_count": 3.0,
+  "connections": [{"azimuth_deg":180.0,"dn_mm":250,"invert_rise_m":2.6,"name":"entrada__TB-010"},{"azimuth_deg":0.0,"dn_mm":250,"invert_rise_m":2.5,"name":"salida__TB-011"}],
+  "height_m": 3.2,
+  "length_m": 8.0,
+  "wall_thickness_m": 0.3,
+  "width_m": 6.0
+}

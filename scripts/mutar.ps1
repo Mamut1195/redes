@@ -362,8 +362,8 @@ $mutaciones = @(
     @{
         Nombre = "clave-sin-receta"
         Archivo = "crates/redes-core/src/bake.rs"
-        Patron = 'for part in \[lf_only\(driver\), lf_only\(script\), canonical\]'
-        Reemplazo = 'for part in [lf_only(driver), canonical]'
+        Patron = 'parts\.extend\(sources\.iter\(\)\.map\(\|s\| lf_only\(s\)\)\);'
+        Reemplazo = 'let _ = sources;'
         Prueba = "the_key_follows_params_and_recipe_but_not_key_order_or_line_endings"
         Que = "una clave de horneado que no cambia al editar la receta: la cache serviria piezas viejas (F17-02)"
     },
@@ -451,6 +451,14 @@ $mutaciones = @(
         Destino = "topografia"
         Prueba = "a_survey_in_another_datum_than_the_network_is_e_datum"
         Que = "mezclar cotas de datums verticales distintos sin error (F17-12)"
+    },
+    @{
+        Nombre = "modulo-fuera-de-clave"
+        Archivo = "crates/redes-core/src/bake.rs"
+        Patron = 'sources\.extend\(self\.module_bytes\.iter\(\)\.map\(Vec::as_slice\)\);'
+        Reemplazo = 'let _ = &self.module_bytes;'
+        Prueba = "a_module_the_recipe_imports_is_part_of_the_key"
+        Que = "dejar plant_units.py fuera de la clave: tocarlo no rehornearia las unidades (F17-07)"
     }
 )
 

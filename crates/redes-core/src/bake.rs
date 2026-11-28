@@ -80,6 +80,10 @@ pub struct Recipe {
     pub subtype: Option<String>,
     #[serde(rename = "parametros")]
     pub params: BTreeMap<String, ParamSource>,
+    /// Python modules next to the script that it imports (`plant_units.py`…). They shape the
+    /// geometry as much as the script does, so they are part of the cache key.
+    #[serde(rename = "modulos", default)]
+    pub modules: Vec<String>,
 }
 
 /// One set of recipe parameters, by recipe name. Sorted, so its JSON is canonical.
@@ -93,6 +97,7 @@ pub struct LoadedRecipe {
     pub script: PathBuf,
     script_bytes: Vec<u8>,
     driver_bytes: Vec<u8>,
+    module_bytes: Vec<Vec<u8>>,
 }
 
 impl LoadedRecipe {
@@ -123,9 +128,15 @@ impl LoadedRecipe {
         let read = |path: &Path| {
             std::fs::read(path).map_err(|e| format!("E_IO_NOT_FOUND: {}: {e}", path.display()))
         };
+        let module_bytes = recipe
+            .modules
+            .iter()
+            .map(|m| read(&dir.join(m)))
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(LoadedRecipe {
             script_bytes: read(&script)?,
             driver_bytes: read(&dir.join(DRIVER_FILE))?,
+            module_bytes,
             script,
             name: name.to_string(),
             recipe,
@@ -133,7 +144,9 @@ impl LoadedRecipe {
     }
 
     pub fn key(&self, params: &ParamSet) -> String {
-        bake_key(&self.driver_bytes, &self.script_bytes, params)
+        let mut sources = vec![self.script_bytes.as_slice()];
+        sources.extend(self.module_bytes.iter().map(Vec::as_slice));
+        key_of_sources(&self.driver_bytes, &sources, params)
     }
 
     /// Manifest id of a baked piece: readable family prefix plus the start of the key.
@@ -452,10 +465,19 @@ fn normalise_degrees(a: f64) -> f64 {
 /// The Blender version is left out on purpose: the cache must be readable without Blender, and
 /// the recipes are pinned to one Blender release (docs/17, section F17-02).
 pub fn bake_key(driver: &[u8], script: &[u8], params: &ParamSet) -> String {
+    key_of_sources(driver, &[script], params)
+}
+
+/// [`bake_key`] of a script and the modules it imports, in the recipe's order. A recipe without
+/// modules keeps the key it had before modules existed.
+fn key_of_sources(driver: &[u8], sources: &[&[u8]], params: &ParamSet) -> String {
     let canonical = serde_json::to_vec(params).expect("a map of JSON values serialises");
     let mut hasher = blake3::Hasher::new();
     hasher.update(KEY_DOMAIN);
-    for part in [lf_only(driver), lf_only(script), canonical] {
+    let mut parts = vec![lf_only(driver)];
+    parts.extend(sources.iter().map(|s| lf_only(s)));
+    parts.push(canonical);
+    for part in parts {
         hasher.update(&(part.len() as u64).to_le_bytes());
         hasher.update(&part);
     }
@@ -747,6 +769,29 @@ mod tests {
         let lonely = node_connections(&p, p.node_by_code("PZ-201").unwrap());
         assert!(lonely.anchored.is_empty());
         assert_eq!(lonely.unanchored[0].reason, "sin tramos conectados");
+    }
+
+    #[test]
+    fn a_module_the_recipe_imports_is_part_of_the_key() {
+        let contract = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tools/blender/build_plant_sedimentator.receta.json");
+        let r = LoadedRecipe::load(&contract).expect("the sedimentator recipe loads");
+        assert_eq!(r.module_bytes.len(), 1, "plant_units.py");
+        let set = ParamSet::from([("length_m".to_string(), Json::from(11.0))]);
+        let mut edited = r.clone();
+        edited.module_bytes[0].extend_from_slice(b"\n# edited\n");
+        assert_ne!(
+            r.key(&set),
+            edited.key(&set),
+            "a module edit invalidates the cache"
+        );
+        let mut without = r.clone();
+        without.module_bytes.clear();
+        assert_eq!(
+            without.key(&set),
+            bake_key(&r.driver_bytes, &r.script_bytes, &set),
+            "a recipe without modules keeps its old key"
+        );
     }
 
     #[test]

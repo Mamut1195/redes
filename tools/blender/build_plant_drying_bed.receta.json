@@ -1,0 +1,23 @@
+{
+  "schema": "redes.receta/1",
+  "familia": "comun.lecho_secado",
+  "subtipo": "arena_grava",
+  "modulos": ["plant_units.py"],
+  "parametros": {
+    "length_m": { "desde": "atributo", "clave": "largo", "unidad": "m" },
+    "width_m": { "desde": "atributo", "clave": "ancho", "unidad": "m" },
+    "wall_height_m": { "desde": "atributo", "clave": "altura_muro", "unidad": "m" },
+    "cell_count": { "desde": "atributo", "clave": "numero_celdas" },
+    "sand_depth_m": { "desde": "atributo", "clave": "espesor_arena", "unidad": "m" },
+    "gravel_depth_m": { "desde": "atributo", "clave": "espesor_grava", "unidad": "m" },
+    "drain_dn_mm": { "desde": "atributo", "clave": "diametro_dren", "unidad": "mm" },
+    "wall_thickness_m": { "desde": "atributo", "clave": "espesor_pared", "unidad": "m" },
+    "body_material": { "desde": "atributo", "clave": "material" },
+    "connections": { "desde": "conexiones" },
+    "floor_thickness_m": { "desde": "forma", "valor": 0.2, "unidad": "m" },
+    "gravel_material": { "desde": "forma", "valor": "grava" },
+    "sand_material": { "desde": "forma", "valor": "arena" },
+    "drain_material": { "desde": "forma", "valor": "pvc" },
+    "segments": { "desde": "forma", "valor": 16 }
+  }
+}

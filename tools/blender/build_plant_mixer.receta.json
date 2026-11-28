@@ -1,0 +1,18 @@
+{
+  "schema": "redes.receta/1",
+  "familia": "agua.mezcla",
+  "subtipo": "resalto_hidraulico",
+  "modulos": ["plant_units.py"],
+  "parametros": {
+    "length_m": { "desde": "atributo", "clave": "largo", "unidad": "m" },
+    "width_m": { "desde": "atributo", "clave": "ancho", "unidad": "m" },
+    "height_m": { "desde": "atributo", "clave": "altura_util", "unidad": "m" },
+    "drop_height_m": { "desde": "atributo", "clave": "altura_caida", "unidad": "m" },
+    "jump_length_m": { "desde": "atributo", "clave": "longitud_resalto", "unidad": "m" },
+    "wall_thickness_m": { "desde": "atributo", "clave": "espesor_pared", "unidad": "m" },
+    "body_material": { "desde": "atributo", "clave": "material" },
+    "connections": { "desde": "conexiones" },
+    "floor_thickness_m": { "desde": "forma", "valor": 0.25, "unidad": "m" },
+    "drop_run_m": { "desde": "forma", "valor": 0.4, "unidad": "m" }
+  }
+}

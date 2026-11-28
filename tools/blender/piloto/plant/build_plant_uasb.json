@@ -1,0 +1,11 @@
+{
+  "body_material": "hormigon",
+  "chamber_count": 2.0,
+  "connections": [{"azimuth_deg":180.0,"dn_mm":250,"invert_rise_m":3.8,"name":"entrada__CL-309"},{"azimuth_deg":0.0,"dn_mm":250,"invert_rise_m":3.6,"name":"salida__CL-310"}],
+  "height_m": 4.5,
+  "inlet_count": 6.0,
+  "length_m": 12.0,
+  "wall_thickness_m": 0.3,
+  "water_depth_m": 4.0,
+  "width_m": 8.0
+}

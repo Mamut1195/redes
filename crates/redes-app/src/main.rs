@@ -1541,6 +1541,8 @@ fn main() {
                     s.rebuild();
                 }) as fn(&mut State),
             ),
+            ("unidad", unit_close_up as fn(&mut State)),
+            ("unidad-corte", unit_cut as fn(&mut State)),
             ("validar", validacion::escena as fn(&mut State)),
         ],
         ..AppSpec::new("Redes — visor 3D", (1280.0, 800.0), State::new, view)
@@ -1613,6 +1615,46 @@ fn sample_manhole(p: &Project) -> Option<String> {
         .find(|n| n.modelo.is_some() && p.tramos_de(n.id).count() >= 2)
         .or_else(|| manholes().next())
         .map(|n| n.code.clone())
+}
+
+/// Object the `unidad` scenes show: the code in `$REDES_OBJETO`, else the first object drawn with
+/// a library model that is not a manhole (a treatment unit in the chain demo, F17-07).
+fn sample_unit(p: &Project) -> Option<String> {
+    let alive = || p.nodes.iter().filter(|n| !n.deleted);
+    let wanted = std::env::var("REDES_OBJETO").ok();
+    match wanted {
+        Some(code) => alive().find(|n| n.code == code),
+        None => alive().find(|n| n.modelo.is_some() && n.family != "saneamiento.pozo"),
+    }
+    .map(|n| n.code.clone())
+}
+
+/// The focus frames a whole unit with room for its pipes; a review wants the unit to fill the view.
+const CLOSE_UP_ZOOM: f64 = 0.65;
+
+/// Scene `unidad`: the sample unit up close without terrain or selection tint, as it was baked.
+fn unit_close_up(s: &mut State) {
+    s.sel = sample_unit(&s.project);
+    s.enfocar();
+    s.layers.terreno = false;
+    s.sel = None;
+    s.cam.distance *= CLOSE_UP_ZOOM;
+    s.cam.elevation = 30.0;
+    s.rebuild();
+}
+
+/// Scene `unidad-corte`: the sample unit cut by the vertical plane through its centre, seen from
+/// the removed side (painter only: the 3D pass does not cut).
+fn unit_cut(s: &mut State) {
+    s.sel = sample_unit(&s.project);
+    s.enfocar();
+    s.layers.terreno = false;
+    s.alternar_corte();
+    s.sel = None;
+    s.cam.distance *= CLOSE_UP_ZOOM;
+    s.cam.azimuth = -25.0;
+    s.cam.elevation = 18.0;
+    s.rebuild();
 }
 
 /// Escena `pozos`: primer plano del primer pozo (cono, marco, tapa y escalera). El objetivo sale

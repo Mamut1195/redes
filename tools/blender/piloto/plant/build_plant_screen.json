@@ -1,0 +1,9 @@
+{
+  "bar_thickness_mm": 10.0,
+  "connections": [{"azimuth_deg":176.423666,"dn_mm":250,"invert_rise_m":0.0,"name":"entrada__CL-307"},{"azimuth_deg":0.0,"dn_mm":250,"invert_rise_m":0.0,"name":"salida__CL-308"}],
+  "inclination_deg": 75.0,
+  "opening_mm": 25.0,
+  "screen_height_m": 1.2,
+  "wall_thickness_m": 0.2,
+  "width_m": 1.6
+}
