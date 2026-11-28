@@ -287,8 +287,9 @@ modelan agentes con Blender 5.1 sin ventana; el usuario aprueba cada pieza por c
 | F17-08 | P0 | **Demo de la cadena completa solo con piezas de Blender** | `redes proyecto cadena` dibujado con la biblioteca; recorrido de capturas (iso, cortes verticales, perfil, foco en la planta) | el usuario aprueba el recorrido; banco sin regresión | 2 |
 | F17-09 | P0 | **Ejemplo con topografía real** (D17) | recorte del MDT Copernicus GLO-30 (zona andina, con atribución) como terreno de `redes proyecto cadena`: quebrada encajada, lomas, vaguada y cruce de río; trazado coherente con el relieve de la captación a la planta y a la distribución; todas las piezas horneadas | perfiles y cortes verticales legibles; el usuario aprueba el recorrido | 2 |
 | F17-10 | P1 | **Biblioteca horneada en el paquete** (D17) | juego de medidas comerciales por familia horneado con las recetas, manifiesto y recetas dentro de `scripts/empaquetar.ps1`; el CI comprueba que cada `.glb` versionado corresponde a la clave de su receta | el paquete portable abre la demo con piezas de Blender sin Blender instalado | 1 |
+| F17-11 | P0 | **Topografía de levantamiento** (D18), antes de F17-09 | contrato `redes.topografia/1` (puntos con número, E, N, Z, descripción y clase; líneas de quiebre; contorno y huecos; malla opcional) validado por `redes importar topografia`; TIN con restricciones (Delaunay restringido) que respeta quiebres y contorno; referencia de topografía en `skills/redes-ingesta` para PNEZD, DXF y LandXML de Civil 3D con tabla de códigos típica ajustable; fixtures de ejemplo | un levantamiento con quebrada no cruza el cauce con triángulos; el agente traduce un PNEZD real siguiendo la skill y la CLI lo valida | 3 |
 
-**Total F17: 20,5 días.**
+**Total F17: 23,5 días.**
 
 ---
 
