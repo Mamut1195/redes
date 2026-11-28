@@ -252,7 +252,8 @@ Un solo frente abierto a la vez; no se abre una fase sin cerrar la anterior.
 1. ~~F14 — Rendimiento~~ (cerrada).
 2. **F17 — Familias paramétricas en Blender** (D14). Va **antes** de F15: los IDs de F15/F16 se conservan porque ya están en Linear.
 3. **F15 — Arquitectura y mantenibilidad**, ampliada con la fachada única y el canal de comandos (ver F15-13…F15-15).
-4. **F16 — Release v1.**
+4. **F18 — Revisión completa en la app y salidas que faltan** (huecos del inventario docs/02 §4), sobre la fachada de F15.
+5. **F16 — Release v1.**
 
 Frentes transversales, revisados al cerrar cada ticket:
 
@@ -263,7 +264,7 @@ Frentes transversales, revisados al cerrar cada ticket:
 | Codegraph y Archify | `codegraph sync .` tras cada commit; diagrama de arquitectura y análisis de acoplamiento rehechos al cerrar cada fase (`out/auditoria/`) |
 | Guía de agentes | `CLAUDE.md` y `AGENTS.md` al día con cada cambio de reglas o comandos |
 | Flujos deterministas | cada flujo (ingesta, revisión, exportación, cierre de ticket, integración de subagentes) son pasos fijos y verificables (comandos, scripts, CI), no criterio del agente |
-| Inventario de features | docs/02 y este backlog dicen qué está listo, parcial o planeado; en la app faltan buscar por código, filtrar por estado/familia y la capa `nodos` |
+| Inventario de features | docs/02 y este backlog dicen qué está listo, parcial o planeado; todo hueco de docs/02 §4 tiene ticket (F17-11…13, F18) o queda «fuera de v1» |
 
 ---
 
@@ -288,8 +289,10 @@ modelan agentes con Blender 5.1 sin ventana; el usuario aprueba cada pieza por c
 | F17-09 | P0 | **Ejemplo con topografía real** (D17) | recorte del MDT Copernicus GLO-30 (zona andina, con atribución) como terreno de `redes proyecto cadena`: quebrada encajada, lomas, vaguada y cruce de río; trazado coherente con el relieve de la captación a la planta y a la distribución; todas las piezas horneadas | perfiles y cortes verticales legibles; el usuario aprueba el recorrido | 2 |
 | F17-10 | P1 | **Biblioteca horneada en el paquete** (D17) | juego de medidas comerciales por familia horneado con las recetas, manifiesto y recetas dentro de `scripts/empaquetar.ps1`; el CI comprueba que cada `.glb` versionado corresponde a la clave de su receta | el paquete portable abre la demo con piezas de Blender sin Blender instalado | 1 |
 | F17-11 | P0 | **Topografía de levantamiento** (D18), antes de F17-09 | contrato `redes.topografia/1` (puntos con número, E, N, Z, descripción y clase; líneas de quiebre; contorno y huecos; malla opcional) validado por `redes importar topografia`; TIN con restricciones (Delaunay restringido) que respeta quiebres y contorno; referencia de topografía en `skills/redes-ingesta` para PNEZD, DXF y LandXML de Civil 3D con tabla de códigos típica ajustable; fixtures de ejemplo | un levantamiento con quebrada no cruza el cauce con triángulos; el agente traduce un PNEZD real siguiendo la skill y la CLI lo valida | 3 |
+| F17-12 | P0 | **CRS y datum vertical** (antes de F17-09) | UTM norte y sur (`326NN`/`327NN`); el datum vertical se declara y se guarda con el terreno (ortométrico EGM2008/EGM96 o elipsoidal) y se muestra; mezclar datums falla con error legible; corregir `skills/redes-ingesta/references/plan.md` («siempre 32717») | terreno Copernicus etiquetado EGM2008; plan y terreno con datums distintos → error | 1 |
+| F17-13 | P1 | **Calidad del terreno** | informe al importar: puntos duplicados (misma E,N con distinta Z), densidad, triángulos largos y espigas; el aligerado de la vista conserva picos y quiebres (hoy `thinned` guarda el primer punto de la celda) | fixture con duplicados y espiga → avisos con coordenadas; la vista aligerada no pierde la cima | 1,5 |
 
-**Total F17: 23,5 días.**
+**Total F17: 26 días.**
 
 ---
 
@@ -315,6 +318,33 @@ modelan agentes con Blender 5.1 sin ventana; el usuario aprueba cada pieza por c
 | F15-15 | P1 | **Capas sin ciclos** | ciclos `model` ↔ `revision`/`validar`/`project_io`/`indice` y `families` ↔ `families_extra`: sacar `SCHEMA_VERSION`, `ReglasValidacion` y `Observacion` a una capa `base` | Codegraph y Archify sin ciclos entre capas | 2 |
 
 **Total F15: 32 días.**
+
+---
+
+## F18 — Revisión completa en la app y salidas que faltan (P1/P2)
+
+Huecos del inventario verificado (docs/02 §4). Va tras F15 para construirse sobre la fachada `api`, salvo
+F18-07 y F18-12, que pueden adelantarse si bloquean una revisión real.
+
+| ID | P | Ticket | Alcance | Aceptación | Días |
+|---|---|---|---|---|---|
+| F18-01 | P1 | **Buscar y filtrar en la app** | buscar por código (encuadra y selecciona); filtrar por estado de revisión y por familia; chip de la capa `nodos` | captura con filtro «observados» y búsqueda por código | 2 |
+| F18-02 | P1 | **Acciones de revisión desde la app** | botones de acta, reimportar, exportar (DXF, GeoJSON, glTF, CSV), reabrir y aprobar el proyecto; mismos códigos `E_*` y journal que la CLI | cada botón produce el mismo resultado que su comando | 3 |
+| F18-03 | P1 | **Inspector completo** | todos los atributos del nodo (hoy 10) y los del tramo, con fuente; longitud 3D del tramo (hoy en planta) | árbol `--tree` con todos los atributos de un pozo y de un tramo | 1 |
+| F18-04 | P1 | **Corte orientable y exageración vertical** | corte a lo largo de un tramo o con orientación elegida (hoy fijo en E local); control de exageración vertical en la UI | capturas de corte por un colector y con ×1/×5 | 2 |
+| F18-05 | P2 | **Teclado y capturas con selección** | flechas para girar (o retirar el aviso «Flechas para girar»); `--snap` con un objeto seleccionado para capturar el inspector | prueba de la escena con selección; aviso coherente con lo que hace la app | 1 |
+| F18-06 | P2 | **Varias superficies** | terreno existente y proyectado; añadir puntos a una superficie sin reemplazarla; elegir cuál usan la vista, el perfil y `validar` | proyecto con dos superficies; perfil con ambas líneas | 3 |
+| F18-07 | P1 | **Reglas de `validar` contra el terreno** | tapa o rasante declaradas frente al TIN (diferencia sobre umbral del usuario, D6) y objetos fuera del terreno; se informa, no se corrige | fixture con tapa 0,5 m bajo el TIN → hallazgo; objeto fuera → hallazgo | 1 |
+| F18-08 | P1 | **Salidas que faltan** | `--solo-aprobados` en GeoJSON; DXF por red (agua o alcantarillado); curvas de nivel en la vista y en el DXF; terreno en DXF y GeoJSON | pruebas de contrato por cada salida | 2 |
+| F18-09 | P1 | **DXF abierto en AutoCAD/BricsCAD** | abrir un DXF exportado en un CAD real y dejar constancia (capturas, versión) | constancia en docs/16 o docs/04; lo que falle, ticket | 0,5 |
+| F18-10 | P2 | **Reimportar conserva las anclas de biblioteca** | `importar reimportar` reaplica las anclas de `biblioteca aplicar` a los objetos que siguen | prueba: reimportar no pierde el modelo anclado | 1 |
+| F18-11 | P2 | **Ayuda de la CLI coherente** | `proyecto aprobar --help` dice que bloquea pendientes **y observados**; repasar el resto de ayudas contra el código | prueba que compara la ayuda con los códigos de `esquema` | 0,5 |
+| F18-12 · [MAM-1155](https://linear.app/mamutsystems/issue/MAM-1155) | P0 | **No inventar el diámetro del pozo** | `Node::diametro` usa `unwrap_or(1.20)`: el inspector muestra un dato que no existe; mostrar `—` (D4); en curso dentro de F17-03 | pozo sin `diametro_interior` → `—` | 0,5 |
+
+Fuera de v1, sin ticket: nubes LAS/LAZ, IFC/Revit, servidor MCP, modo lote, autoguardado, atributos
+definidos por el usuario. LandXML y curvas de nivel de Civil 3D entran por la skill de topografía (F17-11).
+
+**Total F18: 17,5 días.**
 
 ---
 

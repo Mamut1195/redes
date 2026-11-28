@@ -34,7 +34,7 @@ Uso paso a paso: [docs/04](04-guia.md).
 | SWMM `.inp`, EPANET `.inp`, DXF de Civil 3D, GeoJSON/SIG, tablas Excel/CSV | ✅ por skill | skill [`skills/redes-ingesta`](../skills/redes-ingesta/SKILL.md) (referencias por formato, sin scripts) → plan → `importar plan` | D5, [docs/03](03-skill-ingesta.md) |
 | Reimportar una entrega nueva sin perder la revisión (empareja por código) | ✅ | `redes importar reimportar --archivo nuevo.json [--aceptar-bajas] [--tolerancia-pos 0.01]` | D9, F13-06 |
 | Sistema de coordenadas | 🟡 | solo UTM sur WGS 84 (`EPSG:327NN`); otro CRS, coordenadas en grados o CRS distinto del proyecto → `E_CRS`; **no reproyecta** | F12-13 |
-| Reimportar o importar desde la app | 📋 | hoy solo por CLI | sin ticket ([docs/23](23-estado-y-pendientes.md)) |
+| Reimportar o importar desde la app | 📋 | hoy solo por CLI | F18-02 |
 
 ### 2.2 Topografía
 
@@ -45,9 +45,9 @@ Uso paso a paso: [docs/04](04-guia.md).
 | TIN por Delaunay **sin restricciones** sobre la planta de los puntos | 🟡 | automático al importar (`delaunator`); descarta triángulos degenerados | `terrain::Terrain::build` |
 | Cota y pendiente interpoladas en el TIN, solo dentro del casco convexo (fuera: sin cota, nunca extrapola) | ✅ | lo usan la vista, el perfil y `validar` | `Terrain::z_at`, `slope_at` |
 | Terreno aligerado para dibujar (un punto por celda) | ✅ | automático en la app | `Terrain::thinned` |
-| Curvas de nivel | 🟡 | se calculan (`Terrain::contours`), pero **ni se dibujan ni se exportan** | sin ticket |
+| Curvas de nivel | 🟡 | se calculan (`Terrain::contours`), pero **ni se dibujan ni se exportan** | F18-08 |
 | Terreno en el perfil longitudinal | ✅ | `redes perfil … --paso 10` muestrea la rasante entre pozos | F13-02 |
-| Terreno en la salida | 🟡 | solo en glTF (`exportar gltf`, `--sin-terreno` lo quita); no en DXF ni en GeoJSON | sin ticket |
+| Terreno en la salida | 🟡 | solo en glTF (`exportar gltf`, `--sin-terreno` lo quita); no en DXF ni en GeoJSON | F18-08 |
 | Ejemplo sobre topografía real (MDT Copernicus GLO-30) | 📋 | `redes proyecto cadena` | F17-09, D17 |
 
 Lo que falta para un levantamiento real está en §4.1.
@@ -85,7 +85,7 @@ Lo que falta para un levantamiento real está en §4.1.
 | Perfil longitudinal en panel | ✅ | botón Perfil en el inspector de un tramo | F13-02 |
 | Leyenda por forma y color con conteos | ✅ | panel izquierdo | — |
 | Modelos `.glb` de biblioteca en su nodo; proxy decimado sin GPU | ✅ | `--gpu3d` para la malla real; sin él, silueta y aviso | F6-01…05 |
-| Exageración vertical | 🟡 | fija (×2,0; ×2,6 con contexto urbano; ×1 en foco); sin control en la UI | sin ticket |
+| Exageración vertical | 🟡 | fija (×2,0; ×2,6 con contexto urbano; ×1 en foco); sin control en la UI | F18-04 |
 | Abrir proyecto | 🟡 | `redes-app --abrir x.redes` (o `-p`, una ruta `.redes` suelta, `REDES_PROJECT`); sin diálogo de abrir. Sin nada, abre el demo; si lo pedido falla, abre vacío y lo dice | — |
 | Capturas y árbol sin ventana | ✅ | `--snap out.png --scene <escena>`, `--tree arbol.json`, `--size`, `--scale` (Rune). 16 escenas: `iso`, `planta`, `perfil`, `detalle`, `ciudad`, `calle`, `catalogo`, `vitrina`, `pozos`, `pieza`, `foco`, `corte`, `explosion`, `ptap`, `ptar`, `validar` | [docs/00](00-investigacion-rune.md) |
 | Vista SVG sin GPU para agentes | ✅ | `redes vista --salida v.svg [--azimut --elevacion --distancia --ancho --alto]`; sin capas, corte ni foco | — |
@@ -114,7 +114,7 @@ Lo que falta para un levantamiento real está en §4.1.
 | 10 reglas sobre las cotas importadas: `contrapendiente`, `pendiente`, `salto_pozo`, `recubrimiento`, `profundidad_pozo`, `separacion`, `dn_aguas_abajo`, `tramo_huerfano`, `nodo_aislado`, `longitud` | ✅ | `redes validar [--solo pendiente,recubrimiento] [--reglas r.json] [--guardar]`; es un informe (`ok:true` con hallazgos) | D6, F13-01 |
 | Umbrales del usuario; los de fábrica son referencia, no norma; falta un dato → `no_evaluable` | ✅ | `--reglas`, `Project::reglas_validacion` | D6 |
 | Panel Validación con navegación a cada hallazgo | ✅ | botón Validar en el panel izquierdo; escena `--scene validar` | F13-01 |
-| Tapa o rasante declaradas frente al TIN; objetos fuera del terreno | 📋 | no hay regla | sin ticket |
+| Tapa o rasante declaradas frente al TIN; objetos fuera del terreno | 📋 | no hay regla | F18-07 |
 
 ### 2.7 Salida
 
@@ -125,7 +125,7 @@ Lo que falta para un levantamiento real está en §4.1.
 | glTF binario `.glb` (piezas iguales comparten malla; > 4 GB → `E_IO_TOO_LARGE`) | ✅ | `redes exportar gltf --salida x.glb [--sin-terreno]` | F14-05, [docs/16](16-fase-4-5-gltf-y-3d.md) |
 | Cantidades con procedencia: objetos, longitudes por DN y material, volúmenes, áreas, pesos, discrepancias declarado/medido | ✅ | `redes cantidades [--grupo …] [--csv c.csv] [--tolerancia 10]` | D3, F7 |
 | Perfil longitudinal SVG y JSON | ✅ | `redes perfil --desde P1 --hasta P9 --salida p.svg` o `--tramos T1,T2` | F13-02 |
-| Exportar desde la app | 📋 | no hay botón: todo sale por CLI | sin ticket |
+| Exportar desde la app | 📋 | no hay botón: todo sale por CLI | F18-02 |
 
 ### 2.8 Biblioteca de piezas
 
@@ -192,7 +192,7 @@ Decisiones abiertas: A1 (vertedero), A2 (pozo profundo), A3 (repo público) en [
 
 ## 4. Lo que falta
 
-### 4.1 Topografía para un levantamiento real (sin ticket)
+### 4.1 Topografía para un levantamiento real (F17-11, F17-12, F17-13, F18-06, F18-08)
 
 Hoy `importar terreno` toma las tres primeras columnas como E, N, Z y arma un Delaunay sin
 restricciones (`ingest.rs` `import_terreno`, `terrain.rs` `Terrain::build`). `SurfacePoint`
@@ -223,31 +223,36 @@ volúmenes ni diseño.
 
 | Falta | Ticket |
 |---|---|
-| Buscar un objeto por código | sin ticket (frente «Inventario de features», [docs/18](18-backlog.md) §Orden de fases vigente) |
-| Filtrar por estado de revisión y por familia | ídem |
-| Chip de la capa `nodos` (existe en `view::Layers`, no en la app) | ídem |
-| Botones de acta, reimportar, exportar, reabrir y aprobar el proyecto | sin ticket |
-| Todos los atributos en el inspector de nodo (hoy 10) y atributos en el de tramo | sin ticket |
-| Longitud 3D en el inspector de tramo (hoy en planta; `cantidades` ya da la 3D) | sin ticket |
-| Corte a lo largo de un tramo u orientable | sin ticket |
-| Control de exageración vertical | sin ticket |
-| Seleccionar un objeto en una escena `--snap` (capturar el inspector) | sin ticket ([docs/23](23-estado-y-pendientes.md)) |
+| Buscar un objeto por código | F18-01 |
+| Filtrar por estado de revisión y por familia | F18-01 |
+| Chip de la capa `nodos` (existe en `view::Layers`, no en la app) | F18-01 |
+| Botones de acta, reimportar, exportar, reabrir y aprobar el proyecto | F18-02 |
+| Todos los atributos en el inspector de nodo (hoy 10) y atributos en el de tramo | F18-03 |
+| Longitud 3D en el inspector de tramo (hoy en planta; `cantidades` ya da la 3D) | F18-03 |
+| Corte a lo largo de un tramo u orientable | F18-04 |
+| Control de exageración vertical | F18-04 |
+| Seleccionar un objeto en una escena `--snap` (capturar el inspector) | F18-05 |
 | Guardar fuera del hilo de UI | F15-09 |
 
 ### 4.3 Validación y salida
 
 | Falta | Ticket |
 |---|---|
-| Regla de tapa o rasante declaradas frente al TIN, y de objetos fuera del terreno | sin ticket |
-| `--solo-aprobados` en GeoJSON; DXF por red (agua o alcantarillado) | sin ticket |
-| Abrir un DXF exportado en AutoCAD/BricsCAD y dejar constancia | sin ticket ([docs/23](23-estado-y-pendientes.md)) |
-| Reimportar reaplica las anclas de `biblioteca aplicar` | sin ticket ([docs/23](23-estado-y-pendientes.md)) |
+| Regla de tapa o rasante declaradas frente al TIN, y de objetos fuera del terreno | F18-07 |
+| `--solo-aprobados` en GeoJSON; DXF por red (agua o alcantarillado) | F18-08 |
+| Abrir un DXF exportado en AutoCAD/BricsCAD y dejar constancia | F18-09 |
+| Reimportar reaplica las anclas de `biblioteca aplicar` | F18-10 |
 
 ### 4.4 Piezas, arquitectura y release
 
 - F17: pozo piloto (F17-03), tubería (F17-04), accesorios (F17-05), captación (F17-06), planta
   (F17-07), cadena solo con piezas de Blender (F17-08), topografía real (F17-09), biblioteca horneada
-  en el paquete (F17-10).
+  en el paquete (F17-10), topografía de levantamiento (F17-11), CRS y datum vertical (F17-12), calidad
+  del terreno (F17-13).
+- F18: buscar y filtrar (F18-01), acciones de revisión en la app (F18-02), inspector completo (F18-03),
+  corte orientable y exageración (F18-04), teclado y `--snap` con selección (F18-05), varias superficies
+  (F18-06), `validar` contra el terreno (F18-07), salidas que faltan (F18-08), DXF en un CAD real
+  (F18-09), reimportar con anclas (F18-10), ayuda de la CLI (F18-11), diámetro inventado (F18-12).
 - F15: agregado `Project` encapsulado (F15-02), catálogo como datos (F15-03), sin `match` por familia
   (F15-04), funciones gigantes (F15-05), errores tipados (F15-06), demos tras `feature` (F15-07),
   núcleo sin E/S (F15-08), sin `panic` (F15-10), fachada `api` y canal de comandos (F15-13…15).
@@ -264,15 +269,15 @@ revisión (F11-02, hoy cerrada por D2).
 
 ### 4.6 Contradicciones encontradas al verificar
 
-- El inspector muestra «diámetro 1,20 m» cuando el nodo no trae `diametro_interior`
+- (F18-12, MAM-1155) El inspector muestra «diámetro 1,20 m» cuando el nodo no trae `diametro_interior`
   (`Node::diametro`, `model.rs`, `unwrap_or(1.20)`): es un dato inventado en pantalla, contra D4 y
   F12-03. Debería mostrarse `—`.
-- El aviso del foco dice «Flechas para girar», pero la app no atiende el teclado.
-- `skills/redes-ingesta/references/plan.md` dice que el TIN del plan «se etiqueta siempre como
+- (F18-05) El aviso del foco dice «Flechas para girar», pero la app no atiende el teclado.
+- (F17-12) `skills/redes-ingesta/references/plan.md` dice que el TIN del plan «se etiqueta siempre como
   32717»; el código usa el EPSG del plan.
-- `CLAUDE.md` cita la variable `REDES_GPU`; la app lee `REDES_GPU3D=1` (`gpu3d::activo`). También
+- (corregido en d8fb19b) `CLAUDE.md` citaba la variable `REDES_GPU`; la app lee `REDES_GPU3D=1` (`gpu3d::activo`). También
   lista GeoJSON entre lo que importa `ingest`, que desde D5 no lo lee.
-- `redes proyecto aprobar --help` dice que exige «que no queden objetos pendientes»; también exige
+- (F18-11) `redes proyecto aprobar --help` dice que exige «que no queden objetos pendientes»; también exige
   que no queden observados (`E_STATE_OBSERVED`).
 
 ## 5. Cifras clave
