@@ -243,3 +243,95 @@ Total realista: **8–12 días** para la integración completa, con el lector ya
 4. **Licencias**: sin campo de licencia en el manifiesto no se puede distribuir el producto.
 5. **El pintor no perdona**: si se permite un modelo pesado sin `--gpu3d`, el visor se arrastra;
    hay que decidirlo explícitamente y avisar.
+
+## 10. F17-01: MCP de Blender frente a bpy sin ventana
+
+Evaluación del 28/11/2026 (decisión **D15** en docs/22). Pregunta: cómo deben modelar los agentes
+las familias paramétricas de D14 (pozo, tubería, accesorios, captación, planta) con Blender 5.1.
+Criterios de docs/18: fiabilidad con Geometry Nodes, uso sin intervención por subagentes y salida
+reproducible en el CI.
+
+### 10.1 Las dos vías
+
+| | MCP de Blender | `bpy` sin ventana |
+|---|---|---|
+| Cómo funciona | Un complemento dentro de Blender abre un socket TCP (por defecto `localhost:9876`) y un servidor MCP aparte, lanzado por el cliente por stdio, le reenvía órdenes | `blender -b --factory-startup --python-exit-code 1 --python script.py -- params.json`: un proceso por pieza, sin ventana, que termina al exportar |
+| Qué hace falta | Blender abierto con el complemento instalado y activo, el servidor MCP (Python 3.10+ y `uv` en el comunitario) y registrarlo en el cliente del agente | Solo `blender.exe` y el script del repo |
+| Sin ventana | Comunitario (`ahujasid/blender-mcp`, ahora `mcp-for-blender`): no; su guía supone la interfaz. Oficial (Blender Lab, `projects.blender.org/lab/blender_mcp`): tiene herramientas `*_for_cli` que lanzan un Blender en segundo plano, pero entonces es `bpy` sin ventana con un intermediario | Sí, es su modo normal |
+| Seguridad | Los dos exponen `execute_blender_code` (Python arbitrario) por un socket **sin autenticación**; el comunitario además envía telemetría anónima por defecto (`DISABLE_TELEMETRY`) y trae un «modo seguro» opcional | Ejecuta solo el script versionado; sin puertos abiertos |
+| Estado de la sesión | El agente modifica una escena viva: lo que hizo antes (él o el usuario) queda dentro y cambia el resultado | `--factory-startup` y `read_factory_settings(use_empty=True)`: cada horneado empieza de cero |
+| Reproducible | No por sí mismo: el código que manda el agente no queda en el repo | Sí: la receta es el script más el JSON de parámetros, los dos versionables |
+| Madurez | Oficial: v1.0.x (abril–septiembre de 2026), experimental de Blender Lab, pensado para consultar la API, depurar y hacer capturas. Comunitario: muy usado, sin versión estable declarada; avisa de tiempos de espera y de fallos en la primera conexión | Es la línea de órdenes de Blender de siempre |
+
+No se instaló ningún MCP: no aporta nada que el horneado sin ventana no haga y exigiría tocar la
+configuración del cliente. La comparación sale de la documentación de los dos proyectos.
+
+### 10.2 Prototipo medido
+
+`tools/blender/build_manhole.py` hornea un pozo de inspección con todo como parámetro (diámetro
+interior, profundidad, espesor de muro y losa, altura del cono, diámetro de la boca, espesor de la
+tapa, material del cuerpo y de la tapa, segmentos). El cuerpo y el cono son un sólido de revolución
+con vértices y caras explícitos; la tapa es un modificador de **Geometry Nodes** (Mesh Cylinder,
+Transform, Triangulate, Set Material) cuyas entradas se fijan desde el JSON, y el exportador glTF lo
+aplica (`export_apply`). Cada objeto lleva sus `redes_*` en `extras`.
+
+```powershell
+blender -b --factory-startup --python-exit-code 1 `
+    --python tools\blender\build_manhole.py -- out\f17-01\params.json
+# params.json: {"inner_diameter_m":1.5,"depth_m":4.0,"wall_thickness_m":0.2, ..., "output":"...\\pozo.glb"}
+```
+
+Medido en Windows 11 con Blender 5.1.0, tres horneados por juego de parámetros:
+
+| Juego | DI / prof. / espesor (m) | Segmentos | Triángulos | Bytes | Volumen medido (m³) | Cerrada | 3 horneados idénticos | Tiempo por horneado |
+|---|---|---:|---:|---:|---:|---|---|---:|
+| a | 1,2 / 2,5 / 0,15 | 48 | 764 | 37 164 | 1,7022 | sí | **sí** | 2,04–2,16 s |
+| b | 1,5 / 4,0 / 0,20 | 64 | 1 020 | 49 272 | 4,4937 | sí | **sí** | 2,02–2,03 s |
+| c | 0,9 / 1,6 / 0,10 | 32 | 508 | 25 464 | 0,5689 | sí | **sí** | 2,02–2,06 s |
+
+- **Tiempo**: ~2,0 s por pieza, de los que ~1,55 s son el arranque de Blender
+  (`--python-expr "pass"`) y el resto construir y exportar (el exportador tarda 0,05 s). Hornear
+  muchas piezas en un mismo proceso amortiza el arranque; eso es de F17-02.
+- **Determinismo**: los `.glb` de los mismos parámetros salen idénticos byte a byte. La primera
+  versión, con `bmesh.ops.spin` + `remove_doubles` + `triangulate`, **no** lo era: mismos
+  vértices y mismos triángulos, pero en otro orden en cada ejecución (cambiaba el búfer de índices
+  del cuerpo). Se sustituyó por listas explícitas de vértices y caras (`from_pydata`). La parte de
+  Geometry Nodes salió idéntica desde el principio. Regla para F17: en la receta, nada de
+  operadores `bmesh` que fusionan o reordenan; vértices y caras explícitos o Geometry Nodes.
+- **Errores**: sin `--python-exit-code 1`, una excepción de Python deja a Blender salir con código
+  **0** y sin `.glb` (pasó con un tipo de árbol de nodos mal escrito). Con la opción sale con 1.
+  Los parámetros inválidos (`sys.exit` con mensaje) salen con 1 en los dos casos.
+- **Comprobación del volumen** (juego b): a mano, losa 0,567 + fuste 3,204 + cono 0,654 =
+  4,425 m³ con círculos perfectos; con 64 segmentos el polígono da ≈ 4,418, y la CLI mide 4,4178
+  de hormigón más 0,0759 de tapa (π·0,55²·0,08 = 0,0760).
+
+### 10.3 Entra en la biblioteca sin cambios
+
+- `redes biblioteca revisar --glb pozo_b_1.glb --familia saneamiento.pozo`: 2 primitivas,
+  1 020 triángulos, materiales `hormigon_armado` y `fundicion`, base en `z = 0`, dimensiones
+  1,9 × 1,9 × 4,08 m, 0 errores y 0 avisos.
+- `redes biblioteca cantidades`: `cerrada: true`, 0 aristas abiertas, volumen por material y los
+  `extras` `nodo.redes_*`.
+- `redes biblioteca importar` + `lista`: se importa y se anota en el manifiesto sin errores.
+
+Huecos vistos (no se arreglan aquí; pasan a F17-02/F17-03):
+
+- `cantidades` guarda los `extras` de **un** nodo (el cuerpo); los de la tapa se pierden.
+- `importar` deja `extras` vacío en el manifiesto (el `.glb` normalizado no los conserva).
+- `dn_mm` queda nulo: el pozo no tiene DN; su cota principal es el diámetro interior.
+
+### 10.4 Recomendación
+
+**`bpy` sin ventana con scripts versionados en `tools/blender/`** como única vía para hornear
+piezas, en local y en el CI. Es la única que cumple los tres criterios: Geometry Nodes funciona
+igual sin ventana, un subagente lo lanza con una orden y lee el código de salida, y la misma
+receta con los mismos parámetros da los mismos bytes.
+
+El MCP oficial de Blender Lab puede servir, **opcional y fuera del flujo**, al usuario o a un
+agente para consultar la API de Python o mirar una escena mientras escribe una receta; nunca para
+producir piezas, porque lo que hace no queda en el repo ni se puede repetir. El comunitario se
+descarta (sin modo sin ventana, telemetría por defecto, socket sin autenticación).
+
+Siguen abiertas en F17-02: si la app hornea bajo demanda (CLI → Blender → caché por parámetros) o
+reconstruye la receta en el núcleo; cuántas piezas por proceso; y si el CI instala Blender para
+hornear o solo comprueba los `.glb` ya horneados (hoy el CI no tiene Blender).

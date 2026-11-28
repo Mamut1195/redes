@@ -267,7 +267,7 @@ Frentes transversales, revisados al cerrar cada ticket:
 
 ---
 
-## F17 — Familias paramétricas en Blender (D14) — **siguiente**
+## F17 — Familias paramétricas en Blender (D14) — **en curso**
 
 Blender es la **única fuente visual** de las piezas; la geometría de `parts.rs`/`parts_cadena.rs`
 queda como respaldo cuando falta modelo. Los datos (DN, cotas, estado) siguen saliendo del modelo de
@@ -277,7 +277,7 @@ modelan agentes con Blender 5.1 sin ventana; el usuario aprueba cada pieza por c
 
 | ID | P | Ticket | Alcance | Aceptación | Días |
 |---|---|---|---|---|---|
-| F17-01 | P0 | **Evaluar MCP de Blender frente a `bpy` sin ventana** | fiabilidad con Geometry Nodes, uso sin intervención por subagentes, reproducible en CI | informe con recomendación en docs/17 y decisión en docs/22 | 0,5 |
+| F17-01 | P0 | ~~**Evaluar MCP de Blender frente a `bpy` sin ventana**~~ **hecho** (D15): `bpy` sin ventana con scripts en `tools/blender/`; prototipo de pozo a ~2,0 s por pieza y `.glb` idénticos byte a byte (docs/17 §10) | fiabilidad con Geometry Nodes, uso sin intervención por subagentes, reproducible en CI | informe con recomendación en docs/17 y decisión en docs/22 | 0,5 |
 | F17-02 | P0 | **Cómo llegan los parámetros a la geometría** | hornear bajo demanda (CLI → Blender → caché `.glb` por parámetros) o exportar la receta de la familia y reconstruirla en el núcleo; la app no depende de Blender en ejecución salvo decisión explícita | decisión D# con prototipo medido | 1,5 |
 | F17-03 | P0 | **Pieza piloto: pozo de inspección paramétrico** | cuerpo, cono, escalones, tapa, base y espesores como entradas; anclas por entrada/salida; manifiesto | capturas iso, corte y foco aprobadas por el usuario; prueba de contrato del `.glb` | 2 |
 | F17-04 | P1 | **Tubería con campana y espiga, y juntas** | DN, espesor, material y longitud | ídem | 1,5 |

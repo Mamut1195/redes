@@ -11,7 +11,9 @@ resume lo imprescindible y no la sustituye; si se contradicen, manda `CLAUDE.md`
 - Redes es un visor y revisor 3D de redes de agua y alcantarillado. **No calcula, no verifica
   normativa y no edita el diseño** (docs/01 §1, docs/22 D4 y D12).
 - Código nuevo en inglés y que se explique solo; interfaz, CLI y docs en español (D13).
-- Las piezas se dibujan con familias paramétricas de Blender (D14).
+- Las piezas se dibujan con familias paramétricas de Blender (D14). Se hornean sin ventana con un
+  script versionado en `tools/blender/`, no por un MCP (D15):
+  `blender -b --factory-startup --python-exit-code 1 --python tools/blender/<script>.py -- <params.json>`.
 - Orden de fases y frentes transversales: `docs/18-backlog.md` §Orden de fases vigente. Estado y
   traspaso: `docs/23-estado-y-pendientes.md`. Decisiones: `docs/22-decisiones.md`.
 - Antes de leer código, usa **Codegraph** (`codegraph explore|callers|impact <símbolo> .`; si falta el

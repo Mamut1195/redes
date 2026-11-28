@@ -172,6 +172,20 @@ mapas en el montón), así que la cifra de antes se queda corta.
 El paso guarda lo que cambió, no el tamaño de la red: el umbral de la prueba es < 1 % de las
 copias y < 4 kB por paso.
 
+### 4.6 Horneado de piezas en Blender sin ventana (F17-01)
+
+Pozo prototipo `tools/blender/build_manhole.py`, Blender 5.1.0, Windows 11, 28/11/2026; tres
+horneados por juego de parámetros (detalle en docs/17 §10.2).
+
+| Medida | Valor |
+|---|---:|
+| Tiempo por pieza (508–1 020 triángulos) | **2,0–2,2 s** |
+| de ellos, arranque de Blender (`-b --factory-startup --python-expr "pass"`) | 1,54–1,68 s |
+| `.glb` iguales byte a byte con los mismos parámetros | **3 de 3** en los 3 juegos |
+
+Se rehace con `blender -b --factory-startup --python-exit-code 1 --python tools/blender/build_manhole.py -- params.json`
+dos veces y comparando `Get-FileHash` de las salidas.
+
 ## 5. Pruebas
 
 | Suite | Pruebas |
