@@ -259,7 +259,9 @@ volúmenes ni diseño.
 - F16: fixtures reales (F16-03), cobertura (F16-04), CI de publicación (F16-05), instalador
   (F16-06), icono (F16-07), CHANGELOG (F16-08), licencias (F16-09), mensajes para personas
   (F16-10), avisos de compilación (F16-11), `--pretty` automático (F16-12).
-- Fuera de v1, sin ticket: IFC/Revit, servidor MCP, modo lote, autoguardado, atributos definidos por
+- F19 (D19): escena de Blender del proyecto (F19-01), IFC 4.3 para Bonsai (F19-02), IFC preparado para 4D
+  (F19-03), planta 2D en DXF (F19-04), perfiles longitudinales en DXF (F19-05).
+- Fuera de v1, sin ticket: Revit nativo (lo cubre el IFC), servidor MCP, modo lote, autoguardado, atributos definidos por
   el usuario.
 
 ### 4.5 Decisiones pendientes que cambian funciones

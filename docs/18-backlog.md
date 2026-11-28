@@ -253,7 +253,8 @@ Un solo frente abierto a la vez; no se abre una fase sin cerrar la anterior.
 2. **F17 — Familias paramétricas en Blender** (D14). Va **antes** de F15: los IDs de F15/F16 se conservan porque ya están en Linear.
 3. **F15 — Arquitectura y mantenibilidad**, ampliada con la fachada única y el canal de comandos (ver F15-13…F15-15).
 4. **F18 — Revisión completa en la app y salidas que faltan** (huecos del inventario docs/02 §4), sobre la fachada de F15.
-5. **F16 — Release v1.**
+5. **F19 — Entregables: escena de Blender, IFC para BIM (Bonsai) y planos de planta y perfil en DXF** (D19).
+6. **F16 — Release v1.**
 
 Frentes transversales, revisados al cerrar cada ticket:
 
@@ -341,10 +342,30 @@ F18-07 y F18-12, que pueden adelantarse si bloquean una revisión real.
 | F18-11 | P2 | **Ayuda de la CLI coherente** | `proyecto aprobar --help` dice que bloquea pendientes **y observados**; repasar el resto de ayudas contra el código | prueba que compara la ayuda con los códigos de `esquema` | 0,5 |
 | F18-12 · [MAM-1155](https://linear.app/mamutsystems/issue/MAM-1155) | P0 | **No inventar el diámetro del pozo** | `Node::diametro` usa `unwrap_or(1.20)`: el inspector muestra un dato que no existe; mostrar `—` (D4); en curso dentro de F17-03 | pozo sin `diametro_interior` → `—` | 0,5 |
 
-Fuera de v1, sin ticket: nubes LAS/LAZ, IFC/Revit, servidor MCP, modo lote, autoguardado, atributos
+Fuera de v1, sin ticket: nubes LAS/LAZ, Revit nativo (el IFC de F19-02 lo cubre), servidor MCP, modo lote, autoguardado, atributos
 definidos por el usuario. LandXML y curvas de nivel de Civil 3D entran por la skill de topografía (F17-11).
 
 **Total F18: 17,5 días.**
+
+---
+
+## F19 — Entregables: escena de Blender, IFC para BIM y planos de planta y perfil (D19) (P1)
+
+Un proyecto revisado sale listo para seguir trabajando en otras herramientas, sin rehacer nada: una
+escena de Blender para visualización, un IFC para metodología BIM en Bonsai (antes BlenderBIM) y
+dibujos de planta y perfil en DXF para que en AutoCAD se armen los planos. Todo sale de los datos
+declarados y de las piezas horneadas (D14–D16); nada se calcula ni se corrige al exportar.
+
+| ID | P | Ticket | Alcance | Aceptación | Días |
+|---|---|---|---|---|---|
+| F19-01 | P1 | **Escena de Blender del proyecto** | `redes exportar blender --salida x.blend`: Blender sin ventana arma el terreno, las piezas horneadas colocadas (respaldo si falta), materiales por material declarado, colecciones por red, familia y estado de revisión, cámaras iso/planta/foco y luz; propiedades `redes_*` con los datos y su fuente en cada objeto; coordenadas locales con el origen guardado (CLAUDE.md, f64) | abrir el `.blend` en Blender 5.1 y renderizar la cadena sin tocar nada; captura aprobada por el usuario | 2,5 |
+| F19-02 | P1 | **Exportar IFC 4.3 para Bonsai** | `redes exportar ifc --salida x.ifc` con IfcOpenShell (en Blender sin ventana o Python aparte, como D15): `IfcProject` georreferenciado (`IfcMapConversion` + `IfcProjectedCRS` con el EPSG y el datum vertical, F17-12); tubos `IfcPipeSegment`, pozos y cámaras `IfcDistributionChamberElement`, accesorios `IfcPipeFitting`, válvulas `IfcValve`, tanques `IfcTank`, unidades de planta con su clase IFC (tabla familia → clase IFC en docs/16); sistemas `IfcDistributionSystem` (agua, alcantarillado); terreno como `IfcGeographicElement` con malla; geometría de las piezas horneadas; `Pset_Redes` con cada `Dato` (valor, unidad, fuente), código, estado de revisión y observaciones | el IFC valida con IfcOpenShell y abre en Bonsai con clases, sistemas, propiedades y georreferencia; prueba de contrato sin Blender | 4 |
+| F19-03 | P2 | **IFC preparado para 4D** | agrupar por etapa constructiva si el plan la declara (atributo `etapa`, `IfcGroup`/`IfcZone`), para que el cronograma (`IfcWorkSchedule`/`IfcTask`) se arme en Bonsai; la app no planifica ni inventa etapas | proyecto con dos etapas → dos grupos en Bonsai | 1 |
+| F19-04 | P1 | **Planta 2D en DXF para planos** | `redes exportar planta --salida planta.dxf`: dibujo en planta (Z=0) con capas por red, familia, DN y estado; símbolos de pozo, válvula, hidrante y unidades de planta como bloques; etiquetas de código, DN, material, longitud y pendiente declaradas (texto con estilo propio, sin solapes graves); curvas de nivel (F18-08) y bordes del levantamiento; sin cajetín: los planos se arman en AutoCAD | abre en AutoCAD/BricsCAD (F18-09) con capas y bloques limpios; prueba de contrato de capas y textos | 3 |
+| F19-05 | P1 | **Perfiles longitudinales en DXF** | `redes exportar perfiles --colector <código>\|--todos --salida perfiles.dxf`: por colector, línea de terreno (TIN), tubo con solera y clave, pozos con tapa y fondo, escalas horizontal y vertical elegibles, retícula de cotas y guitarra (abscisa, cota terreno, cota solera, profundidad, DN, longitud, pendiente) con los datos declarados; lo que falte sale `—`; un perfil por colector, separados en el espacio modelo | perfil de la cadena abierto en AutoCAD; los valores de la guitarra coinciden con `redes perfil --json` | 3 |
+
+**Total F19: 13,5 días.** Depende de F17 (piezas horneadas y topografía real) y de F18-08 (curvas de
+nivel). Va antes de F16 (release v1).
 
 ---
 
