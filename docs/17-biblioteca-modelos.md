@@ -620,3 +620,6 @@ Para el usuario: aprobar la forma de §12.1 (sobre todo el cono excéntrico haci
 plana de los pozos someros, la banqueta de medio DN con fondo plano y que la banqueta solo exista
 con una salida con DN) y las capturas.
 
+## 13. Familias de F17-04…F17-07 y topografía
+
+Los informes de cada familia horneada están en `docs/familias/`: tubería ([F17-04](familias/F17-04-tuberia.md)), accesorios ([F17-05](familias/F17-05-accesorios.md)), captación ([F17-06](familias/F17-06-captacion.md)), planta ([F17-07](familias/F17-07-planta.md)) y topografía ([F17-11](familias/F17-11-topografia.md)). Cada uno trae la partición dato/forma, los pilotos versionados en `tools/blender/piloto/`, las cifras y las decisiones pendientes.

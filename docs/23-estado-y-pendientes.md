@@ -12,8 +12,8 @@ Documento de traspaso: qué está hecho, qué falta y por dónde seguir. Las cif
 | Modelos | importación, validación, medidas, caché, dibujo en el pase 3D, política de pesados, foco sobre el modelo, **selector en el inspector** y **anclas de conexión** (se leen del `.glb` y la tubería nace en el puerto, no en el centro) |
 | Cantidades | `redes cantidades`: unidades, longitudes por DN/material, volúmenes, pesos, discrepancias y CSV |
 | CAD | ida y vuelta DXF sin pérdida (46 familias y 7 arcos vuelven idénticos), **bloques con atributos** por familia y GeoJSON con atributos |
-| Calidad | **313 pruebas** (núcleo 170 + 13 validar + 5 acta + 8 reimportar + 33 ingesta + 3 cotas + 2 rendimiento + 3 índices + 1 banco + 2 escena + 6 deshacer + 3 pozo horneado, app 28, CLI 19 + 3 + 4 + 2 acta + 2 reimportar + 5 hornear, doctest 1), arnés de 46 mutaciones, CI en GitHub **en verde** |
-| Formato (F15-01, D10) | solo se abre la versión vigente: `redes.project/3` (otra versión → `E_PROJ_SCHEMA`, con pista para regenerar desde la entrega) y `redes.plan/1` (otra → `E_FMT_VERSION`); sin migraciones antes de v1; demos de `demo/` regeneradas a `/3` |
+| Calidad | **402 pruebas** en 30 binarios de prueba (con Blender instalado; las de Blender se saltan sin él), arnés de **60 mutaciones**, CI en GitHub |
+| Formato (F15-01, D10) | solo se abre la versión vigente: `redes.project/4` (otra versión → `E_PROJ_SCHEMA`, con pista para regenerar desde la entrega) y `redes.plan/1` (otra → `E_FMT_VERSION`); sin migraciones antes de v1; demos de `demo/` regeneradas a `/4` (F17-11) |
 | Revisor (F13) | `redes validar` geométrico con panel Validación (F13-01, D6), `redes perfil` con botón Perfil en el inspector (F13-02), observaciones con historial (`objeto observar/observaciones/cerrar-observacion`, panel en el inspector, `redes.project/3`, F13-03, D7; sin conversión de `.redes` anteriores), `redes proyecto diff` (F13-05, compara estado y cada observación por id), `redes acta` en CSV (Excel, BOM y «;») o HTML imprimible (F13-04, sin autor si no se registró, D2), `redes importar reimportar` (F13-06, D9: empareja por código, conserva estados y observaciones, reinicia a pendiente el aprobado cuyo diseño cambió y exige `--aceptar-bajas` para dar de baja objetos con revisión) |
 | Índices (F14-01) | `Project` indexa por id, por código y nodo → tramos (`indice.rs`, no se serializa; se rehace al abrir y al reimportar); 50k tramos: ingesta 91 s → 485 ms, escena 4,0 s → 49 ms, reimportar 167 s → 912 ms (`docs/21` §4.1). Un código dado de baja se puede reutilizar: la unicidad de códigos al abrir solo cuenta objetos vivos (los ids, todos). **D11**: nodos y tramos vivos comparten un único espacio de códigos; `add_node`/`add_link` rechazan el choque (`E_STATE_DUPLICATE_NAME`) y la ingesta lo descarta con aviso. La app busca por código con el índice (`node_by_code_mut`) |
 | Pase 3D (F14-02, F14-03) | La cámara no regenera la malla (`ClaveMalla`, exageración vertical en la matriz, `rebuild()` sin `build_opts` en `--gpu3d`) y el búfer no se copia por frame (`Arc<[u8]>`, `Geometria::tomar`). Ciudad: cambio de cámara 6,03 ms → 0,008 ms; 30 → 0 regeneraciones en 30 cambios; 3,6 MB → 0 copiados por frame (`docs/21` §4.2). La escena `--snap pozos` vuelve a mostrar el pozo (miraba a un punto fijo de un demo anterior; lienzo vacío con y sin `--gpu3d`) |
@@ -35,7 +35,7 @@ y en Linear (MAM-1085…MAM-1139). Se trabaja **por fases en orden**; no se abre
 | F12 — Corrección de dominio | **cerrada** (F12-01…F12-15). Ingesta por skill guiada (D5) |
 | F13 — Herramientas del revisor | **cerrada** (F13-01…F13-06): `redes validar`, perfil longitudinal, observaciones con historial, `redes acta`, `proyecto diff` y `importar reimportar` |
 | F14 — Rendimiento con redes reales | **cerrada** (F14-01…F14-10). F14-04 aceptada por el usuario con ×2,7 a 20k (×3,7 a 50k, ×4,3 contando el perfil) en lugar del ×3 estricto; F14-08 (deshacer por diferencias) cerró la fase |
-| F17 — Familias paramétricas en Blender | **en curso** (D14): Blender es la única fuente visual; familias paramétricas en todo; pieza piloto = pozo de inspección; termina con el demo de la cadena completa dibujado solo con piezas de Blender. Va antes de F15 (orden en docs/18 §Orden de fases vigente). **F17-01 hecha** (D15): se hornea con `bpy` sin ventana y scripts versionados (`tools/blender/build_manhole.py`, prototipo de pozo: ~2,0 s por pieza, `.glb` idénticos byte a byte; docs/17 §10), no con un MCP. **F17-02 hecha** (D16): `redes biblioteca hornear` resuelve los parámetros de cada objeto según el contrato `tools/blender/X.receta.json`, hornea en **un** proceso de Blender solo lo que no está en la caché `biblioteca/horneado/<clave>.glb` (100 pozos: 7,2 s; todo en caché: 86 ms y sin Blender) y apunta `modelo` a la pieza; un dato que falta no se rellena: queda la pieza de respaldo. **F17-03 hecha, falta que el usuario apruebe capturas y forma** (docs/17 §12): la receta del pozo dibuja cuerpo, cono excéntrico/concéntrico, escalones, marco, tapa (Geometry Nodes), losa y banqueta con canal; dato = diámetro interior, profundidad, espesor de pared y material (D17) más los tramos que llegan, que dan un ancla por tubo a su cota de solera (sin cota, `sin_ancla` y `W_SIN_ANCLA`); el modelo se apoya en solera − losa (ancla `solera`) y **sustituye** a la paramétrica con y sin `--gpu3d`; `extras` por nodo; `importar` conserva `extras` y anclas; la app ya no tumbaba de lado los `.glb` de Blender; la cadena hornea sus 18 pozos (7 piezas, 2,5 s) con el espesor como `Dato` de demostración; piloto versionado en `tools/blender/piloto/` con prueba de contrato sin Blender. Hecho también F18-12 (MAM-1155): el inspector muestra `—` sin `diametro_interior`. Siguen F17-04 (tubería) y el resto de familias |
+| F17 — Familias paramétricas en Blender | **en curso** (D14): Blender es la única fuente visual; familias paramétricas en todo; pieza piloto = pozo de inspección; termina con el demo de la cadena completa dibujado solo con piezas de Blender. Va antes de F15 (orden en docs/18 §Orden de fases vigente). **F17-01 hecha** (D15): se hornea con `bpy` sin ventana y scripts versionados (`tools/blender/build_manhole.py`, prototipo de pozo: ~2,0 s por pieza, `.glb` idénticos byte a byte; docs/17 §10), no con un MCP. **F17-02 hecha** (D16): `redes biblioteca hornear` resuelve los parámetros de cada objeto según el contrato `tools/blender/X.receta.json`, hornea en **un** proceso de Blender solo lo que no está en la caché `biblioteca/horneado/<clave>.glb` (100 pozos: 7,2 s; todo en caché: 86 ms y sin Blender) y apunta `modelo` a la pieza; un dato que falta no se rellena: queda la pieza de respaldo. **F17-03 hecha, falta que el usuario apruebe capturas y forma** (docs/17 §12): la receta del pozo dibuja cuerpo, cono excéntrico/concéntrico, escalones, marco, tapa (Geometry Nodes), losa y banqueta con canal; dato = diámetro interior, profundidad, espesor de pared y material (D17) más los tramos que llegan, que dan un ancla por tubo a su cota de solera (sin cota, `sin_ancla` y `W_SIN_ANCLA`); el modelo se apoya en solera − losa (ancla `solera`) y **sustituye** a la paramétrica con y sin `--gpu3d`; `extras` por nodo; `importar` conserva `extras` y anclas; la app ya no tumbaba de lado los `.glb` de Blender; la cadena hornea sus 18 pozos (7 piezas, 2,5 s) con el espesor como `Dato` de demostración; piloto versionado en `tools/blender/piloto/` con prueba de contrato sin Blender. Hecho también F18-12 (MAM-1155): el inspector muestra `—` sin `diametro_interior`. **Aprobado por el usuario** (28/11). **F17-04, F17-05, F17-06 y F17-07 hechas, pendientes de aprobación de capturas** (informes en `docs/familias/`): tubería por tramo comercial con campana, espiga y junta, instanciada a lo largo del tramo y recortada en la pared del pozo o en la boca del puerto del accesorio (`pipe_layout`); codo, tee, reducción, válvulas de compuerta, mariposa, retención y aire e hidrante de columna, girados con sus tubos; bocatoma de barraje fijo, desarenador longitudinal y cámaras de carga y quiebre; 10 unidades de PTAP y PTAR. **F17-11 y F17-12 hechas** (D18): `redes importar topografia` con el contrato `redes.topografia/1`, TIN restringido (`spade`) con quiebres, contorno y huecos, `importar terreno` retirado, UTM norte y sur, datum vertical (`E_DATUM`) y referencia de topografía en la skill. Siguen F17-09 (ejemplo sobre Copernicus), F17-08 (recorrido de la cadena completa) y F17-10 (biblioteca en el paquete) |
 | F15 — Arquitectura | después de F17, ampliada con la fachada `api`, el canal único de comandos y las capas sin ciclos (F15-13…15); **F15-01 hecha por adelantado** (solo la versión vigente del `.redes`, D10, MAM-1115). Falta agregado, catálogo como datos y errores tipados |
 | F16 — Release v1 | pendiente (F16-01 ya cerrada por F12-09) |
 
@@ -50,19 +50,15 @@ Pendientes menores conocidos de F13 (no bloquean F14):
 - Cada reimportación añade una entrada a `fuentes` aunque la entrega sea idéntica.
 - La escena `--snap` no permite seleccionar un tramo (no se puede capturar el inspector con un objeto elegido).
 
-Pendientes conocidos de F17-03 (no bloquean F17-04):
+Pendientes conocidos de F17 (no bloquean F17-09):
 
-- El usuario tiene que aprobar las capturas de `out/f17-03/` y la forma de docs/17 §12.1 (cono
-  excéntrico hacia −X, losa superior plana en pozos someros, banqueta de medio DN con fondo plano solo
-  si hay salida con DN).
-- El pase 3D no corta: el corte vertical solo se ve sin `--gpu3d`. Con terreno, en `--gpu3d` el pozo
-  enterrado no se ve (solo la tapa); la escena `pozo-modelo` quita el terreno.
-- El modelo es una sola parte en el pintor: la explosión y los rayos X no separan cuerpo, escalones y
-  tapa del `.glb` (sí en la paramétrica).
-- Los tubos siguen naciendo en el centro del pozo: `hornear` no llama a `anclar_conexiones` (movería
-  el trazado del diseño); queda para decidir si el dibujo del tubo debe cortarse en el ancla.
-- Limpieza de la caché (`.glb`/`.blend` que ya no usa nadie) y si el `.blend` va siempre en redes grandes
-  (de F17-02).
+- El usuario aprueba las capturas de `out/f17-04…07/` y las particiones dato/forma de cada informe de `docs/familias/`.
+- Importar un plan en un proyecto vacío deja `origin` en (0,0): de cerca, `--gpu3d` pierde precisión f32 (ticket aparte).
+- `biblioteca aplicar` (`anclar_conexiones`) ignora el giro de la pieza.
+- Válvulas de EPANET como enlace (sin nodo) no se hornean; subtipos sin receta (5 bocatomas, 4 desarenadores, 6 cámaras, Parshall, desinfección, reservorio, laguna, edificios) siguen con la pieza de respaldo (F20).
+- Discrepancias de la demo sin corregir: BC-001 `altura_barraje` 1,4 frente a cresta − fondo 1,8; CA-002 `altura_caida` frente al tubo que llega.
+- El pase 3D no corta (el corte solo sin `--gpu3d`) y el pintor ordena mal a veces caras grandes de las unidades de planta.
+- Hornear todas las recetas de un proyecto en una llamada; limpieza de la caché.
 
 Pendientes conocidos de F14 (fase cerrada; no bloquean F17):
 
@@ -93,8 +89,8 @@ Pendientes conocidos de F14 (fase cerrada; no bloquean F17):
 ## Cómo retomar
 
 ```powershell
-cargo test --workspace                       # 288 pruebas
-powershell -File scripts/mutar.ps1           # 40 mutaciones
+cargo test --workspace                       # 402 pruebas
+powershell -File scripts/mutar.ps1           # 60 mutaciones
 powershell -File scripts/empaquetar.ps1      # zip portable
 gh run list --limit 3                        # CI
 ```
