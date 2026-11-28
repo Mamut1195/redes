@@ -374,6 +374,9 @@ pub struct Project {
     pub name: String,
     /// CRS del proyecto, p. ej. `EPSG:32717`.
     pub crs: String,
+    /// Vertical datum of the network heights, as the plan declared it (F17-12).
+    #[serde(rename = "datum_vertical")]
+    pub vertical_datum: crate::terrain::VerticalDatum,
     /// Origen local para el render (resta en f64 antes de pasar a f32).
     pub origin: P2,
     pub revision: u64,
@@ -429,6 +432,7 @@ impl Project {
             id: format!("prj_{:08x}", fnv1a(name.as_bytes())),
             name: name.into(),
             crs: crs.into(),
+            vertical_datum: Default::default(),
             origin: P2::new(0.0, 0.0),
             revision: 0,
             estado: EstadoProyecto::Importado,

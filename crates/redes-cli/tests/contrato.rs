@@ -614,7 +614,7 @@ fn las_observaciones_tienen_historial() {
     assert_eq!(j["data"]["cerradas"], serde_json::json!([1]));
 
     let guardado = std::fs::read_to_string(&ruta).unwrap();
-    assert!(guardado.contains("\"redes.project/3\""));
+    assert!(guardado.contains("\"redes.project/4\""));
     assert!(guardado.contains(&format!("objeto.observar {pz} #2")));
     assert!(guardado.contains(&format!("objeto.cerrar_observacion {pz} #1")));
     assert!(guardado.contains(&format!("objeto.aprobar {cl} #1")));
@@ -792,7 +792,7 @@ fn proyecto_diff_reporta_altas_bajas_y_cambios_y_escribe_csv() {
     assert!(esq.contains("proyecto diff") && esq.contains("E_STATE_CRS_DISTINTO"));
 }
 
-/// D10 (F15-01): solo se abre `redes.project/3`; un `/2` da `E_PROJ_SCHEMA` (código 4) con la
+/// D10 (F15-01): solo se abre `redes.project/4`; un `/3` da `E_PROJ_SCHEMA` (código 4) con la
 /// pista de regenerarlo, y un plan que no es `redes.plan/1` da `E_FMT_VERSION` (código 7).
 #[test]
 fn solo_abre_la_version_vigente_del_proyecto_y_del_plan() {
@@ -804,10 +804,10 @@ fn solo_abre_la_version_vigente_del_proyecto_y_del_plan() {
         0
     );
     let actual = std::fs::read_to_string(&ruta).unwrap();
-    assert!(actual.contains("\"redes.project/3\""));
+    assert!(actual.contains("\"redes.project/4\""));
     std::fs::write(
         &ruta,
-        actual.replacen("\"redes.project/3\"", "\"redes.project/2\"", 1),
+        actual.replacen("\"redes.project/4\"", "\"redes.project/3\"", 1),
     )
     .unwrap();
     let s = corre(&["-p", r, "proyecto", "info"], &d);
@@ -818,7 +818,7 @@ fn solo_abre_la_version_vigente_del_proyecto_y_del_plan() {
     assert_eq!(diag["code"], "E_PROJ_SCHEMA");
     let msg = diag["message"].as_str().unwrap();
     assert!(
-        msg.contains("redes.project/2") && msg.contains("redes.project/3"),
+        msg.contains("redes.project/3") && msg.contains("redes.project/4"),
         "{msg}"
     );
     assert!(

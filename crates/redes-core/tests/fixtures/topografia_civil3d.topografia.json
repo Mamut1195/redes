@@ -1,0 +1,20 @@
+{
+  "schema": "redes.topografia/1",
+  "nombre": "EG",
+  "crs": "EPSG:32717",
+  "datum_vertical": "egm2008",
+  "fuente": "Autodesk Civil 3D 2024 (topografia_civil3d.landxml.xml)",
+  "puntos": [
+    {"numero": "1", "e": 760000.0, "n": 9796000.0, "z": 2500.0, "descripcion": "TN", "clase": "terreno"},
+    {"numero": "2", "e": 760040.0, "n": 9796000.0, "z": 2501.0, "descripcion": "TN", "clase": "terreno"},
+    {"numero": "3", "e": 760040.0, "n": 9796040.0, "z": 2502.0, "descripcion": "TN", "clase": "terreno"},
+    {"numero": "4", "e": 760000.0, "n": 9796040.0, "z": 2501.5, "descripcion": "TN", "clase": "terreno"},
+    {"numero": "5", "e": 760020.0, "n": 9796005.0, "z": 2500.2, "descripcion": "EJE", "clase": "quiebre"},
+    {"numero": "6", "e": 760020.0, "n": 9796035.0, "z": 2501.3, "descripcion": "EJE", "clase": "quiebre"},
+    {"numero": "7", "e": 760010.0, "n": 9796020.0, "z": 2500.9, "descripcion": "ARB", "clase": "excluido"}
+  ],
+  "quiebres": [
+    {"descripcion": "EJE", "puntos": ["5", "6"]}
+  ],
+  "contorno": ["1", "2", "3", "4"]
+}

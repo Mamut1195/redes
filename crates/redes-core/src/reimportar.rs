@@ -176,6 +176,7 @@ pub fn preparar(
     // cota de terreno que el plan no declara, igual que en la primera importación.
     let mut entrega = Project::new(&p.name, &p.crs);
     entrega.terrain = p.terrain.clone();
+    entrega.vertical_datum = p.vertical_datum;
     let importacion = match formato {
         Formato::Plan => ingest::import_plan(&mut entrega, archivo)?,
         Formato::Dxf => ingest::import_dxf(&mut entrega, archivo, 0.0)?,
@@ -272,6 +273,7 @@ pub fn preparar(
     nuevo.enlaces = entrega.enlaces;
     nuevo.next_slot = entrega.next_slot;
     nuevo.terrain = entrega.terrain;
+    nuevo.vertical_datum = entrega.vertical_datum;
     nuevo.name = entrega.name;
     nuevo.crs = entrega.crs;
     nuevo.fuentes.extend(entrega.fuentes);

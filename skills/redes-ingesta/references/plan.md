@@ -38,10 +38,11 @@ Derivado de `crates/redes-core/src/ingest.rs` (`Plan`, `PlanProyecto`, `PlanObje
 |---|---|---|---|
 | `schema` | texto | `redes.plan/1` | exactamente `redes.plan/1` (D10); otra versión de `redes.plan/*` → `E_FMT_VERSION`; algo que no es un plan → `E_FMT_UNSUPPORTED`; si falta, se toma `/1` |
 | `proyecto.nombre` | texto | **obligatorio** (puede ser `""`) | si no está vacío, renombra el proyecto |
-| `proyecto.crs` | texto | `EPSG:32717` | **Pregúntalo** si el origen no lo declara. Ecuador continental: `EPSG:32717` (17S) o `EPSG:32718` (18S). `32617` es 17N: desplaza 10 000 km |
+| `proyecto.crs` | texto | **obligatorio** (vacío → `E_CRS`) | **Pregúntalo** si el origen no lo declara. UTM WGS 84: `EPSG:327NN` (sur; Ecuador continental `32717` = 17S o `32718` = 18S) o `EPSG:326NN` (norte; Colombia `32618`). Confundir hemisferios (`32617` frente a `32717`) desplaza 10 000 km: compruébalo con la magnitud del norte |
+| `proyecto.datum_vertical` | texto | `no_declarado` | datum de las cotas: `egm2008`, `egm96`, `elipsoidal` o `no_declarado`. Si el proyecto ya tiene un terreno en otro datum declarado → `E_DATUM` (la app no convierte). Pregúntalo; no lo supongas (`topografia.md` §5) |
 | `proyecto.fuente_app` | texto | `"plan"` | app y versión de origen (`"EPANET 2.2"`) |
 | `proyecto.fuente_archivo` | texto | ruta del plan | nombre del archivo de origen, no del plan |
-| `terreno` | `[[E,N,Z], …]` | sin terreno | puntos del TIN, en el mismo CRS. Hoy el TIN se etiqueta siempre como 32717 |
+| `terreno` | `[[E,N,Z], …]` | sin terreno | puntos del TIN sin restricciones, en el CRS y el datum del plan (el TIN queda en ese EPSG y datum). Para un levantamiento con números, descripciones, quiebres o contorno usa `redes.topografia/1` (`topografia.md`) |
 | `objetos` | lista | vacía | `nodo` y `arco`, en cualquier orden (los nodos se crean antes) |
 
 ### `tipo: "nodo"`

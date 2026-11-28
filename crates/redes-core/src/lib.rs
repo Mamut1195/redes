@@ -42,6 +42,7 @@ pub mod reimportar;
 pub mod revision;
 pub mod scene3d;
 pub mod seleccion;
+pub mod survey;
 pub mod terrain;
 pub mod topology;
 pub mod undo;

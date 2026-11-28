@@ -1,4 +1,5 @@
-//! Ingesta con archivos de verdad: lo que entra al producto (plan, DXF de Redes y terreno, D5).
+//! Ingesta con archivos de verdad: lo que entra al producto (plan y DXF de Redes, D5). La
+//! topografía tiene su propio archivo de pruebas (`topografia.rs`).
 //!
 //! Las fixtures viven en `tests/fixtures` y son pequeñas a propósito: lo que se comprueba es el
 //! contrato (qué entra, qué se descarta y qué se dice), no el volumen.
@@ -63,20 +64,6 @@ fn una_capa_redes_info_sin_objetos_legibles_se_rechaza() {
 }
 
 #[test]
-fn el_terreno_en_csv_construye_el_tin() {
-    let mut p = Project::new("terreno", "EPSG:32717");
-    let rep = redes_core::ingest::import_terreno(&mut p, &fixture("terreno.csv"), 32717)
-        .expect("terreno");
-    assert_eq!(rep.puntos_terreno, 9);
-    let t = p.terrain.as_ref().expect("TIN");
-    assert!(t.tris.len() >= 8, "triángulos: {}", t.tris.len());
-    assert!(
-        t.z_at(redes_core::geom::P2::new(758_020.0, 9_797_020.0))
-            .is_some()
-    );
-}
-
-#[test]
 fn un_plan_de_la_skill_entra_completo() {
     let mut p = Project::new("plan", "EPSG:32717");
     let rep = redes_core::ingest::import_plan(&mut p, &fixture("plan.json")).expect("plan");
@@ -86,21 +73,6 @@ fn un_plan_de_la_skill_entra_completo() {
     assert!(p.nodes.iter().any(|n| n.code == "PZ-901"));
     let cl = tramo(&p, "CL-901");
     assert!((cl.path[0].z - 2498.4).abs() < 1e-9, "los vértices entran");
-}
-
-#[test]
-fn un_terreno_con_una_fila_mala_avisa_y_sigue() {
-    let mut p = Project::new("terreno-malo", "EPSG:32717");
-    let ruta = std::env::temp_dir().join(format!("redes-terreno-{}.csv", std::process::id()));
-    std::fs::write(
-        &ruta,
-        "E,N,Z\n758000,9797000,2500\n758020,texto,2501\n758040,9797040,2502\n758060,9797060,2503\n",
-    )
-    .unwrap();
-    let rep = redes_core::ingest::import_terreno(&mut p, &ruta, 32717).expect("importa");
-    assert_eq!(rep.puntos_terreno, 3, "descarta la fila no numérica");
-    assert!(!rep.descartados.is_empty(), "y lo dice");
-    let _ = std::fs::remove_file(&ruta);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -502,6 +474,20 @@ fn un_plan_en_18s_entra_en_un_proyecto_vacio_y_lo_fija() {
     assert_eq!(p.terrain.as_ref().unwrap().epsg, 32718, "antes: 32717 fijo");
 }
 
+/// F17-12: the northern hemisphere (326NN) is UTM WGS 84 too; before only 327NN entered.
+#[test]
+fn un_plan_en_18n_entra_en_un_proyecto_vacio_y_lo_fija() {
+    let mut p = Project::new("vacio", "EPSG:32717");
+    importa_en(
+        &mut p,
+        "18n",
+        plan_crs(Some("EPSG:32618"), 600_000.0, 480_000.0),
+    )
+    .expect("18N");
+    assert_eq!(p.crs, "EPSG:32618");
+    assert_eq!(p.terrain.as_ref().unwrap().epsg, 32618);
+}
+
 #[test]
 fn un_plan_en_otro_crs_que_el_proyecto_da_e_crs() {
     let mut p = proyecto_17s_con_objetos();
@@ -516,11 +502,12 @@ fn un_plan_en_otro_crs_que_el_proyecto_da_e_crs() {
 }
 
 #[test]
-fn un_plan_sin_crs_o_con_crs_no_utm_sur_da_e_crs() {
+fn un_plan_sin_crs_o_con_crs_no_utm_wgs84_da_e_crs() {
     for (nombre, crs) in [
         ("sin", None),
         ("vacio", Some("")),
-        ("norte", Some("EPSG:32617")),
+        ("ups-norte", Some("EPSG:32661")),
+        ("web-mercator", Some("EPSG:3857")),
         ("wgs84", Some("EPSG:4326")),
         ("basura", Some("UTM17")),
     ] {
@@ -537,49 +524,6 @@ fn un_plan_en_grados_da_e_crs_legible() {
     let err = importa_en(&mut p, "grados", plan_crs(Some("EPSG:32717"), -78.5, -0.2)).unwrap_err();
     assert!(err.starts_with("E_CRS:"), "{err}");
     assert!(err.contains("lon/lat"), "dice por qué: {err}");
-}
-
-fn terreno_csv(nombre: &str, e: f64, n: f64) -> std::path::PathBuf {
-    let ruta = std::env::temp_dir().join(format!("redes-crs-{nombre}-{}.csv", std::process::id()));
-    std::fs::write(
-        &ruta,
-        format!(
-            "E,N,Z\n{e},{n},2500\n{},{n},2501\n{e},{},2502\n",
-            e + 0.001,
-            n + 0.001
-        ),
-    )
-    .unwrap();
-    ruta
-}
-
-#[test]
-fn un_terreno_en_otra_zona_que_el_proyecto_da_e_crs() {
-    let mut p = proyecto_17s_con_objetos();
-    let revision = p.revision;
-    let ruta = terreno_csv("zona", 760_000.0, 9_796_000.0);
-    let err = redes_core::ingest::import_terreno(&mut p, &ruta, 32718).unwrap_err();
-    let _ = std::fs::remove_file(&ruta);
-    assert!(err.starts_with("E_CRS:"), "{err}");
-    assert_eq!(p.revision, revision);
-    assert_eq!(
-        p.terrain.as_ref().unwrap().epsg,
-        32717,
-        "el terreno no cambia"
-    );
-}
-
-#[test]
-fn un_terreno_en_grados_da_e_crs() {
-    let mut p = Project::new("grados", "EPSG:32717");
-    let ruta = terreno_csv("grados", -78.5, -0.2);
-    let err = redes_core::ingest::import_terreno(&mut p, &ruta, 32717).unwrap_err();
-    let _ = std::fs::remove_file(&ruta);
-    assert!(
-        err.starts_with("E_CRS:") && err.contains("lon/lat"),
-        "{err}"
-    );
-    assert!(p.terrain.is_none());
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -8,5 +8,5 @@ license.workspace = true
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
-delaunator = "1.0"
+spade = "2.15"
 blake3 = "1.8"

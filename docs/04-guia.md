@@ -157,16 +157,33 @@ redes importar plan --archivo plan.json
 # La vuelta del DXF que exportó Redes (capa REDES_INFO)
 redes importar dxf --archivo plano-devuelto.dxf
 
-# Puntos de terreno E,N,Z (sin --epsg toma el del proyecto)
-redes importar terreno --archivo puntos.csv --epsg 32717
+# Topografía de levantamiento redes.topografia/1 (la escribe la skill, D18)
+redes importar topografia --archivo topografia.json
 ```
 
-**Sistema de coordenadas (F12-13).** Redes trabaja en UTM sur WGS 84, en metros
-(`EPSG:327NN`; 17S = 32717, 18S = 32718). El plan **declara** su CRS en `proyecto.crs` y no se
-supone ninguno. Devuelven `E_CRS` sin tocar el proyecto: un plan sin CRS o con uno que no es UTM
-sur (p. ej. 32617, que es 17**N**, o 4326); un plan o un terreno en otro CRS que el del proyecto
-(Redes no reproyecta; un proyecto vacío adopta el del primer plan o terreno, y se avisa); y
-coordenadas que parecen grados lon/lat (|E| ≤ 180 y |N| ≤ 90).
+**Sistema de coordenadas (F12-13, F17-12).** Redes trabaja en UTM WGS 84, en metros, del
+hemisferio sur (`EPSG:327NN`; 17S = 32717, 18S = 32718) o del norte (`EPSG:326NN`; 18N = 32618).
+El plan **declara** su CRS en `proyecto.crs` y la topografía en `crs`; no se supone ninguno.
+Devuelven `E_CRS` sin tocar el proyecto: un plan o una topografía sin CRS o con uno que no es UTM
+WGS 84 (p. ej. 4326 o 3857); uno en otro CRS que el del proyecto (Redes no reproyecta; un
+proyecto vacío adopta el del primer plan o topografía, y se avisa); y coordenadas que parecen
+grados lon/lat (|E| ≤ 180 y |N| ≤ 90).
+
+**Datum vertical (F17-12).** Plan (`proyecto.datum_vertical`) y topografía (`datum_vertical`)
+dicen de qué superficie se miden las cotas: `egm2008`, `egm96`, `elipsoidal` o `no_declarado`.
+`proyecto info` lo muestra con el terreno (`terreno.datum_vertical`) y el de la red
+(`datum_vertical_red`); la app, en el inspector del proyecto. Dos datums declarados distintos
+(plan en EGM2008 y levantamiento elipsoidal) dan `E_DATUM` (código 1) sin tocar el proyecto: Redes
+no convierte. Uno no declarado frente a uno declarado entra con aviso.
+
+**Topografía (F17-11, D18).** El levantamiento (PNEZD de estación total, DXF, LandXML, MDT) lo
+traduce un agente con `skills/redes-ingesta/references/topografia.md`, que clasifica cada punto
+por su descripción (`terreno`, `quiebre`, `contorno`, `excluido`) y arma las líneas de quiebre, el
+contorno y los huecos. `importar topografia` valida (números únicos, coincidentes con otra cota,
+referencias, polígonos que se cortan, quiebres que se cruzan: códigos `E_TOPO_*`), triangula con
+Delaunay restringido y guarda número, descripción y clase de cada punto. Fuera del contorno y en
+los huecos no hay cota. El antiguo `importar terreno` ya no existe: leía las tres primeras
+columnas como E, N, Z y un PNEZD entraba con el número de punto como E sin aviso.
 
 La app **no adivina** formatos ajenos. Un DXF de Civil 3D, un GeoJSON de un SIG, un `.inp` o un
 Excel los adapta un agente con la skill `skills/redes-ingesta`, que escribe un `redes.plan/1`.
@@ -534,7 +551,7 @@ referencia por formato en `skills/redes-ingesta/references/`:
 | EPANET | skill → `importar plan` | `epanet.md` |
 | Excel / CSV / informes de Civil 3D | skill → `importar plan` | `tablas.md` |
 | SIG (GeoJSON, Shapefile) | skill → `importar plan` | `geojson-sig.md` |
-| Terreno `E,N,Z` | `redes importar terreno` | — |
+| Topografía (PNEZD/PENZD/NEZ, DXF, LandXML, MDT) | skill → `importar topografia` | `topografia.md` |
 
 Contrato del plan: `references/plan.md`. Procedimiento y reglas: `skills/redes-ingesta/SKILL.md`.
 
@@ -547,7 +564,10 @@ descarta con su motivo. Sin planta no hay 3D.
 
 | Síntoma | Causa | Solución |
 |---|---|---|
-| «E_CRS» al importar | El plan no declara CRS, no es UTM sur (`32617` es 17**N**), no coincide con el proyecto o trae grados lon/lat | Declarar `EPSG:32717` (17S) o `EPSG:32718` (18S) y coordenadas UTM en metros; reproyectar en origen |
+| «E_CRS» al importar | El plan o la topografía no declara CRS, no es UTM WGS 84 (`326NN`/`327NN`), no coincide con el proyecto o trae grados lon/lat | Declarar el UTM real (`EPSG:32717` 17S, `EPSG:32618` 18N…) y coordenadas en metros; reproyectar en origen |
+| «E_DATUM» al importar | Plan y topografía declaran datums verticales distintos | Convertir en origen y declarar el mismo `datum_vertical` |
+| «E_TOPO_…» al importar topografía | Número repetido, misma planta con otra cota, referencia a un punto que no existe, polígono que se corta, quiebres que se cruzan | El mensaje cita los puntos: corregir la traducción o preguntar al usuario |
+| El terreno rellena una quebrada o cubre un patio | Faltan líneas de quiebre o contorno en la topografía | Revisar la clasificación por códigos (`topografia.md` §4) |
 | Todo apilado en un punto | El origen no traía coordenadas | Pasar `--coords` a la skill |
 | «E_TOPO_ORPHAN_LINK» | Un arco apunta a un nodo que no entró | Revisar `desde`/`hasta` en el plan |
 | «E_STATE_DUPLICATE_NAME» | Código repetido entre objetos vivos (uno dado de baja se puede reutilizar) | Renombrar en el origen |

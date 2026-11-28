@@ -1077,6 +1077,21 @@ fn view(s: &State, _cx: &mut Cx<State>) -> El {
             right = right.child(section("Proyecto"));
             right = right.child(kv("nombre", s.project.name.clone()));
             right = right.child(kv("CRS", s.project.crs.clone()));
+            right = right.child(kv(
+                "datum de la red",
+                s.project.vertical_datum.label().to_string(),
+            ));
+            if let Some(t) = &s.project.terrain {
+                right = right.child(kv(
+                    "datum del terreno",
+                    t.vertical_datum.label().to_string(),
+                ));
+                let points = t
+                    .survey
+                    .as_ref()
+                    .map_or(t.points.len(), |sv| sv.points.len());
+                right = right.child(kv("puntos de terreno", points.to_string()));
+            }
             right = right.child(kv("estado", s.project.estado.key().to_string()));
             right = right.child(kv("objetos", s.project.count().to_string()));
             right = right.child(el().h(8.0));

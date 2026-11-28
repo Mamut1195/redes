@@ -102,7 +102,9 @@ pub fn validar_finito(p: &Project) -> Result<(), String> {
 /// (`migrar_vN→vN+1`) empiezan cuando el formato se congele en v1.
 ///
 /// - 3: `observaciones` con historial (F13-03).
-pub const SCHEMA_VERSION: u32 = 3;
+/// - 4: survey topography with its points, breaklines, boundary and holes, and the vertical datum
+///   of the terrain and of the network (F17-11, F17-12).
+pub const SCHEMA_VERSION: u32 = 4;
 
 /// Solo el campo `schema`: se mira antes de deserializar el resto, para que un archivo de otra
 /// versión dé `E_PROJ_SCHEMA` y no un `E_FMT_PARSE` confuso sobre un campo que cambió.
@@ -322,7 +324,7 @@ mod tests {
             err.contains("redes.project/99"),
             "dice qué versión trae: {err}"
         );
-        assert!(err.contains("redes.project/3"), "dice cuál entiende: {err}");
+        assert!(err.contains("redes.project/4"), "dice cuál entiende: {err}");
     }
 
     /// D10: antes de v1 no hay migraciones; un `/2` no abre y el mensaje dice cómo regenerarlo.
@@ -463,18 +465,20 @@ mod tests {
         let _ = std::fs::remove_file(&ruta);
     }
 
-    /// Un CSV con NaN en la cota se descarta en la ingesta y no envenena el proyecto.
+    /// A NaN point never reaches the TIN nor the saved project (the NaN-on-save bug).
     #[test]
-    fn el_terreno_descarta_lineas_no_finitas() {
+    fn a_non_finite_terrain_point_is_dropped_before_saving() {
+        use crate::terrain::{SurfacePoint, Terrain};
         let mut p = crate::model::Project::new("nan", "EPSG:32717");
-        let csv = "E,N,Z\n758000,9797000,2500\nNaN,9797001,2501\n758002,9797002,2502\n758010,9797010,2505\n";
-        let ruta = std::env::temp_dir().join(format!("redes-nan-{}.csv", std::process::id()));
-        std::fs::write(&ruta, csv).expect("csv");
-        let rep = crate::ingest::import_terreno(&mut p, &ruta, 32717).expect("importa");
+        let pts = vec![
+            SurfacePoint::new(758000.0, 9797000.0, 2500.0),
+            SurfacePoint::new(f64::NAN, 9797001.0, 2501.0),
+            SurfacePoint::new(758002.0, 9797002.0, 2502.0),
+            SurfacePoint::new(758010.0, 9797010.0, 2505.0),
+        ];
+        p.terrain = Some(Terrain::build("nan", 32717, pts));
         assert_eq!(p.terrain.as_ref().map(|t| t.points.len()).unwrap_or(0), 3);
-        assert!(!rep.descartados.is_empty(), "debe informar del descarte");
         assert!(crate::project_io::validar_finito(&p).is_ok());
-        let _ = std::fs::remove_file(&ruta);
     }
 
     use super::*;

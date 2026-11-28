@@ -417,6 +417,40 @@ $mutaciones = @(
         Destino = "captacion_horneada"
         Prueba = "a_level_without_the_object_invert_is_missing_not_filled_in"
         Que = "hornear una obra sin cota de solera como si estuviera a cota 0 (F17-06)"
+    },
+    @{
+        Nombre = "topo-sin-quiebres"
+        Archivo = "crates/redes-core/src/terrain.rs"
+        Patron = '(?s)finite,\s*edges,'
+        Reemplazo = 'finite, { let _ = edges; Vec::new() },'
+        Prueba = "no_triangle_crosses_the_ravine_breakline"
+        Que = "triangular sin las lineas de quiebre: el TIN rellena la quebrada (F17-11)"
+    },
+    @{
+        Nombre = "topo-sin-recorte"
+        Archivo = "crates/redes-core/src/terrain.rs"
+        Patron = '!outside && !in_hole'
+        Reemplazo = 'true || (!outside && !in_hole)'
+        Prueba = "boundary_concavities_get_no_triangles"
+        Que = "no recortar el TIN al contorno: triangulos en las concavidades (F17-11)"
+    },
+    @{
+        Nombre = "topo-coincidentes"
+        Archivo = "crates/redes-core/src/survey.rs"
+        Patron = 'if \(f\.z - q\.z\)\.abs\(\) > SAME_HEIGHT_M \{'
+        Reemplazo = 'if false {'
+        Destino = "topografia"
+        Prueba = "same_place_with_another_height_is_an_error_and_same_height_a_warning"
+        Que = "elegir en silencio una de dos cotas para la misma planta (F17-11)"
+    },
+    @{
+        Nombre = "datum-mezclado"
+        Archivo = "crates/redes-core/src/ingest.rs"
+        Patron = 'if datum\.is_declared\(\) && incoming\.is_declared\(\) && datum != incoming \{'
+        Reemplazo = 'if false {'
+        Destino = "topografia"
+        Prueba = "a_survey_in_another_datum_than_the_network_is_e_datum"
+        Que = "mezclar cotas de datums verticales distintos sin error (F17-12)"
     }
 )
 

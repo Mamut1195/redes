@@ -29,7 +29,13 @@ Redes no diseña: recibe. Cada aplicación exporta a su manera:
                                         redes.plan/1           documento *.redes
 
    DXF escrito por Redes (REDES_INFO) ──► redes importar dxf
-   Terreno E,N,Z (CSV)                ──► redes importar terreno
+
+   Levantamiento (PNEZD, DXF,          agente + skill        CLI
+   LandXML, MDT)                  ──►   (clasifica por   ──►  redes importar topografia
+                                         código, pregunta)    (valida, triangula)
+                                              │
+                                              ▼
+                                       redes.topografia/1
 ```
 
 - **Un solo formato de entrada** para orígenes ajenos: `redes.plan/1`.
@@ -66,7 +72,7 @@ Contrato sólido (F12-15):
 
 - Un campo que no es del contrato rechaza el plan con `E_FMT_CAMPO`, el objeto, el campo y el
   nombre válido más parecido (`«trazado» (¿quiso decir «vertices»?)`). Antes se perdía en silencio.
-- `--dry-run` de `importar plan` (y de `dxf` y `terreno`) importa en una copia en memoria y da el
+- `--dry-run` de `importar plan` (y de `dxf` y `topografia`) importa en una copia en memoria y da el
   mismo informe sin escribir.
 - Una **entrega nueva** sobre un proyecto ya revisado entra con `redes importar reimportar
   --archivo plan-v2.json` (F13-06, D9): sustituye el diseño y conserva estados y observaciones
@@ -107,6 +113,7 @@ Una clave nunca se copia como solera; solera = clave − DI solo con el DI decla
 | `references/dxf-civil3d.md` | DXF de terceros: códigos de grupo, `INSERT`+`ATTRIB`, polilíneas 3D, capas NCS y en español, ajuste de extremos; LandXML |
 | `references/geojson-sig.md` | GeoJSON/Shapefile: CRS, campos típicos, extremos |
 | `references/tablas.md` | Excel/CSV e informes de Civil 3D: columnas, clave → solera |
+| `references/topografia.md` | contrato `redes.topografia/1` (D18); lectura de PNEZD/PENZD/NEZ, DXF de puntos y polilíneas 3D, LandXML (CgPoints, superficies) y MDT en rejilla; **tabla de códigos típicos** (ajustable por el usuario) para clasificar `terreno`/`quiebre`/`contorno`/`excluido`; cómo se encadenan los quiebres; CRS y datum vertical |
 
 ## 5. Cómo se prueba
 
@@ -116,12 +123,15 @@ Una clave nunca se copia como solera; solera = clave − DI solo con el DI decla
 | `cargo test -p redes-core --test cotas_tramo` | La solera declarada del tramo manda y el tubo se dibuja sobre ella |
 | `redes importar plan` en un proyecto de prueba | Los descartes del plan concreto |
 | `redes vista --salida x.svg` | Lo que entró se ve (una imagen que un agente puede mirar) |
+| `cargo test -p redes-core --test topografia` | El PNEZD de ejemplo con quebrada y vía (`topografia_quebrada.pnezd.txt`) traducido según la skill entra; ningún triángulo cruza la quebrada; sin cota en la muesca del contorno ni en la casa; cada regla del contrato da su `E_TOPO_*`; CRS norte; `E_DATUM` |
+| `cargo test -p redes-cli --test topografia` | Lo mismo con el binario: `importar topografia`, `--dry-run`, `E_DATUM` con código 1, `importar terreno` ya no existe |
 
 ## 6. Lo que la skill **no** hará nunca
 
 - Rellenar caudales, presiones, volúmenes, terrenos o coordenadas «faltantes».
 - Convertir un modelo hidráulico en un diseño, ni decidir si un diámetro cumple norma.
-- Elegir por el usuario lo que el origen no dice (sistema, CRS, subtipo): lo pregunta.
+- Elegir por el usuario lo que el origen no dice (sistema, CRS, datum vertical, subtipo, el orden
+  de columnas de un levantamiento, la clase de un código desconocido): lo pregunta.
 
 Si un proyecto no se puede representar sin calcular algo, es que el origen no traía el dato y
 hay que volver a la aplicación que lo produce.

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2" version="1.2" date="2026-11-20" time="10:00:00">
+  <Units>
+    <Metric areaUnit="squareMeter" linearUnit="meter" volumeUnit="cubicMeter" temperatureUnit="celsius" pressureUnit="milliBars" angularUnit="decimal degrees" directionUnit="decimal degrees"/>
+  </Units>
+  <CoordinateSystem epsgCode="32717" horizontalDatum="WGS84" verticalDatum="EGM2008"/>
+  <Application name="Autodesk Civil 3D" version="2024"/>
+  <CgPoints>
+    <CgPoint name="1" code="TN">9796000.000 760000.000 2500.000</CgPoint>
+    <CgPoint name="2" code="TN">9796000.000 760040.000 2501.000</CgPoint>
+    <CgPoint name="3" code="TN">9796040.000 760040.000 2502.000</CgPoint>
+    <CgPoint name="4" code="TN">9796040.000 760000.000 2501.500</CgPoint>
+    <CgPoint name="5" code="EJE">9796005.000 760020.000 2500.200</CgPoint>
+    <CgPoint name="6" code="EJE">9796035.000 760020.000 2501.300</CgPoint>
+    <CgPoint name="7" code="ARB">9796020.000 760010.000 2500.900</CgPoint>
+  </CgPoints>
+  <Surfaces>
+    <Surface name="EG" desc="Terreno existente">
+      <SourceData>
+        <Breaklines>
+          <Breakline brkType="standard" desc="EJE">
+            <PntList3D>9796005.000 760020.000 2500.200 9796035.000 760020.000 2501.300</PntList3D>
+          </Breakline>
+        </Breaklines>
+        <Boundaries>
+          <Boundary name="Borde" bndType="outer" edgeTrim="true">
+            <PntList2D>9796000.000 760000.000 9796000.000 760040.000 9796040.000 760040.000 9796040.000 760000.000 9796000.000 760000.000</PntList2D>
+          </Boundary>
+        </Boundaries>
+      </SourceData>
+      <Definition surfType="TIN">
+        <Pnts>
+          <P id="1">9796000.000 760000.000 2500.000</P>
+          <P id="2">9796000.000 760040.000 2501.000</P>
+          <P id="3">9796040.000 760040.000 2502.000</P>
+          <P id="4">9796040.000 760000.000 2501.500</P>
+          <P id="5">9796005.000 760020.000 2500.200</P>
+          <P id="6">9796035.000 760020.000 2501.300</P>
+        </Pnts>
+        <Faces>
+          <F>1 2 5</F>
+          <F>2 6 5</F>
+          <F>2 3 6</F>
+          <F>3 4 6</F>
+          <F>4 5 6</F>
+          <F>4 1 5</F>
+        </Faces>
+      </Definition>
+    </Surface>
+  </Surfaces>
+</LandXML>

@@ -7,7 +7,8 @@
 //!    EPANET, DXF o GeoJSON de terceros, Excel) los adapta un agente con la skill
 //!    `skills/redes-ingesta`, que escribe este JSON.
 //! 2. **DXF de Redes**: la vuelta del DXF que exporta Redes (capa `REDES_INFO`, F8).
-//! 3. **Terreno**: puntos `E,N,Z`.
+//! 3. **Topografía** (`redes.topografia/1`, D18): la escribe un agente con la skill; la valida y
+//!    triangula [`crate::survey`].
 //!
 //! Todos devuelven un [`ImportReport`] con lo leído, lo descartado y los avisos, con motivo.
 
@@ -19,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use crate::families::Value;
 use crate::geom::{P2, P3};
 use crate::model::{Dato, ElementId, EstadoObjeto, Fuente, Link, Node, Project};
-use crate::terrain::{SurfacePoint, Terrain};
+use crate::terrain::{SurfacePoint, Terrain, VerticalDatum};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ImportReport {
@@ -79,10 +80,13 @@ fn comprobar_version_plan(crudo: &serde_json::Value) -> Result<(), String> {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct PlanProyecto {
     pub nombre: String,
-    /// CRS declarado (`EPSG:327NN`, UTM sur). Obligatorio en la práctica: vacío → `E_CRS`
-    /// (F12-13). Antes se suponía EPSG:32717 en silencio.
+    /// CRS declarado (`EPSG:326NN` o `EPSG:327NN`, UTM WGS 84). Obligatorio en la práctica:
+    /// vacío → `E_CRS` (F12-13). Antes se suponía EPSG:32717 en silencio.
     #[serde(default)]
     pub crs: String,
+    /// Vertical datum of the heights (F17-12). Absent means undeclared, never a guess.
+    #[serde(default)]
+    pub datum_vertical: VerticalDatum,
     #[serde(default)]
     pub fuente_app: String,
     #[serde(default)]
@@ -103,10 +107,10 @@ pub fn epsg_de(crs: &str) -> Option<u32> {
     num.trim().parse().ok()
 }
 
-/// ¿Es un UTM sur WGS 84 (`EPSG:32701`…`32760`)? Redes trabaja en metros UTM; 17S (32717) y 18S
-/// (32718) son los de Ecuador y Perú.
-pub fn es_utm_sur(epsg: u32) -> bool {
-    (32701..=32760).contains(&epsg)
+/// WGS 84 / UTM, north (`EPSG:32601`…`32660`) or south (`32701`…`32760`) hemisphere (F17-12).
+/// Redes works in UTM metres and never reprojects.
+pub fn is_wgs84_utm(epsg: u32) -> bool {
+    (32601..=32660).contains(&epsg) || (32701..=32760).contains(&epsg)
 }
 
 /// ¿Parecen grados (lon/lat) y no metros UTM? Un UTM tiene E de cientos de miles y N de millones.
@@ -116,11 +120,11 @@ fn parece_lonlat(e: f64, n: f64) -> bool {
 
 /// Comprueba el CRS de lo que entra contra el del proyecto. Devuelve el EPSG a usar.
 ///
-/// - CRS ausente, ilegible o que no es UTM sur → `E_CRS`.
+/// - CRS ausente, ilegible o que no es UTM WGS 84 (norte o sur) → `E_CRS`.
 /// - Distinto del proyecto → `E_CRS` (no se reproyecta), salvo que el proyecto esté vacío: entonces
 ///   adopta el del plan, porque no hay nada que desalinear.
 /// - Un terreno ya cargado con otro EPSG → `E_CRS`.
-fn comprobar_crs(p: &Project, crs: &str, origen: &str) -> Result<u32, String> {
+pub(crate) fn check_crs(p: &Project, crs: &str, origen: &str) -> Result<u32, String> {
     if crs.trim().is_empty() {
         return Err(format!(
             "E_CRS: {origen} no declara su sistema de coordenadas (p. ej. \"EPSG:32717\")"
@@ -129,9 +133,9 @@ fn comprobar_crs(p: &Project, crs: &str, origen: &str) -> Result<u32, String> {
     let Some(epsg) = epsg_de(crs) else {
         return Err(format!("E_CRS: {origen}: CRS ilegible «{crs}»"));
     };
-    if !es_utm_sur(epsg) {
+    if !is_wgs84_utm(epsg) {
         return Err(format!(
-            "E_CRS: {origen} está en EPSG:{epsg}; Redes solo admite UTM sur WGS 84 (EPSG:327NN, p. ej. 32717 = 17S, 32718 = 18S). Si es 326NN es el hemisferio norte"
+            "E_CRS: {origen} está en EPSG:{epsg}; Redes solo admite UTM WGS 84 en metros: EPSG:326NN (norte) o EPSG:327NN (sur), p. ej. 32717 = 17S. Reproyecte en origen"
         ));
     }
     let vacio = p.count() == 0 && p.terrain.is_none();
@@ -152,9 +156,45 @@ fn comprobar_crs(p: &Project, crs: &str, origen: &str) -> Result<u32, String> {
     Ok(epsg)
 }
 
+/// Compares the vertical datum of what comes in with the project's network heights and its
+/// terrain (F17-12). Two declared datums that differ are an `E_DATUM` error: Redes does not
+/// convert between geoid models. When one side is undeclared nothing can be checked, so it is a
+/// warning, never a silent pass.
+pub(crate) fn check_vertical_datum(
+    network: VerticalDatum,
+    terrain: Option<VerticalDatum>,
+    incoming: VerticalDatum,
+    origen: &str,
+) -> Result<Option<String>, String> {
+    let existing = [
+        ("las cotas de la red del proyecto", Some(network)),
+        ("el terreno del proyecto", terrain),
+    ];
+    for (who, datum) in existing {
+        let Some(datum) = datum else { continue };
+        if datum.is_declared() && incoming.is_declared() && datum != incoming {
+            return Err(format!(
+                "E_DATUM: {origen} declara cotas en {} y {who} están en {}; Redes no convierte entre datums verticales: convierta en origen o declare el mismo datum",
+                incoming.label(),
+                datum.label()
+            ));
+        }
+    }
+    let declared_elsewhere = existing
+        .iter()
+        .find_map(|(who, d)| d.filter(|d| d.is_declared()).map(|d| (*who, d)));
+    Ok(match declared_elsewhere {
+        Some((who, d)) if !incoming.is_declared() => Some(format!(
+            "{origen} no declara datum vertical y {who} están en {}: no se puede comprobar que las cotas casen",
+            d.label()
+        )),
+        _ => None,
+    })
+}
+
 /// Rechaza coordenadas en grados: un GeoJSON o un Excel en lon/lat que llega como si fuera UTM
 /// quedaría a miles de kilómetros (o todo en un punto).
-fn rechazar_lonlat<'a>(
+pub(crate) fn reject_lonlat<'a>(
     puntos: impl Iterator<Item = (&'a str, f64, f64)>,
     origen: &str,
 ) -> Result<(), String> {
@@ -263,7 +303,13 @@ pub struct PlanDato {
 // Campos del contrato (F12-15). Un campo que no está aquí se rechaza: antes se perdía en silencio.
 
 const CAMPOS_RAIZ: &[&str] = &["schema", "proyecto", "terreno", "objetos"];
-const CAMPOS_PROYECTO: &[&str] = &["nombre", "crs", "fuente_app", "fuente_archivo"];
+const CAMPOS_PROYECTO: &[&str] = &[
+    "nombre",
+    "crs",
+    "datum_vertical",
+    "fuente_app",
+    "fuente_archivo",
+];
 const CAMPOS_NODO: &[&str] = &[
     "tipo",
     "codigo",
@@ -515,7 +561,7 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
     revisar_campos(&crudo)?;
     let plan: Plan = serde_json::from_str(&text).map_err(|e| format!("E_FMT_PARSE: {e}"))?;
     // F12-13: el CRS se comprueba antes de tocar nada.
-    let epsg = comprobar_crs(p, &plan.proyecto.crs, "el plan")?;
+    let epsg = check_crs(p, &plan.proyecto.crs, "el plan")?;
     let terreno = plan
         .terreno
         .iter()
@@ -530,11 +576,24 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
             .map(|v| (codigo.as_str(), v[0], v[1]))
             .collect(),
     });
-    rechazar_lonlat(terreno.chain(objetos), "el plan")?;
+    reject_lonlat(terreno.chain(objetos), "el plan")?;
+    let datum = plan.proyecto.datum_vertical;
     let mut rep = ImportReport {
         formato: "plan".into(),
         ..Default::default()
     };
+    // The plan's own terrain replaces the project's: only the network heights are compared then.
+    let kept_terrain = if plan.terreno.is_empty() {
+        p.terrain.as_ref().map(|t| t.vertical_datum)
+    } else {
+        None
+    };
+    rep.avisos.extend(check_vertical_datum(
+        p.vertical_datum,
+        kept_terrain,
+        datum,
+        "el plan",
+    )?);
     if epsg_de(&p.crs) != Some(epsg) {
         rep.avisos.push(format!(
             "el proyecto estaba vacío y adopta el CRS del plan: EPSG:{epsg} (antes {})",
@@ -567,7 +626,9 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
             .map(|v| SurfacePoint::new(v[0], v[1], v[2]))
             .collect::<Vec<_>>();
         rep.puntos_terreno = pts.len();
-        p.terrain = Some(Terrain::build(&plan.proyecto.nombre, epsg, pts));
+        let mut tin = Terrain::build(&plan.proyecto.nombre, epsg, pts);
+        tin.vertical_datum = datum;
+        p.terrain = Some(tin);
     }
 
     // Índice de códigos para resolver `desde`/`hasta`.
@@ -904,6 +965,9 @@ pub fn import_plan(p: &mut Project, path: &Path) -> Result<ImportReport, String>
         p.name = plan.proyecto.nombre.clone();
     }
     p.crs = format!("EPSG:{epsg}");
+    if datum.is_declared() {
+        p.vertical_datum = datum;
+    }
     p.commit("importar plan");
     Ok(rep)
 }
@@ -1259,72 +1323,7 @@ fn dxf_pairs(text: &str) -> Vec<(String, String)> {
     out
 }
 
-/// Importa puntos de terreno `E,N,Z` desde CSV o texto.
-pub fn import_terreno(p: &mut Project, path: &Path, epsg: u32) -> Result<ImportReport, String> {
-    let text = std::fs::read_to_string(path).map_err(|e| format!("E_IO_NOT_FOUND: {e}"))?;
-    let mut pts = Vec::new();
-    let mut rep = ImportReport {
-        formato: "csv".into(),
-        ..Default::default()
-    };
-    for (i, line) in text.lines().enumerate() {
-        let l = line.trim();
-        if l.is_empty() || l.starts_with('#') {
-            continue;
-        }
-        let parts: Vec<&str> = l
-            .split([',', ';', '\t', ' '])
-            .filter(|s| !s.is_empty())
-            .collect();
-        if parts.len() < 3 {
-            rep.descartados
-                .push(format!("línea {}: menos de 3 columnas", i + 1));
-            continue;
-        }
-        match (
-            parts[0].parse::<f64>(),
-            parts[1].parse::<f64>(),
-            parts[2].parse::<f64>(),
-        ) {
-            // `"NaN".parse::<f64>()` funciona en Rust: sin este filtro entra un NaN que luego se
-            // serializa como `null` y deja el proyecto imposible de abrir.
-            (Ok(e), Ok(n), Ok(z)) if e.is_finite() && n.is_finite() && z.is_finite() => {
-                pts.push(SurfacePoint::new(e, n, z))
-            }
-            _ => {
-                if i == 0 {
-                    continue;
-                }
-                rep.descartados
-                    .push(format!("línea {}: no numérico o no finito", i + 1));
-            }
-        }
-    }
-    if pts.len() < 3 {
-        return Err("E_FMT_PARSE: se necesitan al menos 3 puntos válidos E,N,Z".into());
-    }
-    // F12-13: EPSG del terreno contra el proyecto, y nada de grados; antes de tocar nada.
-    let origen = format!("el terreno (EPSG:{epsg})");
-    comprobar_crs(p, &format!("EPSG:{epsg}"), &origen)?;
-    rechazar_lonlat(pts.iter().map(|q| ("punto", q.e, q.n)), &origen)?;
-    if epsg_de(&p.crs) != Some(epsg) {
-        rep.avisos.push(format!(
-            "el proyecto estaba vacío y adopta el CRS del terreno: EPSG:{epsg} (antes {})",
-            p.crs
-        ));
-        p.crs = format!("EPSG:{epsg}");
-    }
-    rep.puntos_terreno = pts.len();
-    let name = path
-        .file_stem()
-        .map(|s| s.to_string_lossy().to_string())
-        .unwrap_or_else(|| "terreno".into());
-    p.terrain = Some(Terrain::build(&name, epsg, pts));
-    p.commit("importar terreno");
-    Ok(rep)
-}
-
-fn today() -> String {
+pub(crate) fn today() -> String {
     // Fecha de importación sin dependencias: días desde 1970 → YYYY-MM-DD (UTC).
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

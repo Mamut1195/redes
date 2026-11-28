@@ -207,13 +207,12 @@ enum ImportarCmd {
         #[arg(long)]
         archivo: PathBuf,
     },
-    /// Puntos de terreno E,N,Z (CSV/TXT).
-    Terreno {
+    /// Topografía `redes.topografia/1` (D18): puntos clasificados, líneas de quiebre, contorno,
+    /// huecos y malla de elevación. La escribe un agente con la skill `skills/redes-ingesta`
+    /// (references/topografia.md) a partir del levantamiento; aquí se valida y se triangula.
+    Topografia {
         #[arg(long)]
         archivo: PathBuf,
-        /// EPSG de los puntos (UTM sur). Si se omite, el del proyecto; otro distinto → `E_CRS`.
-        #[arg(long)]
-        epsg: Option<u32>,
     },
     /// Carga una entrega nueva (plan o DXF de Redes) sobre el proyecto sin perder la revisión:
     /// empareja por código, conserva estados y observaciones e informa altas, bajas y cambios.
@@ -1039,7 +1038,7 @@ fn mutates(id: &str) -> bool {
         id,
         "importar.plan"
             | "importar.dxf"
-            | "importar.terreno"
+            | "importar.topografia"
             | "importar.reimportar"
             | "proyecto.aprobar"
     ) || observaciones::muta(id)
@@ -1083,7 +1082,7 @@ fn command_id(c: &Cmd) -> &'static str {
         Cmd::Importar { cmd } => match cmd {
             ImportarCmd::Plan { .. } => "importar.plan",
             ImportarCmd::Dxf { .. } => "importar.dxf",
-            ImportarCmd::Terreno { .. } => "importar.terreno",
+            ImportarCmd::Topografia { .. } => "importar.topografia",
             ImportarCmd::Reimportar(_) => reimportar::CMD,
         },
         Cmd::Objeto { cmd } => match cmd {
@@ -1242,7 +1241,7 @@ const CODIGOS: &[(&str, &str, i32)] = &[
     ("E_PROJ_NOT_FOUND", "no hay proyecto resoluble", 4),
     (
         "E_PROJ_SCHEMA",
-        "el .redes no es de la versión vigente (redes.project/3): antes de v1 no se convierte; se regenera reimportando la entrega",
+        "el .redes no es de la versión vigente (redes.project/4): antes de v1 no se convierte; se regenera reimportando la entrega",
         4,
     ),
     ("E_STATE_NOT_FOUND", "el objeto no existe", 4),
@@ -1299,8 +1298,43 @@ const CODIGOS: &[(&str, &str, i32)] = &[
     ),
     (
         "E_CRS",
-        "CRS ausente, no admitido (solo UTM sur EPSG:327NN), distinto del proyecto o coordenadas en grados",
+        "CRS ausente, no admitido (solo UTM WGS 84: EPSG:326NN norte o 327NN sur), distinto del proyecto o coordenadas en grados",
         1,
+    ),
+    (
+        "E_DATUM",
+        "el datum vertical declarado no es el de la red o el terreno del proyecto: Redes no convierte cotas entre datums",
+        1,
+    ),
+    (
+        "E_TOPO_PUNTO",
+        "topografía: punto sin número o número repetido",
+        7,
+    ),
+    (
+        "E_TOPO_COINCIDENTES",
+        "topografía: dos puntos del TIN en la misma planta con distinta cota",
+        7,
+    ),
+    (
+        "E_TOPO_REFERENCIA",
+        "topografía: una línea de quiebre, el contorno o un hueco cita un punto que no existe o de una clase que no vale ahí",
+        7,
+    ),
+    (
+        "E_TOPO_GEOMETRIA",
+        "topografía: línea o polígono corto, que se corta a sí mismo, hueco fuera del contorno o líneas de quiebre que se cruzan",
+        7,
+    ),
+    (
+        "E_TOPO_MALLA",
+        "topografía: malla de elevación incoherente (filas × columnas ≠ valores, celda no positiva) o demasiado grande",
+        7,
+    ),
+    (
+        "E_TOPO_VACIA",
+        "topografía: menos de 3 puntos entran al TIN, o no queda ningún triángulo",
+        7,
     ),
 ];
 
@@ -1319,8 +1353,14 @@ fn project_info(p: &Project, path: &Path) -> Envelope {
         "arcos": p.links.iter().filter(|l| !l.deleted).count(),
         "revision_objetos": { "pendientes": pnd, "aprobados": ok, "observados": obs },
         "terreno": p.terrain.as_ref().map(|t| json!({
-            "nombre": t.name, "puntos": t.points.len(), "triangulos": t.tris.len()
+            "nombre": t.name, "puntos": t.points.len(), "triangulos": t.tris.len(),
+            "datum_vertical": t.vertical_datum.key(),
+            "puntos_levantamiento": t.survey.as_ref().map(|s| s.points.len()),
+            "quiebres": t.survey.as_ref().map(|s| s.breaklines.len()),
+            "contorno": t.boundary.is_some(),
+            "huecos": t.holes.len(),
         })),
+        "datum_vertical_red": p.vertical_datum.key(),
         "bbox": bbox.to_array(),
         "cota_min": round(z0, 3),
         "cota_max": round(z1, 3),
@@ -1343,19 +1383,7 @@ fn importar(p: &mut Project, cmd: ImportarCmd, dry: bool) -> Envelope {
     let (command, result) = match cmd {
         ImportarCmd::Plan { archivo } => ("importar.plan", ingest::import_plan(p, &archivo)),
         ImportarCmd::Dxf { archivo } => ("importar.dxf", ingest::import_dxf(p, &archivo, 0.0)),
-        ImportarCmd::Terreno { archivo, epsg } => {
-            // Sin `--epsg`, el del proyecto (F12-13): antes se suponía 32717 aunque el proyecto
-            // estuviera en 18S.
-            let epsg = epsg.or_else(|| ingest::epsg_de(&p.crs));
-            let resultado = match epsg {
-                Some(epsg) => ingest::import_terreno(p, &archivo, epsg),
-                None => Err(format!(
-                    "E_CRS: el proyecto tiene un CRS ilegible ({}); indique --epsg",
-                    p.crs
-                )),
-            };
-            ("importar.terreno", resultado)
-        }
+        ImportarCmd::Topografia { archivo } => return import_survey(p, &archivo, dry),
         ImportarCmd::Reimportar(_) => unreachable!("se despacha en `run`"),
     };
     match result {
@@ -1389,15 +1417,54 @@ fn importar(p: &mut Project, cmd: ImportarCmd, dry: bool) -> Envelope {
                 "E_FMT_CAMPO" => {
                     "Use solo los campos del contrato (skills/redes-ingesta/references/plan.md §2); el mensaje sugiere el nombre válido más parecido."
                 }
-                "E_CRS" => {
-                    "Declare el CRS real (en el plan, `proyecto.crs`; en el terreno, `--epsg`): UTM sur en metros, p. ej. EPSG:32717 (17S) o EPSG:32718 (18S), el mismo del proyecto. Redes no reproyecta: hágalo en origen o cree un proyecto con `--crs`."
-                }
+                "E_CRS" => CRS_HINT,
+                "E_DATUM" => DATUM_HINT,
                 _ => {
                     "Revise el archivo. Los formatos ajenos se adaptan con la skill `skills/redes-ingesta` y entran como `redes.plan/1`."
                 }
             };
             Envelope::fail(
                 command,
+                vec![Diagnostic::new(&code, Severity::Error, e).hint(pista)],
+            )
+        }
+    }
+}
+
+const CRS_HINT: &str = "Declare el CRS real (en el plan, `proyecto.crs`; en la topografía, `crs`): UTM WGS 84 en metros, EPSG:327NN (sur, p. ej. 32717 = 17S) o EPSG:326NN (norte, p. ej. 32618 = 18N), el mismo del proyecto. Redes no reproyecta: hágalo en origen o cree un proyecto con `--crs`.";
+const DATUM_HINT: &str = "Declare el mismo datum vertical (`datum_vertical`: egm2008, egm96, elipsoidal o no_declarado) en el plan y en la topografía. Redes no convierte cotas entre datums: conviértalas en origen (p. ej. con el modelo de geoide) y vuelva a escribir el archivo.";
+
+fn import_survey(p: &mut Project, archivo: &Path, dry: bool) -> Envelope {
+    const COMMAND: &str = "importar.topografia";
+    let mut copia;
+    let p: &mut Project = if dry {
+        copia = p.clone();
+        &mut copia
+    } else {
+        p
+    };
+    match redes_core::survey::import_survey(p, archivo) {
+        Ok(rep) => Envelope::ok(COMMAND).with_data(json!({
+            "topografia": rep,
+            "dry_run": dry,
+            "guardado": !dry,
+            "siguiente": if dry {
+                "sin --dry-run para importar"
+            } else {
+                "redes vista --salida vista.svg"
+            }
+        })),
+        Err(e) => {
+            let code = e.split(':').next().unwrap_or("E_FMT_PARSE").to_string();
+            let pista = match code.as_str() {
+                "E_CRS" => CRS_HINT,
+                "E_DATUM" => DATUM_HINT,
+                _ => {
+                    "La topografía entra solo como `redes.topografia/1`. Tradúzcala con la skill `skills/redes-ingesta` (references/topografia.md): el mensaje dice qué punto, línea o polígono no cuadra; corríjalo en la traducción o pregunte al usuario, nunca lo adivine."
+                }
+            };
+            Envelope::fail(
+                COMMAND,
                 vec![Diagnostic::new(&code, Severity::Error, e).hint(pista)],
             )
         }

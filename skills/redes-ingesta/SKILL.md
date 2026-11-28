@@ -1,25 +1,30 @@
 ---
 name: redes-ingesta
-description: Convierte una red de agua o alcantarillado diseñada en otra aplicación (EPA SWMM o EPANET .inp, DXF de Civil 3D/AutoCAD, LandXML, GeoJSON/Shapefile de un SIG, Excel/CSV de diseño o informes de Civil 3D) en un plan `redes.plan/1` para la CLI `redes` y el visor 3D. Úsala cuando haya que meter un modelo existente en Redes o averiguar por qué un archivo no entra. El agente lee el origen, lo mapea con las referencias de formato, escribe el plan y lo valida con la CLI. No calcula hidráulica, hidrología ni movimiento de tierras.
+description: Convierte una red de agua o alcantarillado diseñada en otra aplicación (EPA SWMM o EPANET .inp, DXF de Civil 3D/AutoCAD, LandXML, GeoJSON/Shapefile de un SIG, Excel/CSV de diseño o informes de Civil 3D) en un plan `redes.plan/1`, y un levantamiento topográfico (CSV/TXT PNEZD de estación total, DXF, LandXML, MDT en rejilla) en una topografía `redes.topografia/1`, para la CLI `redes` y el visor 3D. Úsala cuando haya que meter un modelo existente en Redes o averiguar por qué un archivo no entra. El agente lee el origen, lo mapea con las referencias de formato, escribe el plan y lo valida con la CLI. No calcula hidráulica, hidrología ni movimiento de tierras.
 ---
 
 # Ingesta guiada en Redes
 
 Tú (el agente) haces la conversión. No hay adaptadores por programa: lees el archivo de origen,
-entiendes su formato con la referencia correspondiente, escribes un `redes.plan/1` y la CLI lo
-valida (decisión D5, `docs/22-decisiones.md`).
+entiendes su formato con la referencia correspondiente, escribes un `redes.plan/1` (la red) o un
+`redes.topografia/1` (el terreno) y la CLI lo valida (decisiones D5 y D18,
+`docs/22-decisiones.md`).
 
 ## Cuándo usarla
 
 - Hay que ver en 3D una red que vive en SWMM, EPANET, Civil 3D, un SIG o una hoja de cálculo.
 - Un archivo de otra aplicación no entra, o entra incompleto, y hay que saber por qué.
 - Hay que reimportar una versión corregida del origen.
+- Hay un **levantamiento topográfico** (puntos de estación total o GNSS, superficie de Civil 3D,
+  MDT) que tiene que ser el terreno del proyecto: sigue `references/topografia.md`, que tiene su
+  propio flujo, la tabla de códigos y `redes importar topografia`.
 
 No la uses para calcular caudales, presiones, volúmenes ni cumplimiento normativo, ni para
 corregir el diseño: eso es de la aplicación de origen.
 
-**Sin skill:** un DXF escrito por Redes (capa `REDES_INFO`) entra con `redes importar dxf`, y los
-puntos de terreno `E,N,Z` con `redes importar terreno --archivo t.csv --epsg 32717`.
+**Sin skill:** solo un DXF escrito por Redes (capa `REDES_INFO`) entra con `redes importar dxf`.
+El terreno no tiene atajo: `importar terreno` (que leía las tres primeras columnas como E, N, Z y
+metía un PNEZD mal sin avisar) ya no existe; todo levantamiento entra como `redes.topografia/1`.
 
 ## Flujo
 
@@ -57,6 +62,7 @@ puntos de terreno `E,N,Z` con `redes importar terreno --archivo t.csv --epsg 327
 | Origen | Lee |
 |---|---|
 | Contrato, cotas (solera, clave, rasante, tapa, recubrimiento), validación | `references/plan.md` |
+| **Topografía**: PNEZD/PENZD/NEZ, DXF de puntos y polilíneas 3D, LandXML (CgPoints, superficies), MDT; tabla de códigos; contrato `redes.topografia/1` | `references/topografia.md` |
 | EPA SWMM 5 `.inp` | `references/swmm.md` |
 | EPANET 2.2 `.inp` | `references/epanet.md` |
 | DXF de Civil 3D / AutoCAD, LandXML | `references/dxf-civil3d.md` |
@@ -92,7 +98,10 @@ sus `.plan.json`.
 
 ## Preguntar (no adivinar)
 
-- **CRS** si el origen no lo declara (Ecuador: `EPSG:32717` 17S o `EPSG:32718` 18S).
+- **CRS** si el origen no lo declara (Ecuador: `EPSG:32717` 17S o `EPSG:32718` 18S; hemisferio
+  norte `EPSG:326NN`, p. ej. Colombia `32618`).
+- **Datum vertical** de las cotas (`egm2008`, `egm96`, `elipsoidal` o `no_declarado`) si el
+  origen no lo dice; nunca lo supongas (`references/topografia.md` §5).
 - **Sistema**: pluvial, sanitario o combinado, si el archivo no lo deja claro.
 - **Subtipo por defecto** de cada grupo: tipo de tubería en EPANET (conducción, distribución,
   impulsión), de tanque (apoyado, elevado…), de descarga, de válvula sin equivalente.
