@@ -252,10 +252,11 @@ Un solo frente abierto a la vez; no se abre una fase sin cerrar la anterior.
 1. ~~F14 — Rendimiento~~ (cerrada).
 2. **F17 — Familias paramétricas en Blender** (D14). Va **antes** de F15: los IDs de F15/F16 se conservan porque ya están en Linear.
 3. **F20 — Familias de referencia** (D20): cada familia contrastada con la bibliografía técnica y con lo que se construye; ficha de cuándo se usa y cuándo no, y recetas mejoradas.
-4. **F15 — Arquitectura y mantenibilidad**, ampliada con la fachada única y el canal de comandos (ver F15-13…F15-15).
-5. **F18 — Revisión completa en la app y salidas que faltan** (huecos del inventario docs/02 §4), sobre la fachada de F15.
-6. **F19 — Entregables: escena de Blender, IFC para BIM (Bonsai) y planos de planta y perfil en DXF** (D19).
-7. **F16 — Release v1.**
+4. **F21 — Topografía**: el terreno se ve y se usa como el real (sombreado, curvas, ortofoto, densidad, nubes grandes, obras visibles), sin inventar cota (D21).
+5. **F15 — Arquitectura y mantenibilidad**, ampliada con la fachada única y el canal de comandos (ver F15-13…F15-15).
+6. **F18 — Revisión completa en la app y salidas que faltan** (huecos del inventario docs/02 §4), sobre la fachada de F15.
+7. **F19 — Entregables: escena de Blender, IFC para BIM (Bonsai) y planos de planta y perfil en DXF** (D19).
+8. **F16 — Release v1.**
 
 Frentes transversales, revisados al cerrar cada ticket:
 
@@ -292,7 +293,7 @@ modelan agentes con Blender 5.1 sin ventana; el usuario aprueba cada pieza por c
 | F17-10 | P1 | **Biblioteca horneada en el paquete** (D17) | juego de medidas comerciales por familia horneado con las recetas, manifiesto y recetas dentro de `scripts/empaquetar.ps1`; el CI comprueba que cada `.glb` versionado corresponde a la clave de su receta | el paquete portable abre la demo con piezas de Blender sin Blender instalado | 1 |
 | F17-11 | P0 | **Topografía de levantamiento** (D18), antes de F17-09 | contrato `redes.topografia/1` (puntos con número, E, N, Z, descripción y clase; líneas de quiebre; contorno y huecos; malla opcional) validado por `redes importar topografia`; TIN con restricciones (Delaunay restringido) que respeta quiebres y contorno; referencia de topografía en `skills/redes-ingesta` para PNEZD, DXF y LandXML de Civil 3D con tabla de códigos típica ajustable; fixtures de ejemplo | un levantamiento con quebrada no cruza el cauce con triángulos; el agente traduce un PNEZD real siguiendo la skill y la CLI lo valida | 3 |
 | F17-12 | P0 | **CRS y datum vertical** (antes de F17-09) | UTM norte y sur (`326NN`/`327NN`); el datum vertical se declara y se guarda con el terreno (ortométrico EGM2008/EGM96 o elipsoidal) y se muestra; mezclar datums falla con error legible; corregir `skills/redes-ingesta/references/plan.md` («siempre 32717») | terreno Copernicus etiquetado EGM2008; plan y terreno con datums distintos → error | 1 |
-| F17-13 | P1 | **Calidad del terreno** | informe al importar: puntos duplicados (misma E,N con distinta Z), densidad, triángulos largos y espigas; el aligerado de la vista conserva picos y quiebres (hoy `thinned` guarda el primer punto de la celda) | fixture con duplicados y espiga → avisos con coordenadas; la vista aligerada no pierde la cima | 1,5 |
+| F17-13 | P1 | ~~**Calidad del terreno**~~ → F21-04 | informe al importar: puntos duplicados (misma E,N con distinta Z), densidad, triángulos largos y espigas; el aligerado de la vista conserva picos y quiebres (hoy `thinned` guarda el primer punto de la celda) | fixture con duplicados y espiga → avisos con coordenadas; la vista aligerada no pierde la cima | 1,5 |
 
 **Total F17: 26 días.**
 
@@ -336,6 +337,30 @@ adapta al sitio» y «forma») y en el inspector, para que cualquiera sepa qué 
 
 ---
 
+## F21 — Topografía: que el terreno se vea y se use como el real (D21) (P1)
+
+F17-11/12 dejaron el contrato y el TIN restringido. Esta fase hace que el terreno **se vea** como el
+sitio (hoy sale facetado y plano de color) y que aguante levantamientos pobres y nubes enormes. La
+calidad del resultado depende de cuántos puntos traiga el levantamiento: la app lo muestra y lo dice,
+pero **no inventa cota** (D4): todo suavizado es solo de presentación y `z_at`, el perfil y `validar`
+siguen leyendo el TIN tal cual.
+
+| ID | P | Ticket | Alcance | Aceptación | Días |
+|---|---|---|---|---|---|
+| F21-01 | P1 | **Sombreado del terreno** | normales por vértice respetando las líneas de quiebre (arista viva en cunetas y taludes), luz rasante tipo *hillshade*, rampa hipsométrica configurable; en la vista CPU y en `--gpu3d` | capturas de la quebrada y de la cadena aprobadas por el usuario | 2 |
+| F21-02 | P1 | **Curvas de nivel en la vista** | maestras e intermedias con intervalo elegible y etiquetas de cota; respetan quiebres y contorno (antes parte de F18-08) | captura en planta con curvas legibles | 1,5 |
+| F21-03 | P1 | **Ortofoto sobre el terreno** | imagen georreferenciada (GeoTIFF RGB o JPG + world file) proyectada sobre el TIN; la traduce el agente con la skill si viene en otro formato | captura con ortofoto alineada a la red | 2 |
+| F21-04 | P1 | **Calidad y densidad del levantamiento** (absorbe F17-13) | informe al importar: duplicados, triángulos largos, espigas, densidad por zona; en la vista, capa que marca las zonas con pocos puntos (triángulos más largos que un umbral del usuario) sin rellenarlas | fixture escaso → zonas marcadas y aviso con coordenadas | 2 |
+| F21-05 | P2 | **Suavizado solo de presentación** | subdivisión de la malla mostrada para levantamientos escasos, que no toca `z_at` ni las salidas; se activa y se rotula como «vista suavizada» | prueba: `z_at` y el perfil no cambian con el suavizado activo | 1,5 |
+| F21-06 | P2 | **Nubes y rejillas grandes** | LAS/LAZ (clase 2, suelo) y rejillas de millones de celdas con niveles de detalle por teselas; aligerado que conserva quiebres y picos | 5 M puntos abren en tiempo aceptable (cifra en docs/21) | 3 |
+| F21-07 | P2 | **Varias superficies** (antes F18-06) | terreno existente y proyectado; añadir puntos sin reemplazar; elegir cuál usan la vista, el perfil y `validar` | proyecto con dos superficies; perfil con ambas líneas | 3 |
+| F21-08 | P2 | **Curvas de nivel como entrada** | la skill convierte polilíneas con cota (DXF de Civil 3D) en puntos y quiebres de `redes.topografia/1`, preguntando el intervalo y lo dudoso | fixture DXF de curvas → TIN sin terrazas falsas | 1,5 |
+| F21-09 | P1 | **Terreno alrededor de las obras** | recorte visual del terreno en zanjas, pozos y estructuras enterradas (excavación de presentación o terreno translúcido local), para que la bocatoma, las cámaras y la planta no queden tapadas por la ladera | capturas de la captación y de la planta con las obras visibles | 2 |
+
+**Total F21: 18,5 días.** F17-13 y F18-06 pasan a F21-04 y F21-07; las curvas de F18-08 a F21-02.
+
+---
+
 ## F15 — Arquitectura y mantenibilidad (P1/P2)
 
 | ID | P | Ticket | Alcance | Aceptación | Días |
@@ -373,7 +398,7 @@ F18-07 y F18-12, que pueden adelantarse si bloquean una revisión real.
 | F18-03 | P1 | **Inspector completo** | todos los atributos del nodo (hoy 10) y los del tramo, con fuente; longitud 3D del tramo (hoy en planta) | árbol `--tree` con todos los atributos de un pozo y de un tramo | 1 |
 | F18-04 | P1 | **Corte orientable y exageración vertical** | corte a lo largo de un tramo o con orientación elegida (hoy fijo en E local); control de exageración vertical en la UI | capturas de corte por un colector y con ×1/×5 | 2 |
 | F18-05 | P2 | **Teclado y capturas con selección** | flechas para girar (o retirar el aviso «Flechas para girar»); `--snap` con un objeto seleccionado para capturar el inspector | prueba de la escena con selección; aviso coherente con lo que hace la app | 1 |
-| F18-06 | P2 | **Varias superficies** | terreno existente y proyectado; añadir puntos a una superficie sin reemplazarla; elegir cuál usan la vista, el perfil y `validar` | proyecto con dos superficies; perfil con ambas líneas | 3 |
+| F18-06 | P2 | ~~**Varias superficies**~~ → F21-07 | terreno existente y proyectado; añadir puntos a una superficie sin reemplazarla; elegir cuál usan la vista, el perfil y `validar` | proyecto con dos superficies; perfil con ambas líneas | 3 |
 | F18-07 | P1 | **Reglas de `validar` contra el terreno** | tapa o rasante declaradas frente al TIN (diferencia sobre umbral del usuario, D6) y objetos fuera del terreno; se informa, no se corrige | fixture con tapa 0,5 m bajo el TIN → hallazgo; objeto fuera → hallazgo | 1 |
 | F18-08 | P1 | **Salidas que faltan** | `--solo-aprobados` en GeoJSON; DXF por red (agua o alcantarillado); curvas de nivel en la vista y en el DXF; terreno en DXF y GeoJSON | pruebas de contrato por cada salida | 2 |
 | F18-09 | P1 | **DXF abierto en AutoCAD/BricsCAD** | abrir un DXF exportado en un CAD real y dejar constancia (capturas, versión) | constancia en docs/16 o docs/04; lo que falle, ticket | 0,5 |
