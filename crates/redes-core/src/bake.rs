@@ -46,6 +46,17 @@ pub enum ParamSource {
         #[serde(rename = "unidad", default)]
         unit: Option<String>,
     },
+    /// An elevation attribute minus the object's invert, both from the source: structures draw
+    /// their levels (crest, sill, bottom, water) in the frame the viewer places at the invert, and
+    /// the same structure at another elevation is the same piece
+    /// (docs/familias/F17-06-captacion.md).
+    #[serde(rename = "menos_solera")]
+    AttributeMinusInvert {
+        #[serde(rename = "clave")]
+        key: String,
+        #[serde(rename = "unidad", default)]
+        unit: Option<String>,
+    },
     /// The pipes that reach the object: name, direction and invert of each one, from the links
     /// that carry those data (docs/17, section F17-03). A pipe without them has no anchor.
     #[serde(rename = "conexiones")]
@@ -154,6 +165,9 @@ impl Recipe {
                 attribute(node, key, unit.as_deref()).ok_or_else(|| key.clone())
             }
             ParamSource::RimMinusInvert { .. } => rim_minus_invert(node),
+            ParamSource::AttributeMinusInvert { key, unit } => {
+                attribute_minus_invert(node, key, unit.as_deref())
+            }
             ParamSource::Connections => Ok(node_connections(p, node).to_json()),
             ParamSource::Shape { .. } => unreachable!("shape values come from the recipe"),
         })
@@ -176,6 +190,7 @@ impl Recipe {
                     Some(
                         ParamSource::Attribute { .. }
                             | ParamSource::RimMinusInvert { .. }
+                            | ParamSource::AttributeMinusInvert { .. }
                             | ParamSource::Connections
                     )
                 )
@@ -236,7 +251,8 @@ impl Recipe {
         let mut out = Vec::new();
         for (name, source) in &self.params {
             let (declared, expected) = match source {
-                ParamSource::Attribute { key, unit } => match def.attr(key) {
+                ParamSource::Attribute { key, unit }
+                | ParamSource::AttributeMinusInvert { key, unit } => match def.attr(key) {
                     Some(a) => (unit.as_deref().unwrap_or(""), a.unit.symbol()),
                     None => {
                         out.push(format!("{name}: la familia no tiene el atributo {key}"));
@@ -287,6 +303,15 @@ fn rim_minus_invert(node: &Node) -> Result<Json, String> {
         (None, _) => Err(COTA_TAPA.to_string()),
         (Some(_), None) => Err(COTA_SOLERA.to_string()),
     }
+}
+
+fn attribute_minus_invert(node: &Node, key: &str, unit: Option<&str>) -> Result<Json, String> {
+    let level = attribute(node, key, unit)
+        .and_then(|v| v.as_f64())
+        .ok_or_else(|| key.to_string())?;
+    let invert = node.cota_solera().ok_or_else(|| COTA_SOLERA.to_string())?;
+    // Rounded like the derived depth, so float noise never gives the same structure another key.
+    Ok(Json::from(round_to(level - invert, 1e6)))
 }
 
 /// The pipes of an object as recipe data: the ones with the data for an anchor and the others,

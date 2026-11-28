@@ -1,0 +1,14 @@
+{
+  "length_m": 3.0,
+  "width_m": 2.6,
+  "bottom_rise_m": 0.0,
+  "top_rise_m": 1.8,
+  "water_rise_m": 1.4,
+  "wall_thickness_m": 0.2,
+  "slab_thickness_m": 0.2,
+  "body_material": "hormigon",
+  "connections": [
+    { "name": "entrada__TB-A", "azimuth_deg": 170.0, "invert_rise_m": 1.4, "dn_mm": 250 },
+    { "name": "salida__TB-B", "azimuth_deg": -15.0, "invert_rise_m": 0.2, "dn_mm": 250 }
+  ]
+}

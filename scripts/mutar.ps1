@@ -408,6 +408,15 @@ $mutaciones = @(
         Reemplazo = '.unwrap_or(invert);'
         Prueba = "a_pipe_without_invert_has_no_anchor_and_says_why"
         Que = "inventar la cota de un tramo sin dato para ponerle ancla (F17-03)"
+    },
+    @{
+        Nombre = "cota-sin-solera"
+        Archivo = "crates/redes-core/src/bake.rs"
+        Patron = 'let invert = node\.cota_solera\(\)\.ok_or_else\(\|\| COTA_SOLERA\.to_string\(\)\)\?;'
+        Reemplazo = 'let invert = node.cota_solera().unwrap_or(0.0);'
+        Destino = "captacion_horneada"
+        Prueba = "a_level_without_the_object_invert_is_missing_not_filled_in"
+        Que = "hornear una obra sin cota de solera como si estuviera a cota 0 (F17-06)"
     }
 )
 

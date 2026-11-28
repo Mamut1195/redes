@@ -6832,6 +6832,14 @@ fn build() -> Vec<FamilyDef> {
                     Group::Geometrico,
                 ),
                 attr(
+                    "espesor_muro",
+                    "Espesor de muro",
+                    Unit::M,
+                    AttrType::Num,
+                    false,
+                    Group::Estructural,
+                ),
+                attr(
                     "diametro_purga",
                     "Diámetro de purga",
                     Unit::Mm,

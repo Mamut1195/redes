@@ -1,0 +1,25 @@
+{
+  "schema": "redes.receta/1",
+  "familia": "agua.bocatoma",
+  "subtipo": "barraje_fijo",
+  "parametros": {
+    "weir_length_m": { "desde": "atributo", "clave": "largo_barraje", "unidad": "m" },
+    "crest_rise_m": { "desde": "menos_solera", "clave": "cota_cresta", "unidad": "m" },
+    "sill_rise_m": { "desde": "menos_solera", "clave": "cota_umbral", "unidad": "m" },
+    "bed_rise_m": { "desde": "menos_solera", "clave": "cota_fondo", "unidad": "m" },
+    "window_width_m": { "desde": "atributo", "clave": "ancho_ventana", "unidad": "m" },
+    "window_height_m": { "desde": "atributo", "clave": "altura_ventana", "unidad": "m" },
+    "wall_thickness_m": { "desde": "atributo", "clave": "espesor_muro", "unidad": "m" },
+    "body_material": { "desde": "atributo", "clave": "material" },
+    "connections": { "desde": "conexiones" },
+    "crest_width_m": { "desde": "forma", "valor": 0.6, "unidad": "m" },
+    "downstream_slope_h_per_v": { "desde": "forma", "valor": 0.75 },
+    "foundation_depth_m": { "desde": "forma", "valor": 0.6, "unidad": "m" },
+    "apron_length_m": { "desde": "forma", "valor": 3.0, "unidad": "m" },
+    "apron_thickness_m": { "desde": "forma", "valor": 0.4, "unidad": "m" },
+    "wall_freeboard_m": { "desde": "forma", "valor": 0.8, "unidad": "m" },
+    "wall_upstream_m": { "desde": "forma", "valor": 1.5, "unidad": "m" },
+    "window_offset_m": { "desde": "forma", "valor": 1.0, "unidad": "m" },
+    "intake_box_length_m": { "desde": "forma", "valor": 1.5, "unidad": "m" }
+  }
+}

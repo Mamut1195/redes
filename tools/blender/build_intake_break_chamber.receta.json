@@ -1,0 +1,30 @@
+{
+  "schema": "redes.receta/1",
+  "familia": "agua.camara",
+  "subtipo": "quiebre",
+  "parametros": {
+    "length_m": { "desde": "atributo", "clave": "largo", "unidad": "m" },
+    "width_m": { "desde": "atributo", "clave": "ancho", "unidad": "m" },
+    "bottom_rise_m": { "desde": "menos_solera", "clave": "cota_fondo", "unidad": "m" },
+    "top_rise_m": { "desde": "menos_solera", "clave": "cota_tapa", "unidad": "m" },
+    "water_rise_m": { "desde": "menos_solera", "clave": "cota_agua", "unidad": "m" },
+    "wall_thickness_m": { "desde": "atributo", "clave": "espesor_muro", "unidad": "m" },
+    "slab_thickness_m": { "desde": "atributo", "clave": "espesor_losa", "unidad": "m" },
+    "body_material": { "desde": "atributo", "clave": "material" },
+    "connections": { "desde": "conexiones" },
+    "opening_size_m": { "desde": "forma", "valor": 0.6, "unidad": "m" },
+    "opening_margin_m": { "desde": "forma", "valor": 0.1, "unidad": "m" },
+    "cover_thickness_m": { "desde": "forma", "valor": 0.05, "unidad": "m" },
+    "cover_clearance_m": { "desde": "forma", "valor": 0.005, "unidad": "m" },
+    "cover_material": { "desde": "forma", "valor": "fundicion" },
+    "water_sheet_m": { "desde": "forma", "valor": 0.02, "unidad": "m" },
+    "step_first_height_m": { "desde": "forma", "valor": 0.4, "unidad": "m" },
+    "step_spacing_m": { "desde": "forma", "valor": 0.3, "unidad": "m" },
+    "step_top_clearance_m": { "desde": "forma", "valor": 0.25, "unidad": "m" },
+    "step_width_m": { "desde": "forma", "valor": 0.3, "unidad": "m" },
+    "step_projection_m": { "desde": "forma", "valor": 0.15, "unidad": "m" },
+    "step_embed_m": { "desde": "forma", "valor": 0.05, "unidad": "m" },
+    "step_bar_m": { "desde": "forma", "valor": 0.025, "unidad": "m" },
+    "step_material": { "desde": "forma", "valor": "polipropileno" }
+  }
+}

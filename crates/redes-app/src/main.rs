@@ -1449,6 +1449,7 @@ fn main() {
                 }) as fn(&mut State),
             ),
             ("pozos", camara_pozos as fn(&mut State)),
+            ("captacion", camara_captacion as fn(&mut State)),
             (
                 "pieza",
                 (|s: &mut State| {
@@ -1474,7 +1475,7 @@ fn main() {
             (
                 "foco",
                 (|s: &mut State| {
-                    s.sel = sample_manhole(&s.project);
+                    s.sel = scene_object(&s.project);
                     s.enfocar();
                 }) as fn(&mut State),
             ),
@@ -1483,7 +1484,7 @@ fn main() {
                 (|s: &mut State| {
                     // The sample manhole up close, without terrain or selection tint: the piece
                     // as it was baked, with its materials, also under the ground in `--gpu3d`.
-                    s.sel = sample_manhole(&s.project);
+                    s.sel = scene_object(&s.project);
                     s.enfocar();
                     s.layers.terreno = false;
                     s.sel = None;
@@ -1494,7 +1495,7 @@ fn main() {
             (
                 "corte",
                 (|s: &mut State| {
-                    s.sel = sample_manhole(&s.project);
+                    s.sel = scene_object(&s.project);
                     s.enfocar();
                     s.alternar_corte();
                     // Un paso de corte para que se vea el interior.
@@ -1509,7 +1510,7 @@ fn main() {
             (
                 "explosion",
                 (|s: &mut State| {
-                    s.sel = sample_manhole(&s.project);
+                    s.sel = scene_object(&s.project);
                     s.enfocar();
                     s.alternar_explosion();
                     s.opts.explosion = 1.1;
@@ -1534,6 +1535,55 @@ fn main() {
     } else {
         rune::run(spec);
     }
+}
+
+/// Object the focus, cut and explosion scenes show: the one named with `--objeto <código>` (to
+/// review any baked structure), else the sample manhole.
+fn scene_object(p: &Project) -> Option<String> {
+    requested_object(p, rune::extra_args()).or_else(|| sample_manhole(p))
+}
+
+fn requested_object(p: &Project, args: &[String]) -> Option<String> {
+    let code = args.iter().skip_while(|a| *a != "--objeto").nth(1)?;
+    p.node_by_code(code).map(|n| n.code.clone())
+}
+
+/// Scene `captacion`: the intake works around the first intake (bocatoma) seen from above.
+fn camara_captacion(s: &mut State) {
+    const REACH_M: f64 = 70.0;
+    let origin = s.project.origin;
+    let intake = s
+        .project
+        .nodes
+        .iter()
+        .find(|n| !n.deleted && n.family == "agua.bocatoma")
+        .map(|n| n.pos);
+    if let Some(intake) = intake {
+        let near: Vec<_> = s
+            .project
+            .nodes
+            .iter()
+            .filter(|n| !n.deleted && n.pos.dist(intake) <= REACH_M)
+            .map(|n| (n.pos, n.z_rim))
+            .collect();
+        let (mut lo, mut hi) = ([f64::MAX; 3], [f64::MIN; 3]);
+        for (pos, z) in &near {
+            for (k, v) in [pos.x - origin.x, pos.y - origin.y, *z]
+                .into_iter()
+                .enumerate()
+            {
+                lo[k] = lo[k].min(v);
+                hi[k] = hi[k].max(v);
+            }
+        }
+        s.cam.target = [0, 1, 2].map(|k| (lo[k] + hi[k]) * 0.5);
+        s.cam.distance = ((hi[0] - lo[0]).hypot(hi[1] - lo[1]) * 1.3).max(20.0);
+        s.cam.azimuth = -62.0;
+        s.cam.elevation = 30.0;
+        s.cam.z_scale = 1.0;
+    }
+    s.fitted = true;
+    s.rebuild();
 }
 
 /// Manhole the focus, cut and explosion scenes show: the first one drawn with a library model
@@ -1577,6 +1627,21 @@ fn camara_pozos(s: &mut State) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_scenes_show_the_object_named_on_the_command_line() {
+        let p = redes_core::demo_cadena::cadena();
+        let args = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(
+            super::requested_object(&p, &args(&["--snap", "x.png", "--objeto", "DZ-001"])),
+            Some("DZ-001".to_string())
+        );
+        assert_eq!(
+            super::requested_object(&p, &args(&["--objeto", "NO-EXISTE"])),
+            None
+        );
+        assert_eq!(super::requested_object(&p, &args(&["--objeto"])), None);
+    }
+
     #[test]
     fn a_manhole_without_inner_diameter_shows_no_diameter() {
         let mut n = redes_core::demo::project()

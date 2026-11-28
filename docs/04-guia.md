@@ -390,6 +390,10 @@ cargo run -p redes-app --release -- --scene detalle `
 - `--pointer` dibuja el ripple del clic; `--keys` superpone las teclas.
 - `--snap` toma una foto en un instante y `--tree` vuelca el árbol de elementos: con eso se
   verifica una interfaz headless, sin abrir ventana.
+- `--objeto <código>` elige el objeto de las escenas `foco`, `corte`, `explosion` y `pozo-modelo`
+  (sin él, el pozo de muestra); así se revisa de cerca cualquier pieza horneada, p. ej.
+  `--snap out\dz.png --scene corte --objeto DZ-001`. La escena `captacion` encuadra las obras
+  alrededor de la primera bocatoma.
 - Los chips y botones tienen claves estables (`btn-aprobar`, `btn-observar`, `btn-guardar`,
   `btn-planta`, `btn-iso`, `btn-encuadrar`, `btn-anadir-obs`, `btn-cerrar-obs-N`, campo
   `obs-texto`) para que un guion los encuentre.

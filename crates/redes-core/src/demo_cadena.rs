@@ -120,6 +120,35 @@ fn declare_demo_manhole_wall(p: &mut Project, code: &str) {
         .insert("material".into(), Value::Text("hormigon".into()));
 }
 
+/// The intake numbers the recipes take as design data (F17-06) and the demo plan lacks: window
+/// height, wall and slab thickness and material. Each one says it is demo data.
+const DEMO_INTAKE_DATA: &[(&str, &[(&str, f64)])] = &[
+    ("BC-001", &[("altura_ventana", 0.5), ("espesor_muro", 0.3)]),
+    ("DZ-001", &[("espesor_muro", 0.25)]),
+    ("CA-001", &[("espesor_muro", 0.2), ("espesor_losa", 0.2)]),
+    ("CA-002", &[("espesor_muro", 0.2), ("espesor_losa", 0.2)]),
+];
+
+fn declare_demo_intake_data(p: &mut Project) {
+    for (code, data) in DEMO_INTAKE_DATA {
+        let n = p
+            .node_by_code_mut(code)
+            .unwrap_or_else(|| panic!("{code}: demo intake structure"));
+        for (key, value) in *data {
+            n.datos.insert(
+                (*key).into(),
+                crate::model::Dato {
+                    valor: *value,
+                    unidad: "m".into(),
+                    fuente: DEMO_SOURCE.into(),
+                },
+            );
+        }
+        n.attrs
+            .insert("material".into(), Value::Text("hormigon".into()));
+    }
+}
+
 /// Proyecto de la cadena completa (≈ 60 objetos).
 pub fn cadena() -> Project {
     let mut p = Project::new("Cadena completa · San Bartolo", "EPSG:32717");
@@ -306,6 +335,7 @@ pub fn cadena() -> Project {
         250,
         "PVC",
     );
+    declare_demo_intake_data(&mut p);
 
     // --- 2. Planta de tratamiento (PTAP) ---
     let mezcla = nodo(
